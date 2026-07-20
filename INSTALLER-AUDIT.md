@@ -29,6 +29,9 @@ The audited installer set now provides these guarantees:
 10. **Offline operation** — A local repository ZIP may be supplied, and uninstall uses the installed package without downloading another archive.
 11. **Environment isolation** — Installer and validator Python processes run without user site initialization and do not generate package bytecode.
 12. **Complete rollback reporting** — Failures restoring staged plugin backups are reported instead of being silently ignored.
+13. **Reproducible line endings** — `.gitattributes` forces LF for repository text on every platform so shell parsing and package-manifest hashes cannot change during Windows checkout.
+14. **Configuration ownership** — Package-created user configuration is marked and removed during uninstall; pre-existing unmarked user configuration is preserved.
+15. **Idempotent root uninstall** — Root installers locate active or backed-up package uninstallers through canonical paths, work without downloading, and succeed when no package-managed installation remains.
 
 ## Validation coverage
 
@@ -38,6 +41,7 @@ The repository audit performs:
 - POSIX shell, Dash, and Bash syntax checks where available
 - PowerShell parsing when a PowerShell runtime is available
 - static PowerShell parameter, delimiter, strict-mode, and invocation checks otherwise
+- reproducible LF and package-byte consistency checks
 - root installer integration tests
 - Option A, B, and C package validation
 - install, update, switch, rollback, and uninstall tests
