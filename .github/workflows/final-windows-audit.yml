@@ -1,6 +1,9 @@
 name: Final Windows installation audit
 
 on:
+  pull_request:
+    branches:
+      - post-merge-release-audit
   push:
     branches:
       - final-windows-installation-audit
