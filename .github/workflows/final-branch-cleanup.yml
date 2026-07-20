@@ -1,0 +1,96 @@
+name: Final stale branch cleanup
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/final-branch-cleanup.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/final-branch-cleanup.yml"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate cleanup policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "The post-merge job preserves the default branch, protected branches, and branches with open pull requests."
+
+  cleanup:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove stale branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          default_branch="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.default_branch')"
+          owner="${GITHUB_REPOSITORY%%/*}"
+          deleted=0
+          skipped=0
+
+          while IFS=$'\t' read -r branch protected; do
+            if [[ "$branch" == "$default_branch" ]]; then
+              continue
+            fi
+
+            if [[ "$protected" == "true" ]]; then
+              echo "Preserving protected branch: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            open_prs="$(gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=${owner}:${branch}&per_page=100" \
+              --jq 'length')"
+
+            if [[ "$open_prs" -gt 0 ]]; then
+              echo "Preserving branch with an open pull request: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            encoded_branch="${branch//\//%2F}"
+            gh api --method DELETE \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_branch}"
+            echo "Deleted stale branch: $branch"
+            deleted=$((deleted + 1))
+          done < <(
+            gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
+              --jq '.[] | [.name, (.protected | tostring)] | @tsv'
+          )
+
+          echo "Deleted branches: $deleted"
+          echo "Preserved non-default branches: $skipped"
+
+      - name: Remove this one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/final-branch-cleanup.yml
+          git commit -m "chore: remove final branch cleanup workflow"
+          git push origin HEAD:main
