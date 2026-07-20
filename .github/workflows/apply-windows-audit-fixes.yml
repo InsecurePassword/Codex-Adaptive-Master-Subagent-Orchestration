@@ -33,6 +33,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $TranscriptPath = Join-Path $env:RUNNER_TEMP "windows-audit-apply.log"
+          Start-Transcript -LiteralPath $TranscriptPath -Force
           $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*" | Sort-Object Name)
           if ($parts.Count -ne 5) {
             throw "Expected five Windows audit payload chunks; found $($parts.Count)."
@@ -83,6 +85,7 @@ jobs:
           }
           if ($failed) { throw "PowerShell parsing failed." }
 
+          Stop-Transcript
           Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
           $parts | Remove-Item -Force
           Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
@@ -94,3 +97,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Complete independent Windows installation audit coverage"
           git push origin HEAD:windows-final-third-party-audit
+
+      - name: Upload remediation transcript
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-audit-apply-failure
+          path: ${{ runner.temp }}\windows-audit-apply.log
