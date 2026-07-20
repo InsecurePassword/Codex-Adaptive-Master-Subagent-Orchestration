@@ -6,6 +6,9 @@ on:
       - installer-audit-complete
     paths:
       - ".github/workflows/apply-installer-audit.yml"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
