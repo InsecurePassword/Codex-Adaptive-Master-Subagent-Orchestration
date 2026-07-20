@@ -31,8 +31,8 @@ def manifest_check()->None:
     install_package.validate_manifest(ROOT)
 
 def structure_check(*, scripts_only: bool)->None:
-    require((ROOT/'VERSION').read_text().strip()=='3.1.0','VERSION mismatch')
-    require((ROOT/'PACKAGE-OPTION').read_text().strip()==PACKAGE_LABELS[OPTION],'PACKAGE-OPTION mismatch')
+    require((ROOT/'VERSION').read_text(encoding='utf-8').strip()=='3.1.0','VERSION mismatch')
+    require((ROOT/'PACKAGE-OPTION').read_text(encoding='utf-8').strip()==PACKAGE_LABELS[OPTION],'PACKAGE-OPTION mismatch')
     data=json.loads((ROOT/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))
     require(data.get('name')==PLUGIN_NAME,'plugin name mismatch'); require(data.get('version')=='3.1.0','plugin version mismatch'); require(data.get('skills')=='./skills/','skills path mismatch')
     skills=sorted(p.name for p in (ROOT/'skills').iterdir() if p.is_dir())
