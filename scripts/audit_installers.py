@@ -110,10 +110,11 @@ def markdown_audit() -> None:
 
 
 def root_integration_tests() -> None:
-    print("[audit] root installer integration")
+    script_name = "test_windows_installers.py" if os.name == "nt" else "test_installers.py"
+    print(f"[audit] root installer integration ({script_name})")
     run(
-        [sys.executable, "-B", "-E", "-s", "-S", str(ROOT / "tests" / "test_installers.py")],
-        timeout=180,
+        [sys.executable, "-B", "-E", "-s", "-S", str(ROOT / "tests" / script_name)],
+        timeout=300 if os.name == "nt" else 180,
     )
 
 
