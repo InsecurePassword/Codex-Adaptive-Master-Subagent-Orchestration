@@ -92,6 +92,11 @@ def main() -> int:
         require(not lock.exists(), "dead stale config lock was not cleared")
         require(tomllib.loads(config.read_text(encoding="utf-8"))["intensity"] == "auto", "stale-lock recovery did not update config")
 
+        lock.mkdir()
+        output = run("heavy", env=env, expect=1)
+        require("not a regular file" in output, "non-file intensity lock error was unclear")
+        lock.rmdir()
+
         output = run("--dry-run", env=env, expect=2)
         require("requires MODE" in output, "dry-run without mode error was unclear")
         output = run("heavy", "--show", env=env, expect=2)

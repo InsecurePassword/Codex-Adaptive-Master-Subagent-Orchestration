@@ -130,6 +130,9 @@ def test_lock(base:Path)->None:
     out=run(home,'--exclude-spark',expect=1); require('appears to be active' in out,'live lock not enforced'); require(lock.exists(),'live lock removed')
     lock.write_text(json.dumps({'pid':99999999,'host':socket.gethostname()})+'\n',encoding='utf-8'); os.utime(lock,(old,old))
     run(home,'--exclude-spark'); require(not lock.exists(),'dead stale lock not removed')
+    lock.mkdir()
+    out=run(home,'--exclude-spark',expect=1); require('not a regular file' in out,'non-file install lock error was unclear')
+    lock.rmdir()
 
 def main()->int:
     with tempfile.TemporaryDirectory(prefix=f'ams-install-{OPTION}-') as tmp:

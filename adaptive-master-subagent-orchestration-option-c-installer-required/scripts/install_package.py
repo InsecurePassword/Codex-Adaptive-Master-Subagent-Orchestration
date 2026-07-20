@@ -426,12 +426,14 @@ def install_lock(market_root: Path) -> Iterator[None]:
                 handle.flush()
                 os.fsync(handle.fileno())
             break
-        except FileExistsError:
+        except (FileExistsError, IsADirectoryError, PermissionError):
             try:
                 metadata = lock_path.lstat()
                 age = time.time() - metadata.st_mtime
             except FileNotFoundError:
                 continue
+            except OSError as exc:
+                raise SystemExit(f"Unable to inspect install lock path {lock_path}: {exc}") from exc
             if not stat.S_ISREG(metadata.st_mode):
                 raise SystemExit(f"Install lock path is not a regular file: {lock_path}")
             if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
