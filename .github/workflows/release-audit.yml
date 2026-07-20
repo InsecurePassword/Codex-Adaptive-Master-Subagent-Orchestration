@@ -42,6 +42,10 @@ jobs:
               python -B -E -s -S scripts/apply_post_merge_audit_fixes.py
               rm scripts/apply_post_merge_audit_fixes.py
             fi
+            if [[ -f scripts/patch_markdown_audit.py ]]; then
+              python -B -E -s -S scripts/patch_markdown_audit.py
+              rm scripts/patch_markdown_audit.py
+            fi
             if git diff --quiet && git diff --cached --quiet; then
               echo "changed=false" >> "$GITHUB_OUTPUT"
               exit 0
