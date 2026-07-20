@@ -7,6 +7,13 @@ on:
     paths:
       - ".github/.windows-audit-payload-*"
       - ".github/workflows/apply-windows-audit-fixes.yml"
+  pull_request:
+    branches:
+      - post-merge-release-audit
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -87,5 +94,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Complete independent Windows installation audit coverage"
           git push origin HEAD:windows-final-third-party-audit
-
-# Subsequent push trigger after workflow registration.
