@@ -2,7 +2,7 @@
 
 Version **3.1.0**
 
-## 1 — Project description and synopsis
+## Project description and synopsis
 
 Adaptive Master–Subagent Orchestration is a distributable Codex plugin system for Sol Max-controlled, adaptive zero-to-many direct-child orchestration. The Sol Max root master retains sole authority over task decomposition, model and reasoning selection, spawning, ownership, sequencing, integration, validation, recovery, and final acceptance. Children are direct and non-delegating.
 
@@ -10,7 +10,7 @@ The system routes bounded work across Sol, Terra, Luna, and optional GPT-5.3-Cod
 
 This release provides three alternative packages. Install only one option.
 
-## 2 — Installation options
+## Installation options
 
 The options are ordered from the least recurring operational effort to the most manual setup responsibility requested by the operator.
 
@@ -84,7 +84,7 @@ Option C rejects profile-skipping installation. It provides the smallest runtime
 
 The installer registers the plugin in the personal Codex marketplace, preserves unrelated marketplace entries, installs profiles under `$CODEX_HOME/agents/`, and creates `$CODEX_HOME/ams-orchestration.toml` only when missing. Restart Codex if newly installed skills or profiles are not immediately discovered.
 
-## 3 — Subagent classifications and intended use
+## Subagent classifications and intended use
 
 ### Sol
 
@@ -136,7 +136,7 @@ Spark is optional, text-only, and supplemental. It is used where latency or sepa
 
 Spark is not used for architecture, security judgment, ambiguous broad debugging, visual inputs, final review, or project acceptance. Work requiring more than Spark High returns to the normal Luna/Terra/Sol routing ladder.
 
-## 4 — Orchestration intensity, default, and intensity configuration
+## Orchestration intensity, default, and intensity configuration
 
 `auto` is the default and preserves the original orchestration behavior. It does not target a middle level of delegation. Sol Max determines the appropriate intensity from the task graph, risk, dependencies, ownership, verification needs, and available capacity.
 
@@ -179,7 +179,7 @@ AMS MODE heavy
 AMS MODE auto
 ```
 
-## 5 — Non-intensity configuration and package controls
+## Non-intensity configuration and package controls
 
 ### Configuration schema
 
@@ -218,7 +218,7 @@ Python equivalents are available through `scripts/install_package.py` using `--u
 
 Managed files carry a package marker. Installation is idempotent, preserves valid existing profiles, backs up managed files before repair or upgrade, and never silently overwrites unrelated user-authored files. Name collisions receive a nonconflicting managed filename and updated routing map where supported.
 
-## 6 — Additional details
+## Additional details
 
 ### Core authority and safety boundaries
 
