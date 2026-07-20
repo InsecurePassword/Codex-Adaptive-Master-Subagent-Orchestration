@@ -30,6 +30,16 @@ Recovery is included in every runtime option. Direct subagents cannot create add
 - Download instructions no longer depend on repository visibility labels.
 - Terminology consistently identifies `extreme` as the highest orchestration intensity.
 
+## Installer audit
+
+The final installation-tool audit covered the root Bash and PowerShell installers, package wrappers, Python installers, profile installation, intensity configuration, update and package switching, rollback, locks, bounded subprocesses, archive extraction, uninstall, tests, and manifests. Codex runtime behavior was outside that installer-audit scope.
+
+The complete reproducible command is:
+
+```sh
+python3 -B -E -s -S ./scripts/validate_package.py --scripts-only
+```
+
 ## Validation
 
 Each package includes `scripts/validate_package.py` and `MANIFEST.sha256`. Validation covers plugin structure, skill metadata, profile TOML, package membership, checksums, installer behavior, intensity configuration, recovery requirements, and option-specific setup rules.

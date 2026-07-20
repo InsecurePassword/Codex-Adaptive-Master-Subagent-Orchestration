@@ -20,19 +20,17 @@ function Resolve-Python311 {
     $Candidates = @()
     $Launcher = Get-Command py -ErrorAction SilentlyContinue
     if ($Launcher) {
-        $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-3") }
-        foreach ($Version in @("3.14", "3.13", "3.12", "3.11")) {
-            $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-$Version") }
+        foreach ($Prefix in @(@("-3"), @("-3.14"), @("-3.13"), @("-3.12"), @("-3.11"))) {
+            $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = $Prefix }
         }
     }
-    $Python = Get-Command python -ErrorAction SilentlyContinue
-    if ($Python) { $Candidates += [PSCustomObject]@{ Executable = $Python.Source; Prefix = @() } }
-    $Python3 = Get-Command python3 -ErrorAction SilentlyContinue
-    if ($Python3) { $Candidates += [PSCustomObject]@{ Executable = $Python3.Source; Prefix = @() } }
-
+    foreach ($Name in @("python", "python3")) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command) { $Candidates += [PSCustomObject]@{ Executable = $Command.Source; Prefix = @() } }
+    }
     foreach ($Candidate in $Candidates) {
         try {
-            & $Candidate.Executable @($Candidate.Prefix + @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")) 2>$null
+            & $Candidate.Executable @($Candidate.Prefix + @("-B", "-E", "-s", "-S", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")) 2>$null
             if ($LASTEXITCODE -eq 0) { return $Candidate }
         }
         catch { }
@@ -45,8 +43,8 @@ $ScriptPath = Join-Path $PSScriptRoot "bootstrap_profiles.py"
 if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
     throw "Profile installer was not found: $ScriptPath"
 }
-$Arguments = @($ResolvedPython.Prefix + @("-E", "-s", "-S") + @(
-    $ScriptPath,
+$Arguments = @($ResolvedPython.Prefix + @(
+    "-B", "-E", "-s", "-S", $ScriptPath,
     "--sol-model", $SolModel,
     "--terra-model", $TerraModel,
     "--luna-model", $LunaModel,

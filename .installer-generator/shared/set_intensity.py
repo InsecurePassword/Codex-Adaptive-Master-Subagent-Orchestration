@@ -10,9 +10,12 @@ import json
 import os
 import socket
 import stat
+import sys
 import tempfile
 import time
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 from process_utils import process_is_alive
 
@@ -49,15 +52,20 @@ def config_lock(path: Path):
     while True:
         try:
             descriptor = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                json.dump(payload, handle)
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(payload, handle, sort_keys=True)
                 handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
             break
         except FileExistsError:
             try:
-                age = time.time() - lock_path.stat().st_mtime
+                metadata = lock_path.lstat()
+                age = time.time() - metadata.st_mtime
             except FileNotFoundError:
                 continue
+            if not stat.S_ISREG(metadata.st_mode):
+                raise SystemExit(f"Intensity lock path is not a regular file: {lock_path}")
             if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
                 try:
                     lock_path.unlink()
@@ -104,7 +112,7 @@ def read_config(path: Path) -> tuple[str | None, str | None]:
         return None, f"configuration path is not a regular file: {path}"
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         return None, f"invalid TOML: {exc}"
     if data.get("schema_version") != 1:
         return None, f"unsupported or missing schema_version: {data.get('schema_version')!r}"
@@ -112,6 +120,22 @@ def read_config(path: Path) -> tuple[str | None, str | None]:
     if mode not in VALID:
         return None, f"invalid or missing intensity: {mode!r}"
     return str(mode), None
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -130,6 +154,7 @@ def atomic_write(path: Path, text: str) -> None:
         if old_mode is not None:
             os.chmod(tmp_name, old_mode)
         os.replace(tmp_name, path)
+        _fsync_directory(path.parent)
     finally:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)

@@ -1,10 +1,13 @@
-# Adaptive Master-Subagent Orchestration remote installer
+# Adaptive Master-Subagent Orchestration installer
 # Version 3.1.0
 
 [CmdletBinding()]
 param(
-    [ValidateSet("A", "B", "C", "Uninstall", "1", "2", "3", "4")]
+    [Alias("InstallOption")]
+    [ValidateSet("A", "B", "C", "Uninstall", "Remove", "1", "2", "3", "4")]
     [string]$Option,
+
+    [string]$HomeDirectory = $HOME,
 
     [ValidateSet("auto", "minimal", "moderate", "heavy", "extreme")]
     [string]$Intensity = "auto",
@@ -13,43 +16,47 @@ param(
     [string[]]$SparkEfforts = @("low", "medium", "high"),
 
     [switch]$ExcludeSpark,
-    [switch]$Force
+    [switch]$Force,
+    [string]$ArchivePath,
+    [Alias("Ref")]
+    [string]$RepositoryRef
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
 
 $Repository = "InsecurePassword/adaptive-master-subagent-orchestration"
-$Ref = "main"
-$ReleaseVersion = "3.1.0"
-$ArchiveName = "adaptive-master-subagent-orchestration-$Ref.zip"
-$ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
-$PublicArchiveUrl = "https://github.com/$Repository/archive/refs/heads/$Ref.zip"
-$PrivateArchiveUrl = "https://api.github.com/repos/$Repository/zipball/$Ref"
-
-$PluginNames = @(
-    "adaptive-master-subagent-orchestration-option-a-two-skill",
-    "adaptive-master-subagent-orchestration-option-b-unified",
-    "adaptive-master-subagent-orchestration-option-c-installer-required",
-    "adaptive-master-subagent-orchestration-option-a-modular",
-    "adaptive-master-subagent-orchestration-option-c-lean",
-    "adaptive-master-subagent-orchestration"
-)
+$Ref = if (-not [string]::IsNullOrWhiteSpace($RepositoryRef)) { $RepositoryRef.Trim() } elseif ([string]::IsNullOrWhiteSpace($env:AMS_REF)) { "main" } else { $env:AMS_REF.Trim() }
+$ArchiveName = "adaptive-master-subagent-orchestration-$($Ref.Replace('/', '-')).zip"
+$ArchiveUrl = "https://github.com/$Repository/archive/refs/heads/$Ref.zip"
+$ApiArchiveUrl = "https://api.github.com/repos/$Repository/zipball/$Ref"
+$ConnectTimeoutSeconds = 15
+$DownloadTimeoutSeconds = 120
 
 function Write-Heading {
-    param([string]$Text)
+    param([Parameter(Mandatory = $true)][string]$Text)
     Write-Host ""
     Write-Host $Text -ForegroundColor Cyan
     Write-Host ("=" * $Text.Length) -ForegroundColor DarkCyan
 }
 
+function Get-PositiveEnvironmentInteger {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][int]$Default
+    )
+    $Value = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $Default }
+    $Parsed = 0
+    if (-not [int]::TryParse($Value, [ref]$Parsed) -or $Parsed -le 0) {
+        throw "$Name must be a positive integer; received: $Value"
+    }
+    return $Parsed
+}
+
 function Get-NormalizedOption {
     param([string]$Value)
-
-    if ([string]::IsNullOrWhiteSpace($Value)) {
-        return $null
-    }
-
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
     switch ($Value.Trim().ToUpperInvariant()) {
         "1" { return "A" }
         "A" { return "A" }
@@ -73,300 +80,319 @@ function Get-UserSelection {
     Write-Host "  3) Option C - Lean runtime with mandatory deterministic installation"
     Write-Host "  4) Uninstall Adaptive Master-Subagent Orchestration"
     Write-Host ""
-
-    $choice = Read-Host "Selection [1]"
-    if ([string]::IsNullOrWhiteSpace($choice)) {
-        $choice = "1"
-    }
-    return Get-NormalizedOption $choice
-}
-
-function Get-CodexHome {
-    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
-        return [System.IO.Path]::GetFullPath($env:CODEX_HOME)
-    }
-    return (Join-Path $HOME ".codex")
+    $Choice = Read-Host "Selection [1]"
+    if ([string]::IsNullOrWhiteSpace($Choice)) { $Choice = "1" }
+    return Get-NormalizedOption $Choice
 }
 
 function Confirm-Uninstall {
-    if ($Force -or $env:AMS_UNINSTALL_FORCE -eq "1") {
-        return $true
-    }
-
-    Write-Warning "This removes package-managed plugins, managed agent profiles, legacy skill directories, and the user-level AMS configuration."
-    Write-Host "Project-local .codex configuration files and unrelated user files will not be removed."
-    $confirmation = Read-Host "Type REMOVE to continue"
-    return ($confirmation -ceq "REMOVE")
+    if ($Force -or $env:AMS_UNINSTALL_FORCE -eq "1") { return $true }
+    Write-Warning "This removes package-managed AMS plugins, profiles, backups, legacy skill directories, and the user-level AMS configuration."
+    Write-Host "Unrelated files and project-local configuration are preserved."
+    $Confirmation = Read-Host "Type REMOVE to continue"
+    return ($Confirmation -ceq "REMOVE")
 }
 
-function Remove-AmsInstallation {
-    Write-Heading "Uninstalling Adaptive Master-Subagent Orchestration"
+function Resolve-Python311 {
+    $Candidates = @()
+    $Launcher = Get-Command py -ErrorAction SilentlyContinue
+    if ($Launcher) {
+        $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-3") }
+        foreach ($Version in @("3.14", "3.13", "3.12", "3.11")) {
+            $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-$Version") }
+        }
+    }
+    $Python = Get-Command python -ErrorAction SilentlyContinue
+    if ($Python) { $Candidates += [PSCustomObject]@{ Executable = $Python.Source; Prefix = @() } }
+    $Python3 = Get-Command python3 -ErrorAction SilentlyContinue
+    if ($Python3) { $Candidates += [PSCustomObject]@{ Executable = $Python3.Source; Prefix = @() } }
 
-    if (-not (Confirm-Uninstall)) {
-        Write-Host "Uninstall cancelled."
+    foreach ($Candidate in $Candidates) {
+        try {
+            & $Candidate.Executable @($Candidate.Prefix + @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")) 2>$null
+            if ($LASTEXITCODE -eq 0) { return $Candidate }
+        }
+        catch { }
+    }
+    throw "Python 3.11 or later was not found."
+}
+
+function Invoke-ResolvedPython {
+    param(
+        [Parameter(Mandatory = $true)]$Python,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+    & $Python.Executable @($Python.Prefix + @("-B", "-E", "-s", "-S") + $Arguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python command failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Copy-Or-DownloadArchive {
+    param(
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [string]$RequestedArchivePath
+    )
+    if ([string]::IsNullOrWhiteSpace($RequestedArchivePath)) { $RequestedArchivePath = $env:AMS_ARCHIVE_PATH }
+    if (-not [string]::IsNullOrWhiteSpace($RequestedArchivePath)) {
+        $Resolved = [System.IO.Path]::GetFullPath($RequestedArchivePath)
+        if (-not (Test-Path -LiteralPath $Resolved -PathType Leaf)) {
+            throw "Archive path is not a readable file: $RequestedArchivePath"
+        }
+        Copy-Item -LiteralPath $Resolved -Destination $Destination -Force
+        Write-Host "Using repository archive: $Resolved"
         return
     }
 
-    $marketRoot = Join-Path $HOME ".agents\plugins"
-    $pluginRoot = Join-Path $marketRoot "plugins"
-    $marketplacePath = Join-Path $marketRoot "marketplace.json"
-    $codexHome = Get-CodexHome
-    $agentsPath = Join-Path $codexHome "agents"
-    $configPath = Join-Path $codexHome "ams-orchestration.toml"
-
-    if (Test-Path -LiteralPath $pluginRoot) {
-        Get-ChildItem -LiteralPath $pluginRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            $directoryName = $_.Name
-            $owned = $false
-            foreach ($pluginName in $PluginNames) {
-                if ($directoryName -eq $pluginName -or
-                    $directoryName.StartsWith("$pluginName.backup-", [System.StringComparison]::OrdinalIgnoreCase) -or
-                    $directoryName.StartsWith("$pluginName.installing-", [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $owned = $true
-                    break
-                }
-            }
-            if ($owned) {
-                Remove-Item -LiteralPath $_.FullName -Recurse -Force
-                Write-Host "removed plugin directory: $($_.FullName)"
-            }
-        }
-    }
-
-    if (Test-Path -LiteralPath $marketplacePath) {
-        try {
-            $marketplace = Get-Content -LiteralPath $marketplacePath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($null -ne $marketplace.plugins) {
-                $remaining = @($marketplace.plugins | Where-Object { $PluginNames -notcontains $_.name })
-                $marketplace.plugins = $remaining
-                $json = $marketplace | ConvertTo-Json -Depth 100
-                $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
-                [System.IO.File]::WriteAllText($marketplacePath, $json + [Environment]::NewLine, $utf8NoBom)
-                Write-Host "updated marketplace registration: $marketplacePath"
-            }
-        }
-        catch {
-            throw "Unable to safely update $marketplacePath. No marketplace entries were intentionally removed. $($_.Exception.Message)"
-        }
-    }
-
-    if (Test-Path -LiteralPath $agentsPath) {
-        Get-ChildItem -LiteralPath $agentsPath -File -ErrorAction SilentlyContinue | ForEach-Object {
-            try {
-                $content = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 -ErrorAction Stop
-                if ($content.Contains($ManagedMarker)) {
-                    Remove-Item -LiteralPath $_.FullName -Force
-                    Write-Host "removed managed profile: $($_.FullName)"
-                }
-            }
-            catch {
-                Write-Warning "Could not inspect $($_.FullName): $($_.Exception.Message)"
-            }
-        }
-    }
-
-    if (Test-Path -LiteralPath $configPath) {
-        Remove-Item -LiteralPath $configPath -Force
-        Write-Host "removed user configuration: $configPath"
-    }
-
-    $legacySkillRoot = Join-Path $HOME ".agents\skills"
-    foreach ($legacySkillName in @("adaptive-master-subagent-orchestration", "ams-orchestration", "ams-installer")) {
-        $legacySkillPath = Join-Path $legacySkillRoot $legacySkillName
-        if (Test-Path -LiteralPath $legacySkillPath) {
-            Remove-Item -LiteralPath $legacySkillPath -Recurse -Force
-            Write-Host "removed legacy skill directory: $legacySkillPath"
-        }
-    }
-
-    Write-Host ""
-    Write-Host "Uninstall complete. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
-}
-
-function Assert-Python311 {
-    $launcher = Get-Command py -ErrorAction SilentlyContinue
-    if ($launcher) {
-        & $launcher.Source -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"
-        if ($LASTEXITCODE -eq 0) {
-            return
-        }
-    }
-
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if ($python) {
-        & $python.Source -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"
-        if ($LASTEXITCODE -eq 0) {
-            return
-        }
-    }
-
-    throw "Python 3.11 or later is required. Install Python, then run this installer again."
-}
-
-function Download-ReleaseArchive {
-    param([string]$Destination)
-
-    $headers = @{}
-    $archiveUrl = $PublicArchiveUrl
+    $Headers = @{}
+    $Url = $ArchiveUrl
     if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
-        $archiveUrl = $PrivateArchiveUrl
-        $headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
-        $headers["Accept"] = "application/vnd.github+json"
-        $headers["X-GitHub-Api-Version"] = "2022-11-28"
+        $Url = $ApiArchiveUrl
+        $Headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
+        $Headers["Accept"] = "application/vnd.github+json"
+        $Headers["X-GitHub-Api-Version"] = "2022-11-28"
     }
-
-    Write-Host "Downloading repository package: $archiveUrl"
-    $request = @{
-        Uri = $archiveUrl
-        OutFile = $Destination
-        UseBasicParsing = $true
-        ErrorAction = "Stop"
-    }
-    if ($headers.Count -gt 0) {
-        $request["Headers"] = $headers
-    }
-
+    Write-Host "Downloading repository package for ref $Ref."
+    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     try {
-        Invoke-WebRequest @request
+        if ($Curl) {
+            $CurlArguments = @(
+                "-fL", "--silent", "--show-error", "--retry", "3", "--retry-delay", "1",
+                "--connect-timeout", [string]$ConnectTimeoutSeconds, "--max-time", [string]$DownloadTimeoutSeconds
+            )
+            foreach ($Key in $Headers.Keys) {
+                $CurlArguments += @("-H", "$Key`: $($Headers[$Key])")
+            }
+            $CurlArguments += @($Url, "-o", $Destination)
+            & $Curl.Source @CurlArguments
+            if ($LASTEXITCODE -ne 0) { throw "curl.exe exited with code $LASTEXITCODE" }
+        }
+        else {
+            $Request = @{
+                Uri = $Url
+                OutFile = $Destination
+                UseBasicParsing = $true
+                TimeoutSec = $DownloadTimeoutSeconds
+                ErrorAction = "Stop"
+            }
+            if ($Headers.Count -gt 0) { $Request["Headers"] = $Headers }
+            Invoke-WebRequest @Request
+        }
     }
     catch {
-        $privateHint = ""
-        if ([string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
-            $privateHint = " The repository is private; set GITHUB_TOKEN to a token with repository read access and retry."
-        }
-        throw "Repository package download failed.$privateHint $($_.Exception.Message)"
+        throw "Repository package download failed. Verify connectivity and repository access. $($_.Exception.Message)"
+    }
+    if (-not (Test-Path -LiteralPath $Destination -PathType Leaf) -or (Get-Item -LiteralPath $Destination).Length -le 0) {
+        throw "Repository package download produced an empty file."
     }
 }
 
-function Test-PackageManifest {
-    param([string]$PackageRoot)
+function Expand-SafeArchive {
+    param(
+        [Parameter(Mandatory = $true)]$Python,
+        [Parameter(Mandatory = $true)][string]$Archive,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$TempRoot
+    )
+    $ExtractorPath = Join-Path $TempRoot "safe_extract.py"
+    $Extractor = @'
+from __future__ import annotations
+import os
+import stat
+import sys
+import zipfile
+from pathlib import Path, PurePosixPath
 
-    $manifestPath = Join-Path $PackageRoot "MANIFEST.sha256"
-    if (-not (Test-Path -LiteralPath $manifestPath)) {
-        throw "Package manifest was not found: $manifestPath"
-    }
-
-    foreach ($line in Get-Content -LiteralPath $manifestPath -Encoding UTF8) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        if ($line -notmatch '^([0-9a-fA-F]{64})  (.+)$') {
-            throw "Malformed package manifest line: $line"
-        }
-        $expected = $matches[1].ToLowerInvariant()
-        $relative = $matches[2].Replace('/', [System.IO.Path]::DirectorySeparatorChar)
-        $path = Join-Path $PackageRoot $relative
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw "Package manifest references a missing file: $relative"
-        }
-        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($actual -ne $expected) {
-            throw "Package manifest verification failed for $relative."
-        }
-    }
-    Write-Host "Selected package manifest verified."
+archive = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+max_entries = 5000
+max_bytes = 256 * 1024 * 1024
+seen = set()
+try:
+    with zipfile.ZipFile(archive) as zf:
+        infos = zf.infolist()
+        if not infos:
+            raise SystemExit("Repository archive is empty.")
+        if len(infos) > max_entries:
+            raise SystemExit(f"Repository archive has too many entries: {len(infos)}")
+        total = 0
+        validated = []
+        for info in infos:
+            name = info.filename.replace("\\", "/")
+            if any(ord(char) < 32 or ord(char) == 127 for char in name):
+                raise SystemExit(f"Repository archive contains a control character in a path: {name!r}")
+            path = PurePosixPath(name)
+            if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+                raise SystemExit(f"Repository archive contains an unsafe path: {name}")
+            if path.parts and ":" in path.parts[0]:
+                raise SystemExit(f"Repository archive contains an unsupported drive path: {name}")
+            normalized = path.as_posix().rstrip("/")
+            if normalized in seen:
+                raise SystemExit(f"Repository archive contains a duplicate path: {name}")
+            seen.add(normalized)
+            mode = (info.external_attr >> 16) & 0xFFFF
+            if stat.S_ISLNK(mode):
+                raise SystemExit(f"Repository archive contains an unsupported symbolic link: {name}")
+            if info.flag_bits & 0x1:
+                raise SystemExit(f"Repository archive contains an encrypted entry: {name}")
+            total += info.file_size
+            if total > max_bytes:
+                raise SystemExit("Repository archive exceeds the extraction size limit.")
+            validated.append((info, path))
+        destination.mkdir(parents=True, exist_ok=True)
+        root = destination.resolve()
+        for info, path in validated:
+            target = destination.joinpath(*path.parts)
+            resolved_parent = target.parent.resolve(strict=False)
+            if os.path.commonpath((str(root), str(resolved_parent))) != str(root):
+                raise SystemExit(f"Repository archive escapes the extraction directory: {info.filename}")
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as source, target.open("wb") as output:
+                while True:
+                    block = source.read(1024 * 1024)
+                    if not block:
+                        break
+                    output.write(block)
+except (OSError, zipfile.BadZipFile) as exc:
+    raise SystemExit(f"Repository archive could not be extracted: {exc}") from exc
+'@
+    $Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($ExtractorPath, $Extractor, $Utf8NoBom)
+    Invoke-ResolvedPython -Python $Python -Arguments @($ExtractorPath, $Archive, $Destination)
 }
 
-function Install-AmsOption {
-    param([ValidateSet("A", "B", "C")][string]$SelectedOption)
-
-    Assert-Python311
-
-    $optionDirectories = @{
-        "A" = "adaptive-master-subagent-orchestration-option-a-two-skill"
-        "B" = "adaptive-master-subagent-orchestration-option-b-unified"
-        "C" = "adaptive-master-subagent-orchestration-option-c-installer-required"
+function Get-PackageRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractPath,
+        [Parameter(Mandatory = $true)][string]$DirectoryName
+    )
+    $Matches = @(Get-ChildItem -LiteralPath $ExtractPath -Directory -Recurse -ErrorAction Stop | Where-Object { $_.Name -ceq $DirectoryName })
+    if ($Matches.Count -ne 1) {
+        throw "Expected exactly one package directory named $DirectoryName after extraction; found $($Matches.Count)."
     }
+    return $Matches[0].FullName
+}
 
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-install-" + [Guid]::NewGuid().ToString("N"))
-    $archivePath = Join-Path $tempRoot $ArchiveName
-    $extractPath = Join-Path $tempRoot "extracted"
-
-    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-    try {
-        Download-ReleaseArchive -Destination $archivePath
-        New-Item -ItemType Directory -Path $extractPath -Force | Out-Null
-        Expand-Archive -LiteralPath $archivePath -DestinationPath $extractPath -Force
-
-        $packageDirectoryName = $optionDirectories[$SelectedOption]
-        $packageRootItem = Get-ChildItem -LiteralPath $extractPath -Directory -Recurse -ErrorAction Stop |
-            Where-Object { $_.Name -eq $packageDirectoryName } |
-            Select-Object -First 1
-        if ($null -eq $packageRootItem) {
-            throw "Selected package directory was not found after extraction: $packageDirectoryName"
-        }
-        $packageRoot = $packageRootItem.FullName
-        $packageInstaller = Join-Path $packageRoot "Install-Package.ps1"
-
-        if (-not (Test-Path -LiteralPath $packageInstaller)) {
-            throw "Selected package installer was not found: $packageInstaller"
-        }
-        Test-PackageManifest -PackageRoot $packageRoot
-
-        Write-Heading "Installing Option $SelectedOption"
-        $installParameters = @{
-            UpgradeManaged = $true
-            Intensity = $Intensity
-            SparkEfforts = $SparkEfforts
-        }
-        if ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") {
-            $installParameters["ExcludeSpark"] = $true
-        }
-
-        & $packageInstaller @installParameters
-        if ($LASTEXITCODE -ne 0) {
-            throw "The selected package installer exited with code $LASTEXITCODE."
-        }
-
-        $codexHome = Get-CodexHome
-        $configPath = Join-Path $codexHome "ams-orchestration.toml"
-        if (Test-Path -LiteralPath $configPath) {
-            $configText = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8
-            if ($configText.Contains('\n')) {
-                $normalized = $configText.Replace('\n', [Environment]::NewLine)
-                [System.IO.File]::WriteAllText($configPath, $normalized, (New-Object System.Text.UTF8Encoding($false)))
-            }
-        }
-
-        Write-Host ""
-        Write-Host "Option $SelectedOption installed successfully. Restart Codex if it does not appear immediately." -ForegroundColor Green
+function Get-InstalledUninstaller {
+    $PluginRoot = Join-Path $HomeDirectory ".agents\plugins\plugins"
+    if (-not (Test-Path -LiteralPath $PluginRoot -PathType Container)) { return $null }
+    $Names = @(
+        "adaptive-master-subagent-orchestration-option-a-two-skill",
+        "adaptive-master-subagent-orchestration-option-b-unified",
+        "adaptive-master-subagent-orchestration-option-c-installer-required",
+        "adaptive-master-subagent-orchestration-option-a-modular",
+        "adaptive-master-subagent-orchestration-option-c-lean",
+        "adaptive-master-subagent-orchestration"
+    )
+    foreach ($Name in $Names) {
+        $Candidate = Join-Path (Join-Path $PluginRoot $Name) "scripts\install_package.py"
+        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { return $Candidate }
     }
-    finally {
-        if (Test-Path -LiteralPath $tempRoot) {
-            Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
-        }
-    }
+    return $null
 }
 
 try {
+    $ConnectTimeoutSeconds = Get-PositiveEnvironmentInteger -Name "AMS_CONNECT_TIMEOUT_SECONDS" -Default 15
+    $DownloadTimeoutSeconds = Get-PositiveEnvironmentInteger -Name "AMS_DOWNLOAD_TIMEOUT_SECONDS" -Default 120
+
+    if ([string]::IsNullOrWhiteSpace($Ref) -or $Ref.StartsWith("/") -or $Ref.Contains("..") -or $Ref -notmatch '^[A-Za-z0-9._/-]+$') {
+        throw "Unsupported repository ref: $Ref"
+    }
+    if (-not $PSBoundParameters.ContainsKey("HomeDirectory") -and -not [string]::IsNullOrWhiteSpace($env:AMS_HOME)) {
+        $HomeDirectory = $env:AMS_HOME
+    }
+    if ([string]::IsNullOrWhiteSpace($HomeDirectory)) { throw "HomeDirectory cannot be empty." }
+    $HomeDirectory = [System.IO.Path]::GetFullPath($HomeDirectory)
+
     if ([string]::IsNullOrWhiteSpace($Option) -and -not [string]::IsNullOrWhiteSpace($env:AMS_INSTALL_OPTION)) {
         $Option = $env:AMS_INSTALL_OPTION
     }
     if (-not [string]::IsNullOrWhiteSpace($env:AMS_INTENSITY)) {
-        $environmentIntensity = $env:AMS_INTENSITY.Trim().ToLowerInvariant()
-        if (@("auto", "minimal", "moderate", "heavy", "extreme") -notcontains $environmentIntensity) {
+        $EnvironmentIntensity = $env:AMS_INTENSITY.Trim().ToLowerInvariant()
+        if (@("auto", "minimal", "moderate", "heavy", "extreme") -notcontains $EnvironmentIntensity) {
             throw "Unsupported AMS_INTENSITY value: $($env:AMS_INTENSITY)"
         }
-        $Intensity = $environmentIntensity
+        $Intensity = $EnvironmentIntensity
     }
     if (-not [string]::IsNullOrWhiteSpace($env:AMS_SPARK_EFFORTS)) {
-        $environmentSparkEfforts = @($env:AMS_SPARK_EFFORTS.Split(",") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
-        foreach ($effort in $environmentSparkEfforts) {
-            if (@("low", "medium", "high") -notcontains $effort) {
-                throw "Unsupported AMS_SPARK_EFFORTS value: $effort"
+        $EnvironmentSparkEfforts = @($env:AMS_SPARK_EFFORTS.Split(",") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+        foreach ($Effort in $EnvironmentSparkEfforts) {
+            if (@("low", "medium", "high") -notcontains $Effort) {
+                throw "Unsupported AMS_SPARK_EFFORTS value: $Effort"
             }
         }
-        $SparkEfforts = $environmentSparkEfforts
+        $SparkEfforts = $EnvironmentSparkEfforts
+    }
+    if ($env:AMS_EXCLUDE_SPARK -notin @($null, "", "0", "1")) {
+        throw "AMS_EXCLUDE_SPARK must be 0 or 1; received: $($env:AMS_EXCLUDE_SPARK)"
+    }
+    if ($env:AMS_UNINSTALL_FORCE -notin @($null, "", "0", "1")) {
+        throw "AMS_UNINSTALL_FORCE must be 0 or 1; received: $($env:AMS_UNINSTALL_FORCE)"
+    }
+    if (-not ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") -and $SparkEfforts.Count -eq 0) {
+        throw "SparkEfforts cannot be empty unless Spark is excluded."
     }
 
-    $selected = Get-NormalizedOption $Option
-    if ($null -eq $selected) {
-        $selected = Get-UserSelection
+    $Selected = Get-NormalizedOption $Option
+    if ($null -eq $Selected) { $Selected = Get-UserSelection }
+    if ($Selected -eq "UNINSTALL" -and -not (Confirm-Uninstall)) {
+        Write-Host "Uninstall cancelled."
+        exit 0
     }
 
-    if ($selected -eq "UNINSTALL") {
-        Remove-AmsInstallation
+    $Python = Resolve-Python311
+    if ($Selected -eq "UNINSTALL") {
+        $InstalledUninstaller = Get-InstalledUninstaller
+        if (-not [string]::IsNullOrWhiteSpace($InstalledUninstaller)) {
+            Write-Heading "Uninstalling Adaptive Master-Subagent Orchestration"
+            Invoke-ResolvedPython -Python $Python -Arguments @($InstalledUninstaller, "--home", $HomeDirectory, "--uninstall", "--yes")
+            Write-Host ""
+            Write-Host "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
+            exit 0
+        }
     }
-    else {
-        Install-AmsOption -SelectedOption $selected
+    $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-install-" + [Guid]::NewGuid().ToString("N"))
+    $ArchiveFile = Join-Path $TempRoot $ArchiveName
+    $ExtractPath = Join-Path $TempRoot "extracted"
+    New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
+    try {
+        Copy-Or-DownloadArchive -Destination $ArchiveFile -RequestedArchivePath $ArchivePath
+        Expand-SafeArchive -Python $Python -Archive $ArchiveFile -Destination $ExtractPath -TempRoot $TempRoot
+
+        $OptionDirectories = @{
+            "A" = "adaptive-master-subagent-orchestration-option-a-two-skill"
+            "B" = "adaptive-master-subagent-orchestration-option-b-unified"
+            "C" = "adaptive-master-subagent-orchestration-option-c-installer-required"
+            "UNINSTALL" = "adaptive-master-subagent-orchestration-option-c-installer-required"
+        }
+        $PackageRoot = Get-PackageRoot -ExtractPath $ExtractPath -DirectoryName $OptionDirectories[$Selected]
+        $Installer = Join-Path $PackageRoot "scripts\install_package.py"
+        if (-not (Test-Path -LiteralPath $Installer -PathType Leaf)) {
+            throw "Selected package installer was not found: $Installer"
+        }
+
+        if ($Selected -eq "UNINSTALL") {
+            Write-Heading "Uninstalling Adaptive Master-Subagent Orchestration"
+            Invoke-ResolvedPython -Python $Python -Arguments @($Installer, "--home", $HomeDirectory, "--uninstall", "--yes")
+            Write-Host ""
+            Write-Host "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
+        }
+        else {
+            Write-Heading "Installing Option $Selected"
+            $Arguments = @($Installer, "--home", $HomeDirectory, "--upgrade-managed", "--intensity", $Intensity, "--spark-efforts", ($SparkEfforts -join ","))
+            if ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") { $Arguments += "--exclude-spark" }
+            Invoke-ResolvedPython -Python $Python -Arguments $Arguments
+            Write-Host ""
+            Write-Host "Option $Selected installed successfully. Restart Codex if it does not appear immediately." -ForegroundColor Green
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $TempRoot) {
+            Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 catch {

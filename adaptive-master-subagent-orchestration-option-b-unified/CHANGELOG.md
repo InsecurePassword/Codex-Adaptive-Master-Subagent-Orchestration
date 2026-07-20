@@ -9,6 +9,7 @@
 - Moved detailed package setup into `MANUAL-INSTALLATION.md`.
 - Removed download instructions based on repository visibility.
 - Corrected orchestration terminology so `extreme` is consistently the highest intensity.
+- Completed a transactional installer audit with command-line selector bypass, strict manifests, safe option switching, bounded process-tree cleanup, rollback tests, offline uninstall, and expanded integration coverage.
 
 ## 3.1.0
 

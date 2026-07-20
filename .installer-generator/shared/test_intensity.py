@@ -13,6 +13,7 @@ import time
 import tomllib
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 from process_utils import run_bounded
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def run(*args: str, env: dict[str, str] | None = None, expect: int = 0) -> str:
-    command = [sys.executable, "-E", "-s", "-S", str(SCRIPT), *args]
+    command = [sys.executable, "-B", "-E", "-s", "-S", str(SCRIPT), *args]
     try:
         result = run_bounded(
             command,
@@ -43,7 +44,7 @@ def run(*args: str, env: dict[str, str] | None = None, expect: int = 0) -> str:
             f"command returned {result.returncode}, expected {expect}: {command}\n"
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
-    return result.stdout + result.stderr
+    return (result.stdout or "") + (result.stderr or "")
 
 
 def main() -> int:

@@ -20,19 +20,18 @@ function Resolve-Python311 {
     $Candidates = @()
     $Launcher = Get-Command py -ErrorAction SilentlyContinue
     if ($Launcher) {
-        $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-3") }
-        foreach ($Version in @("3.14", "3.13", "3.12", "3.11")) {
-            $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = @("-$Version") }
+        foreach ($Prefix in @(@("-3"), @("-3.14"), @("-3.13"), @("-3.12"), @("-3.11"))) {
+            $Candidates += [PSCustomObject]@{ Executable = $Launcher.Source; Prefix = $Prefix }
         }
     }
-    $Python = Get-Command python -ErrorAction SilentlyContinue
-    if ($Python) { $Candidates += [PSCustomObject]@{ Executable = $Python.Source; Prefix = @() } }
-    $Python3 = Get-Command python3 -ErrorAction SilentlyContinue
-    if ($Python3) { $Candidates += [PSCustomObject]@{ Executable = $Python3.Source; Prefix = @() } }
+    foreach ($Name in @("python", "python3")) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command) { $Candidates += [PSCustomObject]@{ Executable = $Command.Source; Prefix = @() } }
+    }
 
     foreach ($Candidate in $Candidates) {
         try {
-            & $Candidate.Executable @($Candidate.Prefix + @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")) 2>$null
+            & $Candidate.Executable @($Candidate.Prefix + @("-B", "-E", "-s", "-S", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)")) 2>$null
             if ($LASTEXITCODE -eq 0) { return $Candidate }
         }
         catch { }
@@ -46,20 +45,18 @@ if (-not (Test-Path -LiteralPath $Installer -PathType Leaf)) {
     throw "Package installer was not found: $Installer"
 }
 
-$Arguments = @($ResolvedPython.Prefix + @("-E", "-s", "-S") + @($Installer, "--home", $HomeDirectory))
+$Arguments = @($ResolvedPython.Prefix + @("-B", "-E", "-s", "-S", $Installer, "--home", $HomeDirectory))
 if ($Uninstall) {
-    if ($WhatIf) {
-        $Arguments += @("--uninstall", "--dry-run")
-    }
+    $Arguments += "--uninstall"
+    if ($WhatIf) { $Arguments += "--dry-run" }
+    elseif ($Force) { $Arguments += "--yes" }
     else {
-        if (-not $Force) {
-            $Confirmation = Read-Host "Type REMOVE to uninstall all package-managed AMS files"
-            if ($Confirmation -cne "REMOVE") {
-                Write-Host "Uninstall cancelled."
-                return
-            }
+        $Confirmation = Read-Host "Type REMOVE to uninstall all package-managed AMS files"
+        if ($Confirmation -cne "REMOVE") {
+            Write-Host "Uninstall cancelled."
+            return
         }
-        $Arguments += @("--uninstall", "--yes")
+        $Arguments += "--yes"
     }
 }
 else {

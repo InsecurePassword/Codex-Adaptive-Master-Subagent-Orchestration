@@ -341,7 +341,7 @@ run_package_operation() {
     installer=$1
     selected=$2
     if [ "$selected" = UNINSTALL ]; then
-        python3 -E -s -S "$installer" --home "$INSTALL_HOME" --uninstall --yes
+        python3 -B -E -s -S "$installer" --home "$INSTALL_HOME" --uninstall --yes
         return
     fi
 
@@ -349,7 +349,7 @@ run_package_operation() {
     if [ "$EXCLUDE_SPARK" = 1 ]; then
         set -- "$@" --exclude-spark
     fi
-    python3 -E -s -S "$installer" "$@"
+    python3 -B -E -s -S "$installer" "$@"
 }
 
 if [ -n "$SELECTED" ]; then

@@ -122,7 +122,7 @@ function Invoke-ResolvedPython {
         [Parameter(Mandatory = $true)]$Python,
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
-    & $Python.Executable @($Python.Prefix + @("-E", "-s", "-S") + $Arguments)
+    & $Python.Executable @($Python.Prefix + @("-B", "-E", "-s", "-S") + $Arguments)
     if ($LASTEXITCODE -ne 0) {
         throw "Python command failed with exit code $LASTEXITCODE."
     }
