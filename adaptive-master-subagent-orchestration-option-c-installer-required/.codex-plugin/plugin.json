@@ -1,0 +1,30 @@
+{
+  "name": "adaptive-master-subagent-orchestration-option-c-installer-required",
+  "version": "3.1.0",
+  "description": "One minimal runtime skill with no bootstrap; deterministic installation is mandatory.",
+  "skills": "./skills/",
+  "keywords": [
+    "codex",
+    "subagents",
+    "orchestration",
+    "sol",
+    "terra",
+    "luna",
+    "spark"
+  ],
+  "interface": {
+    "displayName": "Option C \u2014 Installer-required lean runtime",
+    "shortDescription": "One minimal runtime skill with no bootstrap; deterministic installation is mandatory.",
+    "longDescription": "Sol Max-controlled adaptive orchestration with auto/minimal/moderate/heavy/extreme intensity modes.",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use auto intensity for this project.",
+      "Use heavy intensity for this project.",
+      "Resume this project from the supplied handoff."
+    ]
+  }
+}

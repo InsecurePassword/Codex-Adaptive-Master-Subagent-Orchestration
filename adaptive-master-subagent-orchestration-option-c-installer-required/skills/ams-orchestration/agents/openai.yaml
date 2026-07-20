@@ -1,0 +1,6 @@
+interface:
+  display_name: "AMS Orchestration"
+  short_description: "Lean adaptive Sol Max orchestration"
+  default_prompt: "Apply lean adaptive orchestration in auto mode unless another intensity is selected."
+policy:
+  allow_implicit_invocation: false

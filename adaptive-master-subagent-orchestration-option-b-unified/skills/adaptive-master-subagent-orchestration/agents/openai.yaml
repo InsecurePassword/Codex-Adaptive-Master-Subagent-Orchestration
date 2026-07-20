@@ -1,0 +1,6 @@
+interface:
+  display_name: "Adaptive Master–Subagent Orchestration"
+  short_description: "Unified self-healing run and resume workflow"
+  default_prompt: "Apply adaptive orchestration, conditionally repair profiles, and resume if a handoff is present."
+policy:
+  allow_implicit_invocation: false
