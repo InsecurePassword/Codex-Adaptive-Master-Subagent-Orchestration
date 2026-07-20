@@ -36,4 +36,24 @@ jobs:
           python-version: "3.12"
 
       - name: Run complete installer and Markdown audit
-        run: python -B -E -s -S scripts/audit_installers.py
+        id: release_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          log="release-audit-${RUNNER_OS}.log"
+          python -B -E -s -S scripts/audit_installers.py > "$log" 2>&1
+          status=$?
+          cat "$log"
+          exit $status
+
+      - name: Upload audit failure
+        if: steps.release_audit.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-audit-${{ runner.os }}-failure
+          path: release-audit-${{ runner.os }}.log
+
+      - name: Stop after audit failure
+        if: steps.release_audit.outcome == 'failure'
+        run: exit 1
