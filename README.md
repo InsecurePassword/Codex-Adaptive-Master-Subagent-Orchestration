@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/InsecurePassword/adaptive-master-su
 
 The installer downloads the repository, checks the selected package, installs its profiles and skills, and keeps unrelated Codex files unchanged.
 
-The commands above work when the repository is public. For authenticated private-repository commands, automation variables, and uninstall details, see [Installer usage](INSTALLER-USAGE.md). For clone-based or offline setup, see [Manual installation](MANUAL-INSTALLATION.md).
+For automation variables and uninstall details, see [Installer usage](INSTALLER-USAGE.md). For clone-based or offline setup, see [Manual installation](MANUAL-INSTALLATION.md).
 
 ## Choose a package
 
@@ -151,11 +151,11 @@ Advanced package flags, folder layouts, validation commands, and direct installe
 - Windows PowerShell 5.1+ or a POSIX-compatible Linux shell
 - Spark access only if Spark profiles are selected
 
-No open-source license has been selected yet. Keep the repository private or add a license before public open-source distribution.
+No license has been selected. Add one before redistributing the project.
 
 ## More information
 
-- [Installer usage](INSTALLER-USAGE.md) — private-repository commands, automation, and uninstall scope
+- [Installer usage](INSTALLER-USAGE.md) — automation and uninstall scope
 - [Manual installation](MANUAL-INSTALLATION.md) — repository tree, direct package installation, and validation
 - [Option A package](adaptive-master-subagent-orchestration-option-a-two-skill/)
 - [Option B package](adaptive-master-subagent-orchestration-option-b-unified/)
