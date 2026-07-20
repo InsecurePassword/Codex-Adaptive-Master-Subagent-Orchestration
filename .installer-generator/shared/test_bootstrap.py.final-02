@@ -1,0 +1,9 @@
+        test_rollback_preserves_concurrent_change(base)
+        test_lock_handling(base)
+
+    print("BOOTSTRAP TESTS PASSED")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
