@@ -48,13 +48,32 @@ jobs:
         run: exit 1
 
       - name: Run complete offline installer audit
-        run: python3 -B -E -s -S scripts/audit_installers.py
+        id: audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          python3 -B -E -s -S scripts/audit_installers.py > installer-audit.log 2>&1
+          status=$?
+          cat installer-audit.log
+          exit $status
+
+      - name: Upload audit failure
+        if: steps.audit.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-audit-error
+          path: installer-audit.log
+
+      - name: Stop after audit failure
+        if: steps.audit.outcome == 'failure'
+        run: exit 1
 
       - name: Remove publication scaffolding
         shell: bash
         run: |
           rm -rf .installer-generator .installer-payload
-          rm -f installer-apply.log
+          rm -f installer-apply.log installer-audit.log
           rm -f .github/workflows/apply-installer-audit.yml
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
