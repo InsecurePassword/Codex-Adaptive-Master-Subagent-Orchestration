@@ -34,9 +34,9 @@ Install only one option.
 
 | Option | Included skills | Best for |
 |---|---|---|
-| **A — Recommended** | `$ams-installer` and `$ams-orchestration` | Most users. Installation and repair stay separate from the smaller runtime skill. |
-| **B — Unified** | `$adaptive-master-subagent-orchestration` | Users who prefer one skill. It checks profiles only when installation or repair is needed. |
-| **C — Lean runtime** | `$ams-orchestration` | Users who want the smallest runtime skill and are comfortable using the external installer for setup and repair. |
+| **A) Recommended** | `$ams-installer` and `$ams-orchestration` | Most users. Installation and repair stay separate from the smaller runtime skill. |
+| **B) Unified** | `$adaptive-master-subagent-orchestration` | Users who prefer one skill. It checks profiles only when installation or repair is needed. |
+| **C) Lean runtime** | `$ams-orchestration` | Users who want the smallest runtime skill and are comfortable using the external installer for setup and repair. |
 
 All three options provide the same orchestration rules, intensity modes, model routing, validation requirements, and recovery behavior.
 
