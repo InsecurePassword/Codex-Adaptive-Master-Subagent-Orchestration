@@ -1,24 +1,12 @@
+# Native Windows PowerShell release audit v4
 name: Release audit
 
 on:
   pull_request:
-    branches:
-      - main
-      - post-merge-release-audit
   push:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      audit_scope:
-        description: Audit platform
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - windows
-          - linux
 
 concurrency:
   group: release-audit-${{ github.workflow }}-${{ github.ref }}
@@ -28,120 +16,109 @@ permissions:
   contents: read
 
 jobs:
-  windows-audit:
-    if: >-
-      github.event_name == 'pull_request' ||
-      github.event_name == 'push' ||
-      inputs.audit_scope == 'all' ||
-      inputs.audit_scope == 'windows'
+  windows-powershell-audit:
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    env:
+      AMS_TEST_ROOT: ${{ runner.temp }}\ams-test
+      AMS_TEST_HOME: ${{ runner.temp }}\ams-test\home
+      CODEX_HOME: ${{ runner.temp }}\ams-test\codex
     steps:
       - name: Check out exact audited revision
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Record Windows environment
+      - name: Record Windows PowerShell environment
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
           Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
-          & pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion'
-          python --version
           git --version
-          git status --short
           git rev-parse HEAD
 
-      - name: Parse PowerShell with Windows PowerShell 5.1
+      - name: Parse the deployment script with Windows PowerShell 5.1
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $failed = $false
-          Get-ChildItem -LiteralPath $PWD -Recurse -Filter *.ps1 | ForEach-Object {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              $_.FullName,
-              [ref]$tokens,
-              [ref]$errors
-            ) | Out-Null
-            if ($errors.Count) {
-              $failed = $true
-              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
-            }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "deploy.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
           }
-          if ($failed) { exit 1 }
 
-      - name: Parse PowerShell with PowerShell 7
-        shell: pwsh
+      - name: Verify single-package repository shape
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $failed = $false
-          Get-ChildItem -LiteralPath $PWD -Recurse -Filter *.ps1 | ForEach-Object {
-            $tokens = $null
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile(
-              $_.FullName,
-              [ref]$tokens,
-              [ref]$errors
-            ) | Out-Null
-            if ($errors.Count) {
-              $failed = $true
-              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
-            }
-          }
-          if ($failed) { exit 1 }
+          if (-not (Test-Path .\deploy.ps1 -PathType Leaf)) { throw "deploy.ps1 is missing" }
+          if (Test-Path .\install.ps1) { throw "legacy install.ps1 remains" }
+          if (Test-Path .\install.sh) { throw "legacy install.sh remains" }
+          if (Test-Path .\adaptive-master-subagent-orchestration-option-a-two-skill) { throw "Option A remains" }
+          if (Test-Path .\adaptive-master-subagent-orchestration-option-b-unified) { throw "Option B remains" }
+          if (-not (Test-Path .\adaptive-master-subagent-orchestration-option-c-installer-required -PathType Container)) { throw "lean payload is missing" }
+          if (Get-ChildItem -Recurse -File -Include *.py,*.sh) { throw "Python or Bash deployment files remain" }
+          $policy = Get-Content .\adaptive-master-subagent-orchestration-option-c-installer-required\skills\ams-orchestration\agents\openai.yaml -Raw
+          if ($policy -notmatch 'allow_implicit_invocation:\s*true') { throw "implicit invocation is not enabled" }
+          if ($policy -match 'allow_implicit_invocation:\s*false') { throw "explicit-only policy remains" }
+          $skill = Get-Content .\adaptive-master-subagent-orchestration-option-c-installer-required\skills\ams-orchestration\SKILL.md -Raw
+          if ($skill -notmatch 'intensity = "auto"') { throw "auto is not the default intensity" }
+          if ((Get-ChildItem .\adaptive-master-subagent-orchestration-option-c-installer-required\assets\agent-profiles\ams_*.toml -File).Count -ne 18) { throw "expected 18 profiles" }
 
-      - name: Run required Windows audit commands
-        shell: pwsh
+      - name: Test install
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          python -B -E -s -S .\scripts\refresh_manifests.py --check
-          python -B -E -s -S .\scripts\audit_markdown.py
-          python -B -E -s -S .\scripts\audit_installers.py
-          python -B -E -s -S .\tests\test_windows_installers.py
-          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-a-two-skill\scripts\validate_package.py
-          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-b-unified\scripts\validate_package.py
-          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-c-installer-required\scripts\validate_package.py
+          New-Item -ItemType Directory -Path @($env:AMS_TEST_HOME, $env:CODEX_HOME) -Force | Out-Null
+          & .\deploy.ps1 -Action Install -SourceDirectory $PWD -HomeDirectory $env:AMS_TEST_HOME -ExcludeSpark
+          $skill = Join-Path $env:AMS_TEST_HOME ".agents\skills\ams-orchestration"
+          $agents = Join-Path $env:CODEX_HOME "agents"
+          $intensity = Join-Path $env:CODEX_HOME "ams-orchestration.toml"
+          if (-not (Test-Path $skill -PathType Container)) { throw "skill was not installed" }
+          if ((Get-ChildItem $agents\ams_*.toml -File).Count -ne 15) { throw "non-Spark install did not create 15 profiles" }
+          if ((Get-Content $intensity -Raw) -notmatch 'intensity = "auto"') { throw "auto intensity was not installed" }
+          if ((Get-Content (Join-Path $skill "agents\openai.yaml") -Raw) -notmatch 'allow_implicit_invocation:\s*true') { throw "installed skill is not implicit" }
+          if ((Get-Content (Join-Path $env:CODEX_HOME "config.toml") -Raw) -notmatch 'max_depth\s*=\s*1') { throw "max_depth was not enforced" }
+
+      - name: Test repair
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $damaged = Join-Path $env:CODEX_HOME "agents\ams_terra_medium.toml"
+          Set-Content -LiteralPath $damaged -Value "# managed-by: adaptive-master-subagent-orchestration`nbroken = true" -Encoding UTF8
+          & .\deploy.ps1 -Action Repair -SourceDirectory $PWD -HomeDirectory $env:AMS_TEST_HOME -ExcludeSpark
+          if ((Get-Content $damaged -Raw) -notmatch 'name = "ams_terra_medium"') { throw "repair did not restore the damaged profile" }
+
+      - name: Test uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\deploy.ps1 -Action Uninstall -HomeDirectory $env:AMS_TEST_HOME -Force
+          $skill = Join-Path $env:AMS_TEST_HOME ".agents\skills\ams-orchestration"
+          $agents = Join-Path $env:CODEX_HOME "agents"
+          $intensity = Join-Path $env:CODEX_HOME "ams-orchestration.toml"
+          if (Test-Path $skill) { throw "skill remains after uninstall" }
+          if (Test-Path $intensity) { throw "managed intensity remains after uninstall" }
+          if (Test-Path $agents -PathType Container) {
+            if (Get-ChildItem $agents\ams_*.toml -File -ErrorAction SilentlyContinue) { throw "managed profiles remain after uninstall" }
+          }
+
+      - name: Clean isolated lifecycle paths
+        if: always()
+        shell: powershell
+        run: |
+          if ($env:AMS_TEST_ROOT) { Remove-Item -LiteralPath $env:AMS_TEST_ROOT -Recurse -Force -ErrorAction SilentlyContinue }
 
       - name: Verify clean audited checkout
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           git diff --exit-code
           $status = git status --porcelain
-          if ($status) {
-            Write-Error "Audit left repository changes:`n$status"
-            exit 1
-          }
-
-  linux-audit:
-    if: >-
-      github.event_name == 'push' ||
-      inputs.audit_scope == 'all' ||
-      inputs.audit_scope == 'linux'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Check out exact audited revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Run complete installer and Markdown audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -B -E -s -S scripts/audit_installers.py
+          if ($status) { throw "Audit left repository changes:`n$status" }
