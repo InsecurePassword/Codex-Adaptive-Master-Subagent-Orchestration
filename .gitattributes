@@ -1,0 +1,5 @@
+# Package manifests hash repository bytes, so text files must be identical on every platform.
+* text=auto eol=lf
+
+# Do not transform binary archives if they are added in a future release.
+*.zip binary
