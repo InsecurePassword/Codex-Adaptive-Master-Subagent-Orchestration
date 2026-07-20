@@ -155,8 +155,8 @@ function Download-Source([string]$Ref, [string]$RequestedArchive) {
 
 function Get-PayloadFiles([string]$Root) {
     $Files = @(
-        Get-Item (Join-Path $Root "VERSION"),
-        Get-Item (Join-Path $Root "deploy.ps1")
+        Get-Item -LiteralPath (Join-Path $Root "VERSION")
+        Get-Item -LiteralPath (Join-Path $Root "deploy.ps1")
     )
     foreach ($Directory in @("assets", "skills", "config")) {
         $Files += Get-ChildItem -LiteralPath (Join-Path $Root ($PayloadDirectory + "\" + $Directory)) -File -Recurse
@@ -219,169 +219,132 @@ function Get-IntensityValue([string]$Text) {
 function Ensure-MaxDepth([string]$Path) {
     $Text = if (Test-Path $Path -PathType Leaf) { Read-Utf8 $Path } else { "" }
     if ($Text -match '(?m)^\s*max_depth\s*=\s*([0-9]+)') {
-        if ([int]$Matches[1] -ne 1) { throw "Existing agents.max_depth is $($Matches[1]); AMS requires 1." }
-        return
-    }
-    $AgentSections = [regex]::Matches($Text, '(?m)^\s*\[agents\]\s*$')
-    if ($AgentSections.Count -gt 1) { throw "Codex configuration contains multiple [agents] sections." }
-    if ($AgentSections.Count -eq 1) {
-        $Text = [regex]::Replace($Text, '(?m)^(\s*\[agents\]\s*)$', "`$1`nmax_depth = 1 $ManagedMarker")
-    }
-    else {
-        $Text = $Text.TrimEnd() + "`n`n[agents]`nmax_depth = 1 $ManagedMarker`n"
-    }
-    Write-Utf8 $Path $Text
-}
+        if ([int]$Matches[1] -ne 1) { throw "Existing agents.max_depv\È	
+	X]Ú\ÖÌWJNÈSTÈ™\]Z\™\ÈKˆˆBˆ™]\›‚ˆBˆ	YÙ[ÙXİ[ÛœÈHÜ™YÙ^N“X]Ú\Ê	^	ÊÛJW—Ê—ØYÙ[×WÊ‰	ÊBˆYˆ
+	YÙ[ÙXİ[ÛœËÛİ[YİJHÈ›İÈÛÙ^ÛÛ™šYİ\˜][ÛˆÛÛZ[œÈ][\HØYÙ[×HÙXİ[ÛœËˆˆBˆYˆ
+	YÙ[ÙXİ[ÛœËÛİ[Y\HJHÂˆ	^HÜ™YÙ^N”™\XÙJ	^	ÊÛJWŠÊ—ØYÙ[×WÊŠI	Ë˜	X›X^Ù\HH	X[˜YÙYX\šÙ\ˆŠBˆBˆ[ÙHÂˆ	^H	^•š[Q[™
 
-function Remove-ManagedMaxDepth([string]$Path) {
-    if (-not (Test-Path $Path -PathType Leaf)) { return }
-    $Text = Read-Utf8 $Path
-    $Text = [regex]::Replace($Text, '(?m)^\s*max_depth\s*=\s*1\s*#\s*managed-by:\s*adaptive-master-subagent-orchestration\s*\r?\n?', '')
-    $Text = [regex]::Replace($Text, '(?ms)^\s*\[agents\]\s*\r?\n(?=\s*(?:\[[^\]]+\]|\z))', '')
-    if ($Text.Trim()) { Write-Utf8 $Path ($Text.TrimEnd() + "`n") } else { Remove-Item $Path -Force }
-}
+H
+È˜˜–ØYÙ[×X›X^Ù\HH	X[˜YÙYX\šÙ\˜ˆ‚ˆBˆÜš]KU]	]	^ŸB‚™[˜İ[Ûˆ™[[İ™KSX[˜YÙYX^\
+Üİš[™×I]
+HÂˆYˆ
+[›İ
+\İT]	]T]\HXYŠJHÈ™]\›ˆBˆ	^H™XYU]	]ˆ	^HÜ™YÙ^N”™\XÙJ	^	ÊÛJW—Ê›X^Ù\ÊWÊŒWÊˆ×Ê›X[˜YÙYXN—Ê˜Y\]™K[X\İ\‹\İX˜YÙ[[Ü˜Ú\İ˜][Û—Ê—×ÉË	ÉÊBˆ	^HÜ™YÙ^N”™\XÙJ	^	ÊÛ\ÊW—Ê—ØYÙ[×WÊ—×ŠÏWÊŠÎ—Ö×—WJ×_ŠJIË	ÉÊBˆYˆ
+	^•š[J
+JHÈÜš]KU]	]
+	^•š[Q[™
 
-function Install-Ams([string]$SourceRoot, [string]$Home, [string]$CodexHome, [string[]]$Spark, [bool]$NoSpark, [bool]$IntensitySpecified) {
-    Validate-Source $SourceRoot
+H
+È˜ˆŠHH[ÙHÈ™[[İ™KR][H	]Q›Ü˜ÙHBŸB‚™[˜İ[Ûˆ[œİ[P[\ÊÜİš[™×IÛİ\˜ÙT›ÛİÜİš[™×IÛYKÜİš[™×IÛÙ^ÛYKÜİš[™Ö×WIÜ\šËØ›ÛÛI›ÔÜ\šËØ›ÛÛI[[œÚ]TÜXÚYšYY
+HÂˆ˜[Y]KTÛİ\˜ÙH	Ûİ\˜ÙT›Ûİ‚ˆ	^[ØY›ÛİH›Ú[‹T]	Ûİ\˜ÙT›Ûİ	^[ØY\™XİÜBˆ	ÚÚ[Ûİ\˜ÙHH›Ú[‹T]	^[ØY›ÛİœÚÚ[×[\Ë[Ü˜Ú\İ˜][Ûˆ‚ˆ	›Ùš[TÛİ\˜ÙHH›Ú[‹T]	^[ØY›Ûİ˜\ÜÙ]×YÙ[\›Ùš[\È‚ˆ	ÚÚ[\™Ù]H›Ú[‹T]	ÛYH‹˜YÙ[×ÚÚ[×[\Ë[Ü˜Ú\İ˜][Ûˆ‚ˆ	YÙ[\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜YÙ[È‚ˆ	[[œÚ]U\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜[\Ë[Ü˜Ú\İ˜][Û‹Û[‚ˆ	ÛÛ™šYÕ\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜ÛÛ™šYËÛ[‚ˆ	˜XÚİ\›ÛİH›Ú[‹T]	ÛYH‹˜YÙ[×[\Ë[Ü˜Ú\İ˜][Û—˜XÚİ\È‚ˆ	\Ú\™YH
+Ù]Q\Ú\™Y›Ùš[\È	Ü\šÈ	›ÔÜ\šÊB‚ˆYˆ
 
-    $PayloadRoot = Join-Path $SourceRoot $PayloadDirectory
-    $SkillSource = Join-Path $PayloadRoot "skills\ams-orchestration"
-    $ProfileSource = Join-Path $PayloadRoot "assets\agent-profiles"
-    $SkillTarget = Join-Path $Home ".agents\skills\ams-orchestration"
-    $AgentTarget = Join-Path $CodexHome "agents"
-    $IntensityTarget = Join-Path $CodexHome "ams-orchestration.toml"
-    $ConfigTarget = Join-Path $CodexHome "config.toml"
-    $BackupRoot = Join-Path $Home ".agents\ams-orchestration\backups"
-    $Desired = @(Get-DesiredProfiles $Spark $NoSpark)
+\İT]	ÚÚ[\™Ù]
+HX[™[›İ
+\İSX[˜YÙYÚÚ[	ÚÚ[\™Ù]
+JHÈ›İÈ”™Y\Ú[™ÈÈ™\XÙH[›İÛ™YÚÚ[ˆ	ÚÚ[\™Ù]ˆBˆ›Ü™XXÚ
+	Ûİ\˜ÙH[ˆÙ]PÚ[][H
+›Ú[‹T]	›Ùš[TÛİ\˜ÙH˜[\×Ê‹Û[ŠHQš[JHÂˆ	\™Ù]H›Ú[‹T]	YÙ[\™Ù]	Ûİ\˜ÙK“˜[YBˆYˆ
 
-    if ((Test-Path $SkillTarget) -and -not (Test-ManagedSkill $SkillTarget)) { throw "Refusing to replace unowned skill: $SkillTarget" }
-    foreach ($Source in Get-ChildItem (Join-Path $ProfileSource "ams_*.toml") -File) {
-        $Target = Join-Path $AgentTarget $Source.Name
-        if (($Desired -contains $Source.BaseName) -and (Test-Path $Target) -and -not (Test-ManagedFile $Target)) {
-            throw "Refusing to replace unowned profile: $Target"
-        }
-    }
-    if ((Test-Path $IntensityTarget) -and -not (Test-ManagedFile $IntensityTarget) -and $IntensitySpecified) {
-        throw "Refusing to modify unowned intensity configuration: $IntensityTarget"
-    }
+	\Ú\™YXÛÛZ[œÈ	Ûİ\˜ÙK˜\ÙS˜[YJHX[™
+\İT]	\™Ù]
+HX[™[›İ
+\İSX[˜YÙYš[H	\™Ù]
+JHÂˆ›İÈ”™Y\Ú[™ÈÈ™\XÙH[›İÛ™Y›Ùš[Nˆ	\™Ù]‚ˆBˆBˆYˆ
 
-    $ExistingIntensity = if (Test-Path $IntensityTarget -PathType Leaf) { Get-IntensityValue (Read-Utf8 $IntensityTarget) } else { $null }
-    $ResolvedIntensity = if ($IntensitySpecified) { $Intensity } elseif ($ExistingIntensity) { $ExistingIntensity } else { "auto" }
+\İT]	[[œÚ]U\™Ù]
+HX[™[›İ
+\İSX[˜YÙYš[H	[[œÚ]U\™Ù]
+HX[™	[[œÚ]TÜXÚYšYY
+HÂˆ›İÈ”™Y\Ú[™ÈÈ[ÙYH[›İÛ™Y[[œÚ]HÛÛ™šYİ\˜][Ûˆ	[[œÚ]U\™Ù]‚ˆB‚ˆ	^\İ[™Ò[[œÚ]HHYˆ
+\İT]	[[œÚ]U\™Ù]T]\HXYŠHÈÙ]R[[œÚ]U˜[YH
+™XYU]	[[œÚ]U\™Ù]
+HH[ÙHÈ	[Bˆ	™\ÛÛ™Y[[œÚ]HHYˆ
+	[[œÚ]TÜXÚYšYY
+HÈ	[[œÚ]HH[ÙZYˆ
+	^\İ[™Ò[[œÚ]JHÈ	^\İ[™Ò[[œÚ]HH[ÙHÈ˜]]ÈˆB‚ˆÜš]KRÜİ”ÚÚ[ˆ	ÚÚ[\™Ù]‚ˆÜš]KRÜİ”›Ùš[\Îˆ	
+	\Ú\™YÛİ[
+H‚ˆÜš]KRÜİ’[[œÚ]Nˆ	™\ÛÛ™Y[[œÚ]H‚ˆYˆ
+	Ú]Y”™Y™\™[˜ÙJHÈÜš]KRÜİ•Ú]Yˆ›ÈÚ[™Ù\ÈXYKˆÈ™]\›ˆB‚ˆ	™\]Z\™Y\™XİÜšY\ÈH
 
-    Write-Host "Skill: $SkillTarget"
-    Write-Host "Profiles: $($Desired.Count)"
-    Write-Host "Intensity: $ResolvedIntensity"
-    if ($WhatIfPreference) { Write-Host "WhatIf: no changes made."; return }
+Ü]T]	ÚÚ[\™Ù]T\™[
+K	YÙ[\™Ù]	ÛÙ^ÛYJBˆ™]ËR][HR][U\H\™XİÜHT]	™\]Z\™Y\™XİÜšY\ÈQ›Ü˜ÙHİ]S[ˆ˜XÚİ\R][H	ÚÚ[\™Ù]	˜XÚİ\›ÛİˆYˆ
+\İT]	ÚÚ[\™Ù]
+HÈ™[[İ™KR][H	ÚÚ[\™Ù]T™Xİ\œÙHQ›Ü˜ÙHBˆÛÜKR][H	ÚÚ[Ûİ\˜ÙHQ\İ[˜][Ûˆ	ÚÚ[\™Ù]T™Xİ\œÙHQ›Ü˜ÙBˆÔŞ\İ[K’SË‘š[WN•Üš]P[^
 
-    New-Item -ItemType Directory -Path (Split-Path $SkillTarget -Parent), $AgentTarget, $CodexHome -Force | Out-Null
-    Backup-Item $SkillTarget $BackupRoot
-    if (Test-Path $SkillTarget) { Remove-Item $SkillTarget -Recurse -Force }
-    Copy-Item $SkillSource -Destination $SkillTarget -Recurse -Force
-    [System.IO.File]::WriteAllText((Join-Path $SkillTarget ".ams-managed"), "adaptive-master-subagent-orchestration`nversion=$Version`n", $Utf8NoBom)
+›Ú[‹T]	ÚÚ[\™Ù]‹˜[\Ë[X[˜YÙYŠK˜Y\]™K[X\İ\‹\İX˜YÙ[[Ü˜Ú\İ˜][Û˜™\œÚ[ÛI™\œÚ[Û˜ˆ‹	]›Ğ›ÛJB‚ˆ›Ü™XXÚ
+	Ûİ\˜ÙH[ˆÙ]PÚ[][H
+›Ú[‹T]	›Ùš[TÛİ\˜ÙH˜[\×Ê‹Û[ŠHQš[JHÂˆ	˜[YHH	Ûİ\˜ÙK˜\ÙS˜[YBˆ	\™Ù]H›Ú[‹T]	YÙ[\™Ù]	Ûİ\˜ÙK“˜[YBˆYˆ
+	\Ú\™YXÛÛZ[œÈ	˜[YJHÂˆ˜XÚİ\R][H	\™Ù]	˜XÚİ\›ÛİˆÛÜKR][H	Ûİ\˜ÙK‘[˜[YHQ\İ[˜][Ûˆ	\™Ù]Q›Ü˜ÙBˆBˆ[ÙZYˆ
 
-    foreach ($Source in Get-ChildItem (Join-Path $ProfileSource "ams_*.toml") -File) {
-        $Name = $Source.BaseName
-        $Target = Join-Path $AgentTarget $Source.Name
-        if ($Desired -contains $Name) {
-            Backup-Item $Target $BackupRoot
-            Copy-Item $Source.FullName -Destination $Target -Force
-        }
-        elseif ((Test-Path $Target) -and (Test-ManagedFile $Target)) {
-            Backup-Item $Target $BackupRoot
-            Remove-Item $Target -Force
-        }
-    }
+\İT]	\™Ù]
+HX[™
+\İSX[˜YÙYš[H	\™Ù]
+JHÂˆ˜XÚİ\R][H	\™Ù]	˜XÚİ\›Ûİˆ™[[İ™KR][H	\™Ù]Q›Ü˜ÙBˆBˆB‚ˆYˆ
+[›İ
+\İT]	[[œÚ]U\™Ù]
+H[Üˆ
+\İSX[˜YÙYš[H	[[œÚ]U\™Ù]
+JHÂˆÜš]KU]	[[œÚ]U\™Ù]‰X[˜YÙYX\šÙ\˜œØÚ[XWİ™\œÚ[ÛˆHXš[[œÚ]HH‰™\ÛÛ™Y[[œÚ]X˜ˆ‚ˆBˆ[œİ\™KSX^\	ÛÛ™šYÕ\™Ù]‚ˆYˆ
+[›İ
+\İSX[˜YÙYÚÚ[	ÚÚ[\™Ù]
+JHÈ›İÈ”ÚÚ[™\šYšXØ][Ûˆ˜Z[YˆˆBˆYˆ
 
-    if (-not (Test-Path $IntensityTarget) -or (Test-ManagedFile $IntensityTarget)) {
-        Write-Utf8 $IntensityTarget "$ManagedMarker`nschema_version = 1`nintensity = `"$ResolvedIntensity`"`n"
-    }
-    Ensure-MaxDepth $ConfigTarget
+™XYU]
+›Ú[‹T]	ÚÚ[\™Ù]˜YÙ[×Ü[˜ZKX[[ŠJH[›İX]Ú	Ø[İ×Ú[\XÚ]Ú[›ØØ][Û—ÊYIÊHÈ›İÈ’[\XÚ][›ØØ][Ûˆ™\šYšXØ][Ûˆ˜Z[YˆˆBˆ›Ü™XXÚ
+	˜[YH[ˆ	\Ú\™Y
+HÂˆYˆ
+[›İ
+\İSX[˜YÙYš[H
+›Ú[‹T]	YÙ[\™Ù]
+	˜[YH
+È‹Û[ŠJJJHÈ›İÈ”›Ùš[H™\šYšXØ][Ûˆ˜Z[Yˆ	˜[YHˆBˆBˆÜš]KRÜİ‰Xİ[ÛˆÛÛ\]YİXØÙ\ÜÙ[KˆˆQ›Ü™YÜ›İ[™ÛÛÜˆÜ™Y[‚ŸB‚™[˜İ[Ûˆ[š[œİ[P[\ÊÜİš[™×IÛYKÜİš[™×IÛÙ^ÛYJHÂˆYˆ
+[›İ	›Ü˜ÙHX[™	[ST×ÕS’S”ÕSÑ“ÔÑH[™HŒHŠHÂˆÜš]KUØ\›š[™È•\È™[[İ™\ÈXÚØYÙK[X[˜YÙYSTÈš[\È[™ÛÛ™šYİ\˜][Û‹ˆ‚ˆYˆ
 
-    if (-not (Test-ManagedSkill $SkillTarget)) { throw "Skill verification failed." }
-    if ((Read-Utf8 (Join-Path $SkillTarget "agents\openai.yaml")) -notmatch 'allow_implicit_invocation:\s*true') { throw "Implicit invocation verification failed." }
-    foreach ($Name in $Desired) {
-        if (-not (Test-ManagedFile (Join-Path $AgentTarget ($Name + ".toml")))) { throw "Profile verification failed: $Name" }
-    }
-    Write-Host "$Action completed successfully." -ForegroundColor Green
-}
+™XYRÜİ•\H‘SSÕ‘HÈÛÛ[YHŠHXÛ™H”‘SSÕ‘HŠHÈÜš]KRÜİ•[š[œİ[Ø[˜Ù[YˆÈ™]\›ˆBˆBˆ	ÚÚ[\™Ù]H›Ú[‹T]	ÛYH‹˜YÙ[×ÚÚ[×[\Ë[Ü˜Ú\İ˜][Ûˆ‚ˆ	YÙ[\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜YÙ[È‚ˆ	[[œÚ]U\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜[\Ë[Ü˜Ú\İ˜][Û‹Û[‚ˆ	ÛÛ™šYÕ\™Ù]H›Ú[‹T]	ÛÙ^ÛYH˜ÛÛ™šYËÛ[‚ˆ	İ]T›ÛİH›Ú[‹T]	ÛYH‹˜YÙ[×[\Ë[Ü˜Ú\İ˜][Ûˆ‚‚ˆYˆ
+	Ú]Y”™Y™\™[˜ÙJHÈÜš]KRÜİ•Ú]YˆX[˜YÙYSTÈš[\ÈÛİ[™H™[[İ™YˆÈ™]\›ˆBˆYˆ
 
-function Uninstall-Ams([string]$Home, [string]$CodexHome) {
-    if (-not $Force -and $env:AMS_UNINSTALL_FORCE -ne "1") {
-        Write-Warning "This removes package-managed AMS files and configuration."
-        if ((Read-Host "Type REMOVE to continue") -cne "REMOVE") { Write-Host "Uninstall cancelled."; return }
-    }
-    $SkillTarget = Join-Path $Home ".agents\skills\ams-orchestration"
-    $AgentTarget = Join-Path $CodexHome "agents"
-    $IntensityTarget = Join-Path $CodexHome "ams-orchestration.toml"
-    $ConfigTarget = Join-Path $CodexHome "config.toml"
-    $StateRoot = Join-Path $Home ".agents\ams-orchestration"
+\İT]	ÚÚ[\™Ù]
+HX[™
+\İSX[˜YÙYÚÚ[	ÚÚ[\™Ù]
+JHÈ™[[İ™KR][H	ÚÚ[\™Ù]T™Xİ\œÙHQ›Ü˜ÙHBˆYˆ
+\İT]	YÙ[\™Ù]T]\HÛÛZ[™\ŠHÂˆ›Ü™XXÚ
+	›Ùš[H[ˆÙ]PÚ[][H
+›Ú[‹T]	YÙ[\™Ù]˜[\×Ê‹Û[ŠHQš[HQ\œ›ÜXİ[ÛˆÚ[[PÛÛ[YJHÂˆYˆ
+\İSX[˜YÙYš[H	›Ùš[K‘[˜[YJHÈ™[[İ™KR][H	›Ùš[K‘[˜[YHQ›Ü˜ÙHBˆBˆBˆYˆ
 
-    if ($WhatIfPreference) { Write-Host "WhatIf: managed AMS files would be removed."; return }
-    if ((Test-Path $SkillTarget) -and (Test-ManagedSkill $SkillTarget)) { Remove-Item $SkillTarget -Recurse -Force }
-    if (Test-Path $AgentTarget -PathType Container) {
-        foreach ($Profile in Get-ChildItem (Join-Path $AgentTarget "ams_*.toml") -File -ErrorAction SilentlyContinue) {
-            if (Test-ManagedFile $Profile.FullName) { Remove-Item $Profile.FullName -Force }
-        }
-    }
-    if ((Test-Path $IntensityTarget) -and (Test-ManagedFile $IntensityTarget)) { Remove-Item $IntensityTarget -Force }
-    Remove-ManagedMaxDepth $ConfigTarget
-    if (Test-Path $StateRoot) { Remove-Item $StateRoot -Recurse -Force }
-    Write-Host "Uninstall completed successfully." -ForegroundColor Green
-}
+\İT]	[[œÚ]U\™Ù]
+HX[™
+\İSX[˜YÙYš[H	[[œÚ]U\™Ù]
+JHÈ™[[İ™KR][H	[[œÚ]U\™Ù]Q›Ü˜ÙHBˆ™[[İ™KSX[˜YÙYX^\	ÛÛ™šYÕ\™Ù]ˆYˆ
+\İT]	İ]T›Ûİ
+HÈ™[[İ™KR][H	İ]T›ÛİT™Xİ\œÙHQ›Ü˜ÙHBˆÜš]KRÜİ•[š[œİ[ÛÛ\]YİXØÙ\ÜÙ[KˆˆQ›Ü™YÜ›İ[™ÛÛÜˆÜ™Y[‚ŸB‚HÂˆYˆ
+[›İ	Ğ›İ[™\˜[Y]\œËÛÛZ[œÒÙ^JXİ[ÛˆŠHX[™	[ST×ĞPÕSÓŠHÂˆİÚ]Ú
+	[ST×ĞPÕSÓ‹•š[J
+K•ÓİÙ\’[˜\šX[
 
-try {
-    if (-not $PSBoundParameters.ContainsKey("Action") -and $env:AMS_ACTION) {
-        switch ($env:AMS_ACTION.Trim().ToLowerInvariant()) {
-            "install" { $Action = "Install" }
-            "repair" { $Action = "Repair" }
-            "uninstall" { $Action = "Uninstall" }
-            default { throw "Unsupported AMS_ACTION: $($env:AMS_ACTION)" }
-        }
-    }
-    $IntensitySpecified = $PSBoundParameters.ContainsKey("Intensity")
-    if (-not $IntensitySpecified -and $env:AMS_INTENSITY) {
-        $Intensity = $env:AMS_INTENSITY.Trim().ToLowerInvariant()
-        if ($ValidIntensities -notcontains $Intensity) { throw "Unsupported AMS_INTENSITY: $Intensity" }
-        $IntensitySpecified = $true
-    }
-    if (-not $PSBoundParameters.ContainsKey("SparkEfforts") -and $env:AMS_SPARK_EFFORTS) { $SparkEfforts = $env:AMS_SPARK_EFFORTS }
-    if (-not $PSBoundParameters.ContainsKey("HomeDirectory") -and $env:AMS_HOME) { $HomeDirectory = $env:AMS_HOME }
+JHÂˆš[œİ[ˆÈ	Xİ[ÛˆH’[œİ[ˆBˆœ™\Z\ˆˆÈ	Xİ[ÛˆH”™\Z\ˆˆBˆ[š[œİ[ˆÈ	Xİ[ÛˆH•[š[œİ[ˆBˆY˜][È›İÈ•[œİ\ÜYST×ĞPÕSÓˆ	
+	[ST×ĞPÕSÓŠHˆBˆBˆBˆ	[[œÚ]TÜXÚYšYYH	Ğ›İ[™\˜[Y]\œËÛÛZ[œÒÙ^J’[[œÚ]HŠBˆYˆ
+[›İ	[[œÚ]TÜXÚYšYYX[™	[ST×ÒS•S”ÒUJHÂˆ	[[œÚ]HH	[ST×ÒS•S”ÒUK•š[J
+K•ÓİÙ\’[˜\šX[
 
-    $HomeDirectory = Get-FullPath $HomeDirectory
-    $CodexHome = if ($env:CODEX_HOME) { Get-FullPath $env:CODEX_HOME } else { Join-Path $HomeDirectory ".codex" }
-    $Spark = @(Convert-SparkEfforts $SparkEfforts)
-    $NoSpark = $ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1"
-    if (-not $NoSpark -and $Spark.Count -eq 0) { throw "SparkEfforts cannot be empty unless Spark is excluded." }
-
-    if (-not $WhatIfPreference) {
-        $LockPath = Join-Path $HomeDirectory ".agents\.ams-orchestration-deploy.lock"
-        Enter-Lock $LockPath
-    }
-    try {
-        if ($Action -eq "Uninstall") {
-            Write-Heading "Uninstalling Adaptive Master-Subagent Orchestration"
-            Uninstall-Ams $HomeDirectory $CodexHome
-        }
-        else {
-            if ($SourceDirectory) {
-                $SourceRoot = Get-FullPath $SourceDirectory
-            }
-            else {
-                $Ref = if ($RepositoryRef) { $RepositoryRef.Trim() } elseif ($env:AMS_REF) { $env:AMS_REF.Trim() } else { "main" }
-                if ($Ref -notmatch '^[A-Za-z0-9._/-]+$' -or $Ref.Contains("..")) { throw "Unsupported repository ref: $Ref" }
-                $SourceRoot = Download-Source $Ref $ArchivePath
-            }
-            Write-Heading ("{0}ing Adaptive Master-Subagent Orchestration" -f $Action)
-            Install-Ams $SourceRoot $HomeDirectory $CodexHome $Spark $NoSpark $IntensitySpecified
-        }
-    }
-    finally { Exit-Lock }
-}
-catch {
-    Exit-Lock
-    Write-Error $_.Exception.Message
-    exit 1
-}
-finally {
-    if ($TempRoot -and (Test-Path $TempRoot)) { Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue }
-}
+BˆYˆ
+	˜[Y[[œÚ]Y\È[›İÛÛZ[œÈ	[[œÚ]JHÈ›İÈ•[œİ\ÜYST×ÒS•S”ÒUNˆ	[[œÚ]HˆBˆ	[[œÚ]TÜXÚYšYYH	YBˆBˆYˆ
+[›İ	Ğ›İ[™\˜[Y]\œËÛÛZ[œÒÙ^J”Ü\šÑY™›ÜÈŠHX[™	[ST×ÔÔT’×ÑQ‘“Ô•ÊHÈ	Ü\šÑY™›ÜÈH	[ST×ÔÔT’×ÑQ‘“Ô•ÈBˆYˆ
+[›İ	Ğ›İ[™\˜[Y]\œËÛÛZ[œÒÙ^J’ÛYQ\™XİÜHŠHX[™	[ST×ÒÓQJHÈ	ÛYQ\™XİÜHH	[ST×ÒÓQHB‚ˆ	ÛYQ\™XİÜHHÙ]Q[]	ÛYQ\™XİÜBˆ	ÛÙ^ÛYHHYˆ
+	[ÓÑVÒÓQJHÈÙ]Q[]	[ÓÑVÒÓQHH[ÙHÈ›Ú[‹T]	ÛYQ\™XİÜH‹˜ÛÙ^ˆBˆ	Ü\šÈH
+ÛÛ™\TÜ\šÑY™›ÜÈ	Ü\šÑY™›ÜÊBˆ	›ÔÜ\šÈH	^ÛYTÜ\šÈ[Üˆ	[ST×ÑVÓQWÔÔT’ÈY\HŒH‚ˆYˆ
+[›İ	›ÔÜ\šÈX[™	Ü\šËÛİ[Y\H
+HÈ›İÈ”Ü\šÑY™›ÜÈØ[››İ™H[\H[›\ÜÈÜ\šÈ\È^ÛYYˆˆB‚ˆYˆ
+[›İ	Ú]Y”™Y™\™[˜ÙJHÂˆ	ØÚÔ]H›Ú[‹T]	ÛYQ\™XİÜH‹˜YÙ[×˜[\Ë[Ü˜Ú\İ˜][Û‹Y\ŞK›ØÚÈ‚ˆ[\‹SØÚÈ	ØÚÔ]ˆBˆHÂˆYˆ
+	Xİ[ÛˆY\H•[š[œİ[ŠHÂˆÜš]KRXY[™È•[š[œİ[[™ÈY\]™HX\İ\‹TİX˜YÙ[Ü˜Ú\İ˜][Ûˆ‚ˆ[š[œİ[P[\È	ÛYQ\™XİÜH	ÛÙ^ÛYBˆBˆ[ÙHÂˆYˆ
+	Ûİ\˜ÙQ\™XİÜJHÂˆ	Ûİ\˜ÙT›ÛİHÙ]Q[]	Ûİ\˜ÙQ\™XİÜBˆBˆ[ÙHÂˆ	™YˆHYˆ
+	™\ÜÚ]ÜT™YŠHÈ	™\ÜÚ]ÜT™Y‹•š[J
+HH[ÙZYˆ
+	[ST×Ô‘QŠHÈ	[ST×Ô‘Q‹•š[J
+HH[ÙHÈ›XZ[ˆˆBˆYˆ
+	™Yˆ[›İX]Ú	×–ĞKV˜K^ŒNK—ËËWJÉ	È[Üˆ	™Y‹ÛÛZ[œÊ‹‹ˆŠJHÈ›İÈ•[œİ\ÜY™\ÜÚ]ÜH™Yˆ	™YˆˆBˆ	Ûİ\˜ÙT›ÛİHİÛ›ØYTÛİ\˜ÙH	™Yˆ	\˜Ú]™T]ˆBˆÜš]KRXY[™È
+ÌZ[™ÈY\]™HX\İ\‹TİX˜YÙ[Ü˜Ú\İ˜][ÛˆˆYˆ	Xİ[ÛŠBˆ[œİ[P[\È	Ûİ\˜ÙT›Ûİ	ÛYQ\™XİÜH	ÛÙ^ÛYH	Ü\šÈ	›ÔÜ\šÈ	[[œÚ]TÜXÚYšYYˆBˆBˆš[˜[HÈ^]SØÚÈBŸB˜Ø]ÚÂˆ^]SØÚÂˆÜš]KQ\œ›Üˆ	Ë‘^Ù\[Û‹“Y\ÜØYÙBˆ^]BŸB™š[˜[HÂˆYˆ
+	[\›ÛİX[™
+\İT]	[\›Ûİ
+JHÈ™[[İ™KR][H	[\›ÛİT™Xİ\œÙHQ›Ü˜ÙHQ\œ›ÜXİ[ÛˆÚ[[PÛÛ[YHBŸB
