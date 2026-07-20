@@ -46,7 +46,8 @@ def shared_source(name: str) -> Path:
     direct = SHARED / name
     if direct.is_file():
         return direct
-    parts = sorted(SHARED.glob(name + ".part-*"))
+    final_parts = sorted(SHARED.glob(name + ".final-*"))
+    parts = final_parts or sorted(SHARED.glob(name + ".part-*"))
     if not parts:
         raise FileNotFoundError(f"No staged source found for {name}")
     target = ASSEMBLED / name
@@ -83,15 +84,15 @@ def render(src: Path, dst: Path, values: dict[str, object]) -> None:
 
 
 def regenerate_manifest(package: Path) -> None:
-    lines: list[str] = []
-    files = sorted(
+    generated = [
         path
         for path in package.rglob("*")
-        if path.is_file()
-        and path.name != "MANIFEST.sha256"
-        and "__pycache__" not in path.parts
-        and path.suffix not in {".pyc", ".pyo"}
-    )
+        if "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}
+    ]
+    if generated:
+        raise RuntimeError(f"Generated Python artifacts found before manifest generation: {generated}")
+    lines: list[str] = []
+    files = sorted(path for path in package.rglob("*") if path.is_file() and path.name != "MANIFEST.sha256")
     for path in files:
         relative = path.relative_to(package).as_posix()
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -100,7 +101,6 @@ def regenerate_manifest(package: Path) -> None:
 
 
 def main() -> int:
-    # Assemble and compile all staged Python sources before touching the repository.
     staged_python = [shared_source(name) for name in SHARED_FILES]
     staged_python += [shared_source("install_package_template.py"), shared_source("validate_package_template.py")]
     for path in staged_python:
