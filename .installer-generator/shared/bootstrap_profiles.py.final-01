@@ -1,0 +1,160 @@
+        raise SystemExit(f"Bundled profile is missing {label}")
+    return updated
+
+
+def replace_model(text: str, model: str) -> str:
+    return replace_exact(MODEL_RE, text, model, "model")
+
+
+def replace_name(text: str, name: str) -> str:
+    return replace_exact(NAME_RE, text, name, "name")
+
+
+def snapshot(path: Path) -> FileSnapshot:
+    if not path.exists() and not path.is_symlink():
+        return FileSnapshot(False)
+    if not path.is_file() or path.is_symlink():
+        raise SystemExit(f"Expected a regular profile file, found another file type: {path}")
+    info = path.stat()
+    return FileSnapshot(True, path.read_bytes(), stat.S_IMODE(info.st_mode))
+
+
+def atomic_write(path: Path, text: str, mode: int | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if mode is not None:
+            os.chmod(tmp_name, mode)
+        os.replace(tmp_name, path)
+        _fsync_directory(path.parent)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+def _current_regular_bytes(path: Path) -> bytes | None:
+    if not path.exists() and not path.is_symlink():
+        return None
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError(f"rollback path changed to a non-regular file: {path}")
+    return path.read_bytes()
+
+
+def restore_if_unchanged(path: Path, state: FileSnapshot, applied: AppliedChange) -> None:
+    """Rollback only when the path still has the exact state written by this installer."""
+    current = _current_regular_bytes(path)
+    if applied.expected_data is None:
+        if current is not None:
+            raise RuntimeError(f"rollback refused to overwrite a concurrently created file: {path}")
+    elif current != applied.expected_data:
+        raise RuntimeError(f"rollback refused to overwrite a concurrently modified file: {path}")
+
+    if state.existed:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.restore.", dir=str(path.parent))
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(state.data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if state.mode is not None:
+                os.chmod(tmp_name, state.mode)
+            os.replace(tmp_name, path)
+            _fsync_directory(path.parent)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+    elif path.exists() or path.is_symlink():
+        # The equality check above proves this is still the regular file we created.
+        path.unlink()
+        _fsync_directory(path.parent)
+
+
+def next_backup_path(path: Path, transaction_id: str = "") -> Path:
+    stamp = transaction_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    candidate = path.with_name(f"{path.name}.bak-{stamp}")
+    index = 2
+    while candidate.exists() or candidate.is_symlink():
+        candidate = path.with_name(f"{path.name}.bak-{stamp}-{index}")
+        index += 1
+    return candidate
+
+
+def read_regular_text(path: Path) -> str | None:
+    if not path.exists() and not path.is_symlink():
+        return None
+    if not path.is_file() or path.is_symlink():
+        return None
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def plan_existing_managed(
+    *, requested: str, installed_name: str, path: Path, expected_text: str, current: str, upgrade_managed: bool
+) -> ProfilePlan:
+    if current == expected_text:
+        return ProfilePlan(requested, installed_name, path, "preserved-identical")
+    if not valid_profile(current, installed_name):
+        return ProfilePlan(
+            requested,
+            installed_name,
+            path,
+            "repaired-managed-malformed",
+            text=expected_text,
+            needs_backup=True,
+        )
+    if upgrade_managed:
+        return ProfilePlan(
+            requested,
+            installed_name,
+            path,
+            "upgraded-managed",
+            text=expected_text,
+            needs_backup=True,
+        )
+    return ProfilePlan(requested, installed_name, path, "preserved-managed-different")
+
+
+def plan_profile(*, src: Path, destination: Path, model: str, upgrade_managed: bool) -> ProfilePlan:
+    requested = src.stem
+    source_text = replace_model(src.read_text(encoding="utf-8"), model)
+    if not valid_profile(source_text, requested):
+        raise SystemExit(f"Bundled profile is invalid: {src}")
+
+    canonical = destination / src.name
+    current = read_regular_text(canonical)
+    if current is None and not canonical.exists() and not canonical.is_symlink():
+        return ProfilePlan(requested, requested, canonical, "created", text=source_text)
+    if current is not None:
+        if current == source_text:
+            return ProfilePlan(requested, requested, canonical, "preserved-identical")
+        if MANAGED_MARKER in current:
+            return plan_existing_managed(
+                requested=requested,
+                installed_name=requested,
+                path=canonical,
+                expected_text=source_text,
+                current=current,
+                upgrade_managed=upgrade_managed,
+            )
+
+    index = 1
+    while index <= MAX_PROFILE_ALIASES:
+        suffix = "_adaptive" if index == 1 else f"_adaptive_{index}"
+        installed_name = requested + suffix
+        candidate = destination / f"{installed_name}.toml"
+        candidate_text = replace_name(source_text, installed_name)
+        candidate_current = read_regular_text(candidate)
+        if candidate_current is None and not candidate.exists() and not candidate.is_symlink():
+            return ProfilePlan(requested, installed_name, candidate, "created-nonconflicting", text=candidate_text)
+        if candidate_current is not None:
+            if candidate_current == candidate_text:
+                return ProfilePlan(requested, installed_name, candidate, "preserved-nonconflicting")
+            if MANAGED_MARKER in candidate_current:
+                planned = plan_existing_managed(
+                    requested=requested,
+                    installed_name=installed_name,
+                    path=candidate,
