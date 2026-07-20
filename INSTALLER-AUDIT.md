@@ -73,3 +73,5 @@ INSTALLER AUDIT PASSED
 ## Platform note
 
 The release workflow runs the complete audit on both Ubuntu and Windows. Windows CI executes the PowerShell installer for Options A, B, and C, verifies package switching and file placement, and runs uninstall. Local systems without PowerShell still receive static PowerShell checks.
+
+- The native Windows gate independently exercises both PowerShell runtimes and the complete installation lifecycle without Bash.

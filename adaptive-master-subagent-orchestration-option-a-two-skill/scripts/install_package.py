@@ -23,6 +23,9 @@ from pathlib import Path, PurePosixPath
 from typing import Iterator
 
 sys.dont_write_bytecode = True
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 from process_utils import process_is_alive, run_bounded
 

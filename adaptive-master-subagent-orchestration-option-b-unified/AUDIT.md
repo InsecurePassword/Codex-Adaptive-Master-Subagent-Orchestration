@@ -47,3 +47,5 @@ python3 -B -E -s -S ./scripts/validate_package.py --scripts-only
 Each package includes `scripts/validate_package.py` and `MANIFEST.sha256`. Validation covers plugin structure, skill metadata, profile TOML, package membership, checksums, installer behavior, intensity configuration, recovery requirements, and option-specific setup rules.
 
 The package manifest must be regenerated whenever a packaged file changes.
+
+- Native Windows wrapper tests verify comma-separated Spark effort forwarding through both Windows PowerShell 5.1 and PowerShell 7.

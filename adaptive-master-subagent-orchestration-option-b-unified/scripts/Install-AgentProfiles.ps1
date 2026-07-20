@@ -2,8 +2,7 @@
 param(
     [string]$Destination,
     [switch]$ExcludeSpark,
-    [ValidateSet("low", "medium", "high")]
-    [string[]]$SparkEfforts = @("low", "medium", "high"),
+    [object]$SparkEfforts = "low,medium,high",
     [switch]$UpgradeManaged,
     [switch]$DryRun,
     [switch]$Json,
@@ -15,6 +14,26 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
+
+function ConvertTo-SparkEffortList {
+    param([AllowNull()][object]$Value)
+
+    $Values = @()
+    foreach ($Entry in @($Value)) {
+        if ($null -eq $Entry) { continue }
+        foreach ($Part in ([string]$Entry).Split(",")) {
+            $Normalized = $Part.Trim().ToLowerInvariant()
+            if ([string]::IsNullOrWhiteSpace($Normalized)) { continue }
+            if (@("low", "medium", "high") -notcontains $Normalized) {
+                throw "Unsupported Spark effort value: $Part"
+            }
+            if ($Values -notcontains $Normalized) {
+                $Values += $Normalized
+            }
+        }
+    }
+    return $Values
+}
 
 function Resolve-Python311 {
     $Candidates = @()
@@ -39,6 +58,8 @@ function Resolve-Python311 {
 }
 
 $ResolvedPython = Resolve-Python311
+$SparkEffortValues = @(ConvertTo-SparkEffortList -Value $SparkEfforts)
+if (-not $ExcludeSpark -and $SparkEffortValues.Count -eq 0) { throw "SparkEfforts cannot be empty unless Spark is excluded." }
 $ScriptPath = Join-Path $PSScriptRoot "bootstrap_profiles.py"
 if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
     throw "Profile installer was not found: $ScriptPath"
@@ -52,7 +73,7 @@ $Arguments = @($ResolvedPython.Prefix + @(
 ))
 if ($Destination) { $Arguments += @("--destination", $Destination) }
 if ($ExcludeSpark) { $Arguments += "--exclude-spark" }
-else { $Arguments += @("--spark-efforts", ($SparkEfforts -join ",")) }
+else { $Arguments += @("--spark-efforts", ($SparkEffortValues -join ",")) }
 if ($UpgradeManaged) { $Arguments += "--upgrade-managed" }
 if ($DryRun) { $Arguments += "--dry-run" }
 if ($Json) { $Arguments += "--json" }

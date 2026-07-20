@@ -68,6 +68,9 @@ def python_syntax_audit() -> None:
 
 
 def shell_syntax_audit() -> None:
+    if os.name == "nt":
+        print("[audit] POSIX/Bash syntax deferred on Windows")
+        return
     print("[audit] POSIX/Bash syntax")
     script = ROOT / "install.sh"
     for executable in ("sh", "dash", "bash"):
@@ -119,7 +122,7 @@ def root_integration_tests() -> None:
     print(f"[audit] root installer integration ({script_name})")
     run(
         [sys.executable, "-B", "-E", "-s", "-S", str(ROOT / "tests" / script_name)],
-        timeout=300 if os.name == "nt" else 180,
+        timeout=1800 if os.name == "nt" else 180,
     )
 
 

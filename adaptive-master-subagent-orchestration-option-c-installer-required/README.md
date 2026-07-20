@@ -17,7 +17,7 @@ To install directly from this folder:
 ### Windows
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto -SparkEfforts low,medium
 ```
 
 ### Linux

@@ -124,7 +124,7 @@ python3 -B -E -s -S ./scripts/install_package.py --upgrade-managed --intensity a
 | `-HomeDirectory <path>` | `--home <path>` | Use an alternate installation home |
 | `-UpgradeManaged` | `--upgrade-managed` | Back up and update older package-managed files |
 | `-ExcludeSpark` | `--exclude-spark` | Skip optional Spark profiles and remove previously managed Spark profiles |
-| `-SparkEfforts low,medium,high` | `--spark-efforts low,medium,high` | Select Spark profiles |
+| `-SparkEfforts low,medium,high` | `--spark-efforts low,medium,high` | Select Spark profiles; the PowerShell value is one comma-separated native argument |
 | `-SkipProfiles` | `--skip-profiles` | Skip profile installation where allowed; Option C rejects this |
 | `-Intensity <mode>` | `--intensity <mode>` | Set the initial intensity if no user configuration exists |
 | `-WhatIf` | `--dry-run` | Preview changes without installing |
@@ -185,7 +185,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option Un
 sh ./install.sh --option UNINSTALL --force
 ```
 
-The uninstall path removes package-managed files while preserving pre-existing unmarked user configuration, unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration.
+The uninstall path removes package-managed files while preserving pre-existing unmarked user configuration, unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration. Windows removal remains local and idempotent even when all active and backup package uninstallers are missing; the root script then uses its embedded ownership-safe fallback and does not download repository content.
 
 Package ownership requires the managed marker on the first line. Marker text embedded in user-authored TOML values or descriptions is not treated as ownership. The root uninstallers execute only canonical local package uninstallers whose path components are regular directories and whose script is a regular file.
 
