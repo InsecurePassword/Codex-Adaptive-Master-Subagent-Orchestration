@@ -66,7 +66,7 @@ jobs:
           if ($skill -notmatch 'intensity = "auto"') { throw "auto is not the default intensity" }
           if ((Get-ChildItem .\adaptive-master-subagent-orchestration-option-c-installer-required\assets\agent-profiles\ams_*.toml -File).Count -ne 18) { throw "expected 18 profiles" }
 
-      - name: Test install, repair, and uninstall
+      - name: Prepare isolated lifecycle paths
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
@@ -74,36 +74,52 @@ jobs:
           $home = Join-Path $root "home"
           $codex = Join-Path $root "codex"
           New-Item -ItemType Directory -Force $home, $codex | Out-Null
-          $env:CODEX_HOME = $codex
-          try {
-            & .\deploy.ps1 -Action Install -SourceDirectory $PWD -HomeDirectory $home -ExcludeSpark
-            if ($LASTEXITCODE -ne 0) { throw "install failed" }
-            $skill = Join-Path $home ".agents\skills\ams-orchestration"
-            $agents = Join-Path $codex "agents"
-            $intensity = Join-Path $codex "ams-orchestration.toml"
-            if (-not (Test-Path $skill -PathType Container)) { throw "skill was not installed" }
-            if ((Get-ChildItem $agents\ams_*.toml -File).Count -ne 15) { throw "non-Spark install did not create 15 profiles" }
-            if ((Get-Content $intensity -Raw) -notmatch 'intensity = "auto"') { throw "auto intensity was not installed" }
-            if ((Get-Content (Join-Path $skill "agents\openai.yaml") -Raw) -notmatch 'allow_implicit_invocation:\s*true') { throw "installed skill is not implicit" }
-            if ((Get-Content (Join-Path $codex "config.toml") -Raw) -notmatch 'max_depth\s*=\s*1') { throw "max_depth was not enforced" }
+          "AMS_TEST_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "AMS_TEST_HOME=$home" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CODEX_HOME=$codex" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-            $damaged = Join-Path $agents "ams_terra_medium.toml"
-            Set-Content -LiteralPath $damaged -Value "# managed-by: adaptive-master-subagent-orchestration`nbroken = true" -Encoding UTF8
-            & .\deploy.ps1 -Action Repair -SourceDirectory $PWD -HomeDirectory $home -ExcludeSpark
-            if ($LASTEXITCODE -ne 0) { throw "repair failed" }
-            if ((Get-Content $damaged -Raw) -notmatch 'name = "ams_terra_medium"') { throw "repair did not restore the damaged profile" }
+      - name: Test install
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\deploy.ps1 -Action Install -SourceDirectory $PWD -HomeDirectory $env:AMS_TEST_HOME -ExcludeSpark
+          $skill = Join-Path $env:AMS_TEST_HOME ".agents\skills\ams-orchestration"
+          $agents = Join-Path $env:CODEX_HOME "agents"
+          $intensity = Join-Path $env:CODEX_HOME "ams-orchestration.toml"
+          if (-not (Test-Path $skill -PathType Container)) { throw "skill was not installed" }
+          if ((Get-ChildItem $agents\ams_*.toml -File).Count -ne 15) { throw "non-Spark install did not create 15 profiles" }
+          if ((Get-Content $intensity -Raw) -notmatch 'intensity = "auto"') { throw "auto intensity was not installed" }
+          if ((Get-Content (Join-Path $skill "agents\openai.yaml") -Raw) -notmatch 'allow_implicit_invocation:\s*true') { throw "installed skill is not implicit" }
+          if ((Get-Content (Join-Path $env:CODEX_HOME "config.toml") -Raw) -notmatch 'max_depth\s*=\s*1') { throw "max_depth was not enforced" }
 
-            & .\deploy.ps1 -Action Uninstall -HomeDirectory $home -Force
-            if ($LASTEXITCODE -ne 0) { throw "uninstall failed" }
-            if (Test-Path $skill) { throw "skill remains after uninstall" }
-            if (Test-Path $intensity) { throw "managed intensity remains after uninstall" }
-            if (Test-Path $agents -PathType Container) {
-              if (Get-ChildItem $agents\ams_*.toml -File -ErrorAction SilentlyContinue) { throw "managed profiles remain after uninstall" }
-            }
+      - name: Test repair
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $damaged = Join-Path $env:CODEX_HOME "agents\ams_terra_medium.toml"
+          Set-Content -LiteralPath $damaged -Value "# managed-by: adaptive-master-subagent-orchestration`nbroken = true" -Encoding UTF8
+          & .\deploy.ps1 -Action Repair -SourceDirectory $PWD -HomeDirectory $env:AMS_TEST_HOME -ExcludeSpark
+          if ((Get-Content $damaged -Raw) -notmatch 'name = "ams_terra_medium"') { throw "repair did not restore the damaged profile" }
+
+      - name: Test uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\deploy.ps1 -Action Uninstall -HomeDirectory $env:AMS_TEST_HOME -Force
+          $skill = Join-Path $env:AMS_TEST_HOME ".agents\skills\ams-orchestration"
+          $agents = Join-Path $env:CODEX_HOME "agents"
+          $intensity = Join-Path $env:CODEX_HOME "ams-orchestration.toml"
+          if (Test-Path $skill) { throw "skill remains after uninstall" }
+          if (Test-Path $intensity) { throw "managed intensity remains after uninstall" }
+          if (Test-Path $agents -PathType Container) {
+            if (Get-ChildItem $agents\ams_*.toml -File -ErrorAction SilentlyContinue) { throw "managed profiles remain after uninstall" }
           }
-          finally {
-            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
-          }
+
+      - name: Clean isolated lifecycle paths
+        if: always()
+        shell: powershell
+        run: |
+          Remove-Item -LiteralPath $env:AMS_TEST_ROOT -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Verify clean audited checkout
         shell: powershell
