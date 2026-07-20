@@ -145,3 +145,21 @@ jobs:
         run: |
           git push origin HEAD:windows-final-third-party-audit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Export validated commit after push rejection
+        if: failure()
+        shell: pwsh
+        run: |
+          git format-patch -1 --stdout HEAD | Set-Content -LiteralPath .\windows-audit-final.patch -Encoding utf8
+          git archive --format=zip --output=.\windows-audit-final.zip HEAD
+          git show --stat --oneline HEAD
+
+      - name: Upload validated Windows audit commit
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-audit-final-commit
+          path: |
+            windows-audit-final.patch
+            windows-audit-final.zip
+          if-no-files-found: error
