@@ -18,6 +18,10 @@ jobs:
   windows-powershell-audit:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      AMS_TEST_ROOT: ${{ runner.temp }}\ams-test
+      AMS_TEST_HOME: ${{ runner.temp }}\ams-test\home
+      CODEX_HOME: ${{ runner.temp }}\ams-test\codex
     steps:
       - name: Check out exact audited revision
         uses: actions/checkout@v4
@@ -66,22 +70,11 @@ jobs:
           if ($skill -notmatch 'intensity = "auto"') { throw "auto is not the default intensity" }
           if ((Get-ChildItem .\adaptive-master-subagent-orchestration-option-c-installer-required\assets\agent-profiles\ams_*.toml -File).Count -ne 18) { throw "expected 18 profiles" }
 
-      - name: Prepare isolated lifecycle paths
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $root = Join-Path $env:RUNNER_TEMP ("ams-test-" + [Guid]::NewGuid().ToString("N"))
-          $home = Join-Path $root "home"
-          $codex = Join-Path $root "codex"
-          New-Item -ItemType Directory -Path @($home, $codex) -Force | Out-Null
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "AMS_TEST_ROOT=$root" -Encoding Ascii
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "AMS_TEST_HOME=$home" -Encoding Ascii
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "CODEX_HOME=$codex" -Encoding Ascii
-
       - name: Test install
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Path @($env:AMS_TEST_HOME, $env:CODEX_HOME) -Force | Out-Null
           & .\deploy.ps1 -Action Install -SourceDirectory $PWD -HomeDirectory $env:AMS_TEST_HOME -ExcludeSpark
           $skill = Join-Path $env:AMS_TEST_HOME ".agents\skills\ams-orchestration"
           $agents = Join-Path $env:CODEX_HOME "agents"
