@@ -29,112 +29,88 @@ jobs:
           ref: windows-final-third-party-audit
           fetch-depth: 0
 
-      - name: Apply exact Windows audit payload
+      - name: Reconstruct exact Windows audit payload
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $DiagnosticPath = Join-Path $PWD "windows-audit-apply.log"
-          Set-Content -LiteralPath $DiagnosticPath -Value "Windows audit remediation diagnostics" -Encoding utf8
+          $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*" | Sort-Object Name)
+          if ($parts.Count -ne 5) { throw "Expected five payload chunks; found $($parts.Count)." }
+          $encoded = ($parts | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::ASCII).Trim() }) -join ""
+          $payload = [Convert]::FromBase64String($encoded)
+          $sha = [System.Security.Cryptography.SHA256]::Create()
+          try { $digest = ([BitConverter]::ToString($sha.ComputeHash($payload))).Replace("-", "").ToLowerInvariant() }
+          finally { $sha.Dispose() }
+          if ($digest -cne "b1fb29b702aaa1236dfea89e345f9b86dc4a20a2ce64df83c1b9d0cd6cf4fec7") { throw "Payload digest mismatch: $digest" }
+          $zip = Join-Path $env:RUNNER_TEMP "windows-audit-payload.zip"
+          [System.IO.File]::WriteAllBytes($zip, $payload)
+          Expand-Archive -LiteralPath $zip -DestinationPath $PWD -Force
 
-          function Invoke-CheckedNative {
-            param(
-              [Parameter(Mandatory = $true)][string]$Label,
-              [Parameter(Mandatory = $true)][string]$Executable,
-              [Parameter(Mandatory = $true)][string[]]$Arguments
-            )
-            $StagePath = Join-Path $env:RUNNER_TEMP ((($Label -replace "[^A-Za-z0-9_-]", "-") + ".log"))
-            & $Executable @Arguments *> $StagePath
-            $ExitCode = $LASTEXITCODE
-            Add-Content -LiteralPath $DiagnosticPath -Value "`n=== $Label ===" -Encoding utf8
-            if (Test-Path -LiteralPath $StagePath) {
-              Get-Content -LiteralPath $StagePath -Raw | Add-Content -LiteralPath $DiagnosticPath -Encoding utf8
-            }
-            Add-Content -LiteralPath $DiagnosticPath -Value "exit_code=$ExitCode" -Encoding utf8
-            if ($ExitCode -ne 0) {
-              throw "$Label failed with exit code $ExitCode."
+      - name: Apply source transformations
+        shell: pwsh
+        run: |
+          python -B -E -s -S .\.windows-audit-transform.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Regenerate and verify manifests
+        shell: pwsh
+        run: |
+          python -B -E -s -S .\scripts\refresh_manifests.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B -E -s -S .\scripts\refresh_manifests.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run static source audits
+        shell: pwsh
+        run: |
+          python -B -E -s -S .\scripts\audit_markdown.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B -E -s -S -c "from pathlib import Path; [compile(p.read_text(encoding='utf-8'), str(p), 'exec') for p in Path('.').rglob('*.py') if '__pycache__' not in p.parts]"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Parse all PowerShell with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem -LiteralPath . -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
             }
           }
+          if ($failed) { exit 1 }
 
-          try {
-            $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*" | Sort-Object Name)
-            if ($parts.Count -ne 5) {
-              throw "Expected five Windows audit payload chunks; found $($parts.Count)."
+      - name: Parse all PowerShell with PowerShell 7
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -LiteralPath . -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
             }
-            $encoded = ($parts | ForEach-Object {
-              [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::ASCII).Trim()
-            }) -join ""
-            $payload = [Convert]::FromBase64String($encoded)
-            $sha = [System.Security.Cryptography.SHA256]::Create()
-            try {
-              $digest = ([BitConverter]::ToString($sha.ComputeHash($payload))).Replace("-", "").ToLowerInvariant()
-            }
-            finally {
-              $sha.Dispose()
-            }
-            if ($digest -cne "b1fb29b702aaa1236dfea89e345f9b86dc4a20a2ce64df83c1b9d0cd6cf4fec7") {
-              throw "Windows audit payload digest mismatch: $digest"
-            }
-            Add-Content -LiteralPath $DiagnosticPath -Value "payload_digest=$digest" -Encoding utf8
-            $zip = Join-Path $env:RUNNER_TEMP "windows-audit-payload.zip"
-            [System.IO.File]::WriteAllBytes($zip, $payload)
-            Expand-Archive -LiteralPath $zip -DestinationPath $PWD -Force
-
-            Invoke-CheckedNative "transform" "python" @("-B", "-E", "-s", "-S", ".\.windows-audit-transform.py")
-            Invoke-CheckedNative "refresh manifests" "python" @("-B", "-E", "-s", "-S", ".\scripts\refresh_manifests.py")
-            Invoke-CheckedNative "check manifests" "python" @("-B", "-E", "-s", "-S", ".\scripts\refresh_manifests.py", "--check")
-            Invoke-CheckedNative "audit Markdown" "python" @("-B", "-E", "-s", "-S", ".\scripts\audit_markdown.py")
-            Invoke-CheckedNative "compile Python" "python" @("-B", "-E", "-s", "-S", "-c", "from pathlib import Path; [compile(p.read_text(encoding='utf-8'), str(p), 'exec') for p in Path('.').rglob('*.py') if '__pycache__' not in p.parts]")
-
-            $failed = $false
-            foreach ($engine in @(
-              "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
-              (Get-Command pwsh.exe -ErrorAction Stop).Source
-            )) {
-              & $engine -NoLogo -NoProfile -ExecutionPolicy Bypass -Command @'
-            $failed = $false
-            Get-ChildItem -LiteralPath . -Recurse -Filter *.ps1 | ForEach-Object {
-              $tokens = $null
-              $errors = $null
-              [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-              if ($errors.Count) {
-                $failed = $true
-                Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
-              }
-            }
-            if ($failed) { exit 1 }
-            '@
-              if ($LASTEXITCODE -ne 0) {
-                Add-Content -LiteralPath $DiagnosticPath -Value "PowerShell parsing failed in $engine with exit code $LASTEXITCODE" -Encoding utf8
-                $failed = $true
-              }
-            }
-            if ($failed) { throw "PowerShell parsing failed." }
-
-            Remove-Item -LiteralPath $DiagnosticPath -Force
-            Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
-            $parts | Remove-Item -Force
-            Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
-
-            git add --all
-            git diff --cached --check
-            if ($LASTEXITCODE -ne 0) { throw "git diff --cached --check failed." }
-            git status --short
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Complete independent Windows installation audit coverage"
-            if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
-            git push origin HEAD:windows-final-third-party-audit
-            if ($LASTEXITCODE -ne 0) { throw "git push failed." }
           }
-          catch {
-            Add-Content -LiteralPath $DiagnosticPath -Value ("`nEXCEPTION:`n" + ($_ | Format-List * -Force | Out-String)) -Encoding utf8
-            throw
-          }
+          if ($failed) { exit 1 }
 
-      - name: Upload remediation diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-audit-apply-failure
-          path: windows-audit-apply.log
-          if-no-files-found: error
+      - name: Commit exact Windows audit corrections
+        shell: pwsh
+        run: |
+          $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*")
+          Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
+          $parts | Remove-Item -Force
+          Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
+          git add --all
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Complete independent Windows installation audit coverage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:windows-final-third-party-audit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
