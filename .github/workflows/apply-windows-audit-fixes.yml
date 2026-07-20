@@ -48,8 +48,18 @@ jobs:
       - name: Apply source transformations
         shell: pwsh
         run: |
-          python -B -E -s -S .\.windows-audit-transform.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B -E -s -S .\.windows-audit-transform.py *> .\windows-audit-transform.log
+          $ExitCode = $LASTEXITCODE
+          Get-Content -LiteralPath .\windows-audit-transform.log
+          if ($ExitCode -ne 0) { exit $ExitCode }
+
+      - name: Upload transform failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-audit-transform-failure
+          path: windows-audit-transform.log
+          if-no-files-found: error
 
       - name: Regenerate and verify manifests
         shell: pwsh
@@ -102,6 +112,7 @@ jobs:
         run: |
           $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*")
           Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
+          Remove-Item -LiteralPath .\windows-audit-transform.log -Force -ErrorAction SilentlyContinue
           $parts | Remove-Item -Force
           Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
           git add --all
