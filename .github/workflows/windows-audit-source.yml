@@ -1,0 +1,41 @@
+name: Windows audit source export
+
+on:
+  push:
+    branches:
+      - final-windows-installation-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact audited revision
+        uses: actions/checkout@v4
+
+      - name: Create deterministic source archive
+        shell: bash
+        run: |
+          python -B -E -s -S - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          root = Path.cwd()
+          output = root / "windows-audit-source.zip"
+          with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+                  if not path.is_file() or ".git" in path.parts or path == output:
+                      continue
+                  archive.write(path, path.relative_to(root).as_posix())
+          PY
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-audit-source-${{ github.sha }}
+          path: windows-audit-source.zip
+          if-no-files-found: error
