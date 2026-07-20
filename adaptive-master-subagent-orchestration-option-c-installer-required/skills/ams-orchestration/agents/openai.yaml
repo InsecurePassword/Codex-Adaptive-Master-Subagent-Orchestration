@@ -1,6 +1,6 @@
 interface:
-  display_name: "AMS Orchestration"
-  short_description: "Lean adaptive Sol Max orchestration"
-  default_prompt: "Apply lean adaptive orchestration in auto mode unless another intensity is selected."
+  display_name: "Adaptive Master–Subagent Orchestration"
+  short_description: "Adaptive Sol Max orchestration with intensity controls"
+  default_prompt: "Apply adaptive master-subagent orchestration in auto mode unless another intensity is explicitly selected."
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true
