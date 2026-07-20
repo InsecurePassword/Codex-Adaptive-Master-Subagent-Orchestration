@@ -2,9 +2,9 @@
 
 Version **3.1.0**
 
-Adaptive Master–Subagent Orchestration lets a Sol Max Codex session act as the master for a flexible group of direct subagents. The master decides when delegation is useful, how many agents to use, which model and reasoning level each task needs, and whether the returned work is acceptable.
+Adaptive Master–Subagent Orchestration lets a Sol Max Codex session manage a flexible group of direct subagents. The master decides when delegation is useful, how many agents to use, which model and reasoning level each task needs, and whether the returned work is acceptable.
 
-The system supports Sol, Terra, Luna, and optional GPT-5.3-Codex-Spark profiles. It also includes safe parallel work, independent review, project recovery, and user-selectable orchestration intensity.
+The system supports Sol, Terra, Luna, and optional GPT-5.3-Codex-Spark profiles. It also includes safe parallel work, independent review, project recovery, and user-selectable activity levels.
 
 ## Quick installation
 
@@ -58,7 +58,7 @@ Use $adaptive-master-subagent-orchestration to complete this project.
 
 Option A also installs `$ams-installer`. Use it only to check, repair, or upgrade the managed profiles.
 
-The master may complete simple work itself or launch multiple direct children when that improves speed or quality. Children cannot create their own agents.
+The master may complete simple work itself or launch multiple direct subagents when that improves speed or quality. Subagents cannot create their own agents.
 
 ## Model routing
 
@@ -66,10 +66,10 @@ The Sol Max master selects the lowest-cost profile that can reliably complete ea
 
 | Family | Typical use |
 |---|---|
-| **Sol** | Architecture, security-sensitive work, difficult debugging, major reviews, and other high-cost-of-failure tasks |
+| **Sol** | Architecture, security-sensitive work, difficult debugging, major reviews, and other tasks where mistakes would be expensive |
 | **Terra** | Everyday implementation, bug fixes, testing, documentation, and technical analysis |
 | **Luna** | Clear, repeatable, high-volume work that is easy to verify |
-| **Spark** | Fast text-only commands, tests, searches, log review, and small bounded fixes |
+| **Spark** | Fast text-only commands, tests, searches, log review, and small, clearly defined fixes |
 
 Sol, Terra, and Luna provide Low, Medium, High, Extra High, and Max profiles. Spark provides Low, Medium, and High profiles. Spark is optional and is not used for architecture, security decisions, visual work, or final acceptance.
 
@@ -85,9 +85,9 @@ The root master remains Sol Max. `Ultra` describes a project that benefits from 
 | `minimal` | Strong preference for master-only work. |
 | `moderate` | Limited delegation for clear independent tasks. |
 | `heavy` | More active parallel work and independent review. |
-| `extreme` | Maximum useful safe parallelism, including independent replication when it adds value. |
+| `extreme` | Maximum useful safe parallelism, including two agents checking the same important task when that adds confidence. |
 
-Intensity is a preference, not an agent quota. The master still controls the final topology and must respect dependencies, write ownership, model suitability, validation, and safety.
+Intensity is a preference, not a required agent count. The master still decides the final agent setup and must respect dependencies, file ownership, model suitability, validation, and safety.
 
 Override the current task with:
 
@@ -127,11 +127,11 @@ Advanced package flags, folder layouts, validation commands, and direct installe
 
 ## Safety and project control
 
-- Sol Max alone controls decomposition, spawning, routing, ownership, integration, validation, and completion.
-- Each child receives a bounded work order and may edit only its assigned scope.
-- Parallel writers must use separate paths or isolated workspaces.
-- A child reporting `complete` does not make the project complete; the master verifies the result.
-- The master stops repeated retries, recursive review, scope drift, and other nonproductive loops.
+- Sol Max alone controls how work is split, when agents are started, which models are used, who owns each change, how results are combined, and when the project is complete.
+- Each subagent receives a clear, limited task and may edit only its assigned files or area.
+- Subagents writing at the same time must use separate files or isolated workspaces.
+- A subagent reporting `complete` does not finish the project; the master still checks the result.
+- The master stops repeated retries, repeated reviews, work expanding beyond the request, and other unproductive loops.
 - Recovery checks the live repository instead of blindly trusting a handoff or earlier completion claim.
 
 ## Requirements
