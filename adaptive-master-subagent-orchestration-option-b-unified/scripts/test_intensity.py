@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import socket
@@ -12,6 +13,7 @@ import tempfile
 import time
 import tomllib
 from pathlib import Path
+from types import ModuleType
 
 sys.dont_write_bytecode = True
 from process_utils import run_bounded
@@ -24,6 +26,16 @@ COMMAND_TIMEOUT = 15
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def load_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("set_intensity_under_test", SCRIPT)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load intensity module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def run(*args: str, env: dict[str, str] | None = None, expect: int = 0) -> str:
@@ -96,6 +108,72 @@ def main() -> int:
         output = run("heavy", env=env, expect=1)
         require("not a regular file" in output, "non-file intensity lock error was unclear")
         lock.rmdir()
+
+        lock.write_text("{malformed", encoding="utf-8")
+        os.utime(lock, (old, old))
+        run("heavy", env=env)
+        require(not lock.exists(), "malformed stale intensity lock was not recovered")
+        if hasattr(os, "symlink"):
+            target = codex / "intensity-lock-target"
+            target.write_text("target", encoding="utf-8")
+            try:
+                lock.symlink_to(target)
+            except OSError:
+                pass
+            else:
+                output = run("heavy", env=env, expect=1)
+                require("not a regular file" in output, "intensity lock symlink error was unclear")
+                lock.unlink()
+
+        module = load_module()
+        permission_config = base / "permission-intensity" / "ams-orchestration.toml"
+        permission_lock = permission_config.parent / ".ams-orchestration-config.lock"
+        original_open = module.os.open
+        def denied_open(path, *args, **kwargs):
+            if Path(path) == permission_lock:
+                raise PermissionError("injected intensity lock creation denial")
+            return original_open(path, *args, **kwargs)
+        module.os.open = denied_open
+        try:
+            try:
+                with module.config_lock(permission_config):
+                    pass
+            except SystemExit as exc:
+                require("Unable to create intensity lock path" in str(exc), f"intensity lock creation denial was unclear: {exc}")
+            else:
+                raise AssertionError("intensity lock creation denial was not reported")
+        finally:
+            module.os.open = original_open
+
+        permission_config.parent.mkdir(parents=True, exist_ok=True)
+        permission_lock.write_text("{}\n", encoding="utf-8")
+        original_lstat = module.Path.lstat
+        def denied_lstat(self, *args, **kwargs):
+            if self == permission_lock:
+                raise PermissionError("injected intensity lock inspection denial")
+            return original_lstat(self, *args, **kwargs)
+        module.Path.lstat = denied_lstat
+        try:
+            try:
+                with module.config_lock(permission_config):
+                    pass
+            except SystemExit as exc:
+                require("Unable to inspect intensity lock path" in str(exc), f"intensity lock inspection denial was unclear: {exc}")
+            else:
+                raise AssertionError("intensity lock inspection denial was not reported")
+        finally:
+            module.Path.lstat = original_lstat
+            permission_lock.unlink(missing_ok=True)
+
+        cleanup_config = base / "cleanup-intensity" / "ams-orchestration.toml"
+        cleanup_lock = cleanup_config.parent / ".ams-orchestration-config.lock"
+        try:
+            with module.config_lock(cleanup_config):
+                require(cleanup_lock.exists(), "intensity lock was not created")
+                raise RuntimeError("injected intensity operation failure")
+        except RuntimeError:
+            pass
+        require(not cleanup_lock.exists(), "intensity lock was not cleaned after failure")
 
         output = run("--dry-run", env=env, expect=2)
         require("requires MODE" in output, "dry-run without mode error was unclear")

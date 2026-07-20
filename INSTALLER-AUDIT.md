@@ -33,6 +33,9 @@ The audited installer set now provides these guarantees:
 14. **Configuration ownership** — Package-created user configuration is marked and removed during uninstall; pre-existing unmarked user configuration is preserved.
 15. **Idempotent root uninstall** — Root installers locate active or backed-up package uninstallers through canonical paths, work without downloading, and succeed when no package-managed installation remains.
 16. **Canonical manifest generation** — `scripts/refresh_manifests.py` regenerates every package manifest from the checked-out bytes and provides a non-mutating freshness check for CI.
+17. **Exact ownership markers** — A user configuration or agent profile is package-managed only when the managed marker is its first line; marker text inside TOML values or comments does not transfer ownership.
+18. **Canonical local uninstallers** — Root uninstall refuses symlinks and other non-regular objects in every path component before executing an installed or backed-up package uninstaller.
+19. **Bounded lock failure handling** — Profile, intensity, and package locks report creation, inspection, stale-removal, and cleanup failures explicitly instead of looping after permission errors.
 
 ## Validation coverage
 

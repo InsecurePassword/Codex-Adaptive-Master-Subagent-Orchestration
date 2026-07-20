@@ -10,6 +10,9 @@
 - Removed download instructions based on repository visibility.
 - Corrected orchestration terminology so `extreme` is consistently the highest intensity.
 - Completed a transactional installer audit with command-line selector bypass, strict manifests, safe option switching, bounded process-tree cleanup, rollback tests, offline uninstall, and expanded integration coverage.
+- Restricted managed-file ownership to an exact first-line marker so marker text inside user-authored TOML values or profile descriptions is preserved.
+- Refused root uninstallers reached through symlinked or non-regular path components.
+- Added explicit lock diagnostics and regression coverage for permission errors, malformed locks, symlinks, stale owners, and cleanup after failures.
 
 ## 3.1.0
 

@@ -87,8 +87,8 @@ function Get-UserSelection {
 
 function Confirm-Uninstall {
     if ($Force -or $env:AMS_UNINSTALL_FORCE -eq "1") { return $true }
-    Write-Warning "This removes package-managed AMS plugins, profiles, backups, legacy skill directories, and the user-level AMS configuration."
-    Write-Host "Unrelated files and project-local configuration are preserved."
+    Write-Warning "This removes package-managed AMS plugins, profiles, backups, legacy skill directories, and package-created marked user configuration."
+    Write-Host "Pre-existing unmarked user configuration, unrelated files, and project-local configuration are preserved."
     $Confirmation = Read-Host "Type REMOVE to continue"
     return ($Confirmation -ceq "REMOVE")
 }
@@ -280,7 +280,9 @@ function Get-InstalledUninstaller {
     param([Parameter(Mandatory = $true)]$Python)
     $Finder = @'
 from pathlib import Path
+import stat
 import sys
+
 names = (
     "adaptive-master-subagent-orchestration-option-a-two-skill",
     "adaptive-master-subagent-orchestration-option-b-unified",
@@ -289,20 +291,51 @@ names = (
     "adaptive-master-subagent-orchestration-option-c-lean",
     "adaptive-master-subagent-orchestration",
 )
+
 home = Path(sys.argv[1]).expanduser().resolve(strict=False)
+unsafe = []
+
+def regular_uninstaller(candidate):
+    try:
+        relative = candidate.relative_to(home)
+    except ValueError:
+        unsafe.append(candidate)
+        return False
+    current = home
+    for part in relative.parts:
+        current = current / part
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            unsafe.append(candidate)
+            return False
+        if stat.S_ISLNK(metadata.st_mode):
+            unsafe.append(candidate)
+            return False
+    if not stat.S_ISREG(metadata.st_mode):
+        if candidate.exists():
+            unsafe.append(candidate)
+        return False
+    return True
+
 plugin_root = home / ".agents" / "plugins" / "plugins"
 for name in names:
     candidate = plugin_root / name / "scripts" / "install_package.py"
-    if candidate.is_file() and not candidate.is_symlink():
+    if regular_uninstaller(candidate):
         print(candidate)
         raise SystemExit(0)
 backup_root = home / ".agents" / "plugins" / "backups"
 for name in names:
     for backup in sorted(backup_root.glob(f"{name}.backup-*"), reverse=True):
         candidate = backup / "scripts" / "install_package.py"
-        if candidate.is_file() and not candidate.is_symlink():
+        if regular_uninstaller(candidate):
             print(candidate)
             raise SystemExit(0)
+if unsafe:
+    print(f"Unsafe AMS uninstaller path was refused: {unsafe[0]}", file=sys.stderr)
+    raise SystemExit(4)
 raise SystemExit(3)
 '@
     $FinderPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-find-uninstaller-" + [Guid]::NewGuid().ToString("N") + ".py")
@@ -323,7 +356,11 @@ raise SystemExit(3)
         return $Candidate.Trim()
     }
     if ($Code -eq 3) { return $null }
-    throw "Installed AMS uninstaller discovery failed with exit code $Code."
+    $Details = (($Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine).Trim()
+    if ([string]::IsNullOrWhiteSpace($Details)) {
+        throw "Installed AMS uninstaller discovery failed with exit code $Code."
+    }
+    throw "Installed AMS uninstaller discovery failed with exit code $Code. $Details"
 }
 
 try {
@@ -342,14 +379,14 @@ try {
     if ([string]::IsNullOrWhiteSpace($Option) -and -not [string]::IsNullOrWhiteSpace($env:AMS_INSTALL_OPTION)) {
         $Option = $env:AMS_INSTALL_OPTION
     }
-    if (-not [string]::IsNullOrWhiteSpace($env:AMS_INTENSITY)) {
+    if (-not $PSBoundParameters.ContainsKey("Intensity") -and -not [string]::IsNullOrWhiteSpace($env:AMS_INTENSITY)) {
         $EnvironmentIntensity = $env:AMS_INTENSITY.Trim().ToLowerInvariant()
         if (@("auto", "minimal", "moderate", "heavy", "extreme") -notcontains $EnvironmentIntensity) {
             throw "Unsupported AMS_INTENSITY value: $($env:AMS_INTENSITY)"
         }
         $Intensity = $EnvironmentIntensity
     }
-    if (-not [string]::IsNullOrWhiteSpace($env:AMS_SPARK_EFFORTS)) {
+    if (-not $PSBoundParameters.ContainsKey("SparkEfforts") -and -not [string]::IsNullOrWhiteSpace($env:AMS_SPARK_EFFORTS)) {
         $EnvironmentSparkEfforts = @($env:AMS_SPARK_EFFORTS.Split(",") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
         foreach ($Effort in $EnvironmentSparkEfforts) {
             if (@("low", "medium", "high") -notcontains $Effort) {

@@ -159,6 +159,74 @@ def test_lock_handling(base: Path) -> None:
     lock.mkdir()
     output = run(destination, "--exclude-spark", expect=1)
     require("not a regular file" in output, "non-file lock error was unclear")
+    lock.rmdir()
+
+    lock.write_text("{malformed", encoding="utf-8")
+    os.utime(lock, (old, old))
+    run(destination, "--exclude-spark")
+    require(not lock.exists(), "malformed stale profile lock was not recovered")
+
+    if hasattr(os, "symlink"):
+        target = destination.parent / "profile-lock-target"
+        target.write_text("target", encoding="utf-8")
+        try:
+            lock.symlink_to(target)
+        except OSError:
+            pass
+        else:
+            output = run(destination, "--exclude-spark", expect=1)
+            require("not a regular file" in output, "profile lock symlink error was unclear")
+            lock.unlink()
+
+    module = load_bootstrap_module()
+    permission_destination = base / "permission-profile-lock" / "agents"
+    permission_lock = permission_destination.parent / f".{permission_destination.name}.ams-profile-install.lock"
+    original_open = module.os.open
+    def denied_open(path, *args, **kwargs):
+        if Path(path) == permission_lock:
+            raise PermissionError("injected profile lock creation denial")
+        return original_open(path, *args, **kwargs)
+    module.os.open = denied_open
+    try:
+        try:
+            with module.exclusive_lock(permission_destination):
+                pass
+        except SystemExit as exc:
+            require("Unable to create profile lock path" in str(exc), f"profile lock creation denial was unclear: {exc}")
+        else:
+            raise AssertionError("profile lock creation denial was not reported")
+    finally:
+        module.os.open = original_open
+
+    permission_destination.parent.mkdir(parents=True, exist_ok=True)
+    permission_lock.write_text("{}\n", encoding="utf-8")
+    original_lstat = module.Path.lstat
+    def denied_lstat(self, *args, **kwargs):
+        if self == permission_lock:
+            raise PermissionError("injected profile lock inspection denial")
+        return original_lstat(self, *args, **kwargs)
+    module.Path.lstat = denied_lstat
+    try:
+        try:
+            with module.exclusive_lock(permission_destination):
+                pass
+        except SystemExit as exc:
+            require("Unable to inspect profile lock path" in str(exc), f"profile lock inspection denial was unclear: {exc}")
+        else:
+            raise AssertionError("profile lock inspection denial was not reported")
+    finally:
+        module.Path.lstat = original_lstat
+        permission_lock.unlink(missing_ok=True)
+
+    cleanup_destination = base / "cleanup-profile-lock" / "agents"
+    cleanup_lock = cleanup_destination.parent / f".{cleanup_destination.name}.ams-profile-install.lock"
+    try:
+        with module.exclusive_lock(cleanup_destination):
+            require(cleanup_lock.exists(), "profile lock was not created")
+            raise RuntimeError("injected profile operation failure")
+    except RuntimeError:
+        pass
+    require(not cleanup_lock.exists(), "profile lock was not cleaned after failure")
 
 
 def main() -> int:
@@ -238,6 +306,39 @@ def main() -> int:
         item = next(item for item in upgraded["profiles"] if item["requested_name"] == "ams_sol_low" and not str(item["action"]).startswith("retired"))
         require(item["action"] == "upgraded-managed", f"managed alternate was not upgraded: {item}")
         require(backup_files(alternate), "managed alternate upgrade did not create backup")
+
+        marker_collision = base / "marker-collision"
+        marker_collision.mkdir()
+        marker_canonical = marker_collision / "ams_sol_low.toml"
+        marker_user_text = (
+            'name = "user_sol_low"\n'
+            'description = "# managed-by: adaptive-master-subagent-orchestration"\n'
+            'model = "user-model"\n'
+            'reasoning_effort = "low"\n'
+        )
+        marker_canonical.write_text(marker_user_text, encoding="utf-8")
+        marker_report = run(marker_collision, "--exclude-spark", "--upgrade-managed")
+        require(marker_canonical.read_text(encoding="utf-8") == marker_user_text, "marker text inside a profile value was misclassified as package ownership")
+        require((marker_collision / "ams_sol_low_adaptive.toml").exists(), "user-owned marker collision did not receive a nonconflicting managed profile")
+        marker_item = next(item for item in marker_report["profiles"] if item["requested_name"] == "ams_sol_low")
+        require(marker_item["action"] == "created-nonconflicting", f"marker collision action was incorrect: {marker_item}")
+
+        indented_marker = base / "indented-marker-profile"
+        indented_marker.mkdir()
+        indented_canonical = indented_marker / "ams_sol_low.toml"
+        indented_user_text = (
+            "  # managed-by: adaptive-master-subagent-orchestration\n"
+            'name = "user_sol_low"\n'
+            'description = "user-owned profile"\n'
+            'model = "user-model"\n'
+            'reasoning_effort = "low"\n'
+        )
+        indented_canonical.write_text(indented_user_text, encoding="utf-8")
+        indented_report = run(indented_marker, "--exclude-spark", "--upgrade-managed")
+        require(indented_canonical.read_text(encoding="utf-8") == indented_user_text, "noncanonical marker comment was misclassified as profile ownership")
+        require((indented_marker / "ams_sol_low_adaptive.toml").exists(), "noncanonical marker collision did not receive a nonconflicting managed profile")
+        indented_item = next(item for item in indented_report["profiles"] if item["requested_name"] == "ams_sol_low")
+        require(indented_item["action"] == "created-nonconflicting", f"indented marker action was incorrect: {indented_item}")
 
         canonical.unlink()
         migrated = run(collision, "--exclude-spark")

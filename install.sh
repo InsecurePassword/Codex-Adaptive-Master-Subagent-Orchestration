@@ -166,8 +166,8 @@ confirm_uninstall() {
     fi
     cat >/dev/tty <<'NOTICE'
 This removes package-managed AMS plugins, profiles, backups, legacy skill directories,
-and the user-level AMS configuration. Unrelated files and project-local configuration
-are preserved.
+and package-created marked user configuration. Unrelated files, pre-existing unmarked
+user configuration, and project-local configuration are preserved.
 NOTICE
     printf '%s' "Type REMOVE to continue: " >/dev/tty
     IFS= read -r confirmation </dev/tty || confirmation=""
@@ -320,7 +320,9 @@ PY
 find_installed_uninstaller() {
     python3 -I -S - "$INSTALL_HOME" <<'PY'
 from pathlib import Path
+import stat
 import sys
+
 names = (
     "adaptive-master-subagent-orchestration-option-a-two-skill",
     "adaptive-master-subagent-orchestration-option-b-unified",
@@ -329,21 +331,52 @@ names = (
     "adaptive-master-subagent-orchestration-option-c-lean",
     "adaptive-master-subagent-orchestration",
 )
+
 home = Path(sys.argv[1]).expanduser().resolve(strict=False)
+unsafe: list[Path] = []
+
+def regular_uninstaller(candidate: Path) -> bool:
+    try:
+        relative = candidate.relative_to(home)
+    except ValueError:
+        unsafe.append(candidate)
+        return False
+    current = home
+    for part in relative.parts:
+        current = current / part
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            return False
+        except OSError:
+            unsafe.append(candidate)
+            return False
+        if stat.S_ISLNK(metadata.st_mode):
+            unsafe.append(candidate)
+            return False
+    if not stat.S_ISREG(metadata.st_mode):
+        if candidate.exists():
+            unsafe.append(candidate)
+        return False
+    return True
+
 plugin_root = home / ".agents" / "plugins" / "plugins"
 for name in names:
     candidate = plugin_root / name / "scripts" / "install_package.py"
-    if candidate.is_file() and not candidate.is_symlink():
+    if regular_uninstaller(candidate):
         print(candidate)
         raise SystemExit(0)
 backup_root = home / ".agents" / "plugins" / "backups"
 for name in names:
     for backup in sorted(backup_root.glob(f"{name}.backup-*"), reverse=True):
         candidate = backup / "scripts" / "install_package.py"
-        if candidate.is_file() and not candidate.is_symlink():
+        if regular_uninstaller(candidate):
             print(candidate)
             raise SystemExit(0)
-raise SystemExit(1)
+if unsafe:
+    print(f"Unsafe AMS uninstaller path was refused: {unsafe[0]}", file=sys.stderr)
+    raise SystemExit(4)
+raise SystemExit(3)
 PY
 }
 
@@ -380,6 +413,11 @@ if [ "$SELECTED" = UNINSTALL ]; then
         run_package_operation "$installed_uninstaller" UNINSTALL
         printf '\n%s\n' "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents."
         exit 0
+    else
+        discovery_status=$?
+        if [ "$discovery_status" -ne 3 ]; then
+            fail "Installed AMS uninstaller discovery failed safely."
+        fi
     fi
     printf '%s\n' "No package-managed AMS installation was found."
     exit 0

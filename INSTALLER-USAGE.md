@@ -106,6 +106,8 @@ Uninstall removes only recognized package-managed data:
 
 Pre-existing unmarked user configuration, unrelated files, and project-level `.codex` configuration remain unchanged.
 
+The managed marker establishes ownership only when it is the first line of the file. The same text inside a TOML value, description, or later comment does not make a user-authored file package-managed. Root uninstall also refuses any discovered uninstaller path containing a symbolic link or another non-regular path component.
+
 ## Verify the installers
 
 Run the complete offline audit from the repository root:

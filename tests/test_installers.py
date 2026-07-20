@@ -5,9 +5,15 @@ from __future__ import annotations
 
 import json
 import os
+import select
+import shlex
 import shutil
+import signal
+import stat
+import struct
 import subprocess
 import sys
+import time
 
 sys.dont_write_bytecode = True
 import tempfile
@@ -21,6 +27,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from process_utils import run_bounded  # noqa: E402
 
 TIMEOUT = 90
+ARCHIVE_PREFIX = "adaptive-master-subagent-orchestration-test"
 PACKAGE_NAMES = {
     "A": "adaptive-master-subagent-orchestration-option-a-two-skill",
     "B": "adaptive-master-subagent-orchestration-option-b-unified",
@@ -59,8 +66,325 @@ def run(command: list[str], *, env: dict[str, str] | None = None, expect: int = 
     return output
 
 
+def run_with_tty(command: list[str], input_text: str, *, env: dict[str, str] | None = None, expect: int = 0) -> str:
+    """Run a command with a controlling terminal while preserving script stdin semantics."""
+    import pty
+
+    child_env = dict(os.environ)
+    if env:
+        child_env.update(env)
+    pid, master = pty.fork()
+    if pid == 0:
+        os.execvpe(command[0], command, child_env)
+    output = bytearray()
+    deadline = time.monotonic() + TIMEOUT
+    try:
+        os.write(master, input_text.encode("utf-8"))
+        status: int | None = None
+        while status is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                try:
+                    os.killpg(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                os.waitpid(pid, 0)
+                raise AssertionError(f"interactive command timed out after {TIMEOUT}s: {command}")
+            readable, _, _ = select.select([master], [], [], min(0.1, remaining))
+            if readable:
+                try:
+                    block = os.read(master, 65536)
+                except OSError:
+                    block = b""
+                output.extend(block)
+            waited, child_status = os.waitpid(pid, os.WNOHANG)
+            if waited == pid:
+                status = child_status
+        while True:
+            readable, _, _ = select.select([master], [], [], 0)
+            if not readable:
+                break
+            try:
+                block = os.read(master, 65536)
+            except OSError:
+                break
+            if not block:
+                break
+            output.extend(block)
+    finally:
+        os.close(master)
+    code = os.waitstatus_to_exitcode(status)
+    decoded = output.decode("utf-8", errors="replace")
+    if code != expect:
+        raise AssertionError(f"interactive command returned {code}, expected {expect}: {command}\n{decoded}")
+    return decoded
+
+
+def rewrite_archive(
+    source: Path,
+    destination: Path,
+    *,
+    remove: set[str] | None = None,
+    replacements: dict[str, bytes | str] | None = None,
+    additions: dict[str, bytes | str | zipfile.ZipInfo] | None = None,
+) -> None:
+    remove = remove or set()
+    replacements = replacements or {}
+    additions = additions or {}
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as changed:
+        for info in original.infolist():
+            if info.filename in remove:
+                continue
+            data: bytes | str = replacements.get(info.filename, original.read(info))
+            changed.writestr(info, data)
+        for name, data in additions.items():
+            if isinstance(data, zipfile.ZipInfo):
+                changed.writestr(data, "target")
+            else:
+                changed.writestr(name, data)
+
+
+def patch_zip_flags(path: Path, flag_mask: int) -> None:
+    data = bytearray(path.read_bytes())
+    offset = 0
+    while True:
+        offset = data.find(b"PK\x03\x04", offset)
+        if offset < 0:
+            break
+        flags = struct.unpack_from("<H", data, offset + 6)[0]
+        struct.pack_into("<H", data, offset + 6, flags | flag_mask)
+        offset += 4
+    offset = 0
+    while True:
+        offset = data.find(b"PK\x01\x02", offset)
+        if offset < 0:
+            break
+        flags = struct.unpack_from("<H", data, offset + 8)[0]
+        struct.pack_into("<H", data, offset + 8, flags | flag_mask)
+        offset += 4
+    path.write_bytes(data)
+
+
+def patch_zip_uncompressed_size(path: Path, size: int) -> None:
+    data = bytearray(path.read_bytes())
+    local = data.find(b"PK\x03\x04")
+    central = data.find(b"PK\x01\x02")
+    require(local >= 0 and central >= 0, "test ZIP headers were not found")
+    struct.pack_into("<I", data, local + 22, size)
+    struct.pack_into("<I", data, central + 24, size)
+    path.write_bytes(data)
+
+
+def assert_archive_rejected(shell: str, archive: Path, home: Path, expected: str) -> str:
+    output = run(
+        [shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(archive), "--home", str(home)],
+        expect=1,
+    )
+    require(expected.lower() in output.lower(), f"archive rejection did not report {expected!r}: {output}")
+    require(not home.exists(), f"archive rejection mutated installation home: {home}")
+    return output
+
+
+def test_selector_matrix(shell: str, archive: Path, base: Path) -> None:
+    cases: list[tuple[str, list[str], dict[str, str], str]] = [
+        ("named-b", ["--option", "B"], {}, "B"),
+        ("named-c", ["--option", "C"], {}, "C"),
+        ("positional-a", ["A"], {}, "A"),
+        ("positional-c", ["C"], {}, "C"),
+        ("numeric-1", ["--option", "1"], {}, "A"),
+        ("numeric-2", ["--option", "2"], {}, "B"),
+        ("numeric-3", ["--option", "3"], {}, "C"),
+        ("environment-a", [], {"AMS_INSTALL_OPTION": "A"}, "A"),
+        ("environment-b", [], {"AMS_INSTALL_OPTION": "B"}, "B"),
+    ]
+    homes: dict[str, Path] = {}
+    for label, selector, extra_env, option in cases:
+        home = base / "selection-matrix" / label
+        homes[label] = home
+        env = dict(os.environ)
+        env.update(extra_env)
+        command = [shell, str(ROOT / "install.sh"), *selector, "--archive-path", str(archive), "--home", str(home), "--exclude-spark"]
+        run(command, env=env)
+        require(active_plugins(home) == [PACKAGE_NAMES[option]], f"{label} selected the wrong package")
+        require_install_layout(home, home / ".codex", option)
+    numeric_home = homes["numeric-1"]
+    run([shell, str(ROOT / "install.sh"), "--option", "4", "--home", str(numeric_home), "--force"])
+    require(active_plugins(numeric_home) == [], "numeric uninstall selection did not remove the package")
+    for label in ("named-b", "named-c"):
+        uninstall_home = homes[label]
+        run([shell, str(ROOT / "install.sh"), "--option", "UNINSTALL", "--home", str(uninstall_home), "--force"])
+        require(active_plugins(uninstall_home) == [], f"root uninstall failed for {label}")
+
+
+def test_interactive_selection(shell: str, archive: Path, base: Path) -> None:
+    interactive_home = base / "interactive-default-home"
+    output = run_with_tty(
+        [shell, str(ROOT / "install.sh"), "--archive-path", str(archive), "--home", str(interactive_home), "--exclude-spark"],
+        "\n",
+    )
+    require("Selection [1]" in output, "interactive menu was not displayed")
+    require(active_plugins(interactive_home) == [PACKAGE_NAMES["A"]], "Enter did not select Option A")
+
+    piped_home = base / "piped-interactive-home"
+    pipeline = (
+        f"cat {shlex.quote(str(ROOT / 'install.sh'))} | {shlex.quote(shell)} -s -- "
+        f"--archive-path {shlex.quote(str(archive))} --home {shlex.quote(str(piped_home))} --exclude-spark"
+    )
+    output = run_with_tty([shell, "-c", pipeline], "\n")
+    require("Selection [1]" in output, "piped installer did not read its menu through the terminal")
+    require(active_plugins(piped_home) == [PACKAGE_NAMES["A"]], "piped interactive Enter did not select Option A")
+
+
+def test_archive_rejections(shell: str, valid_archive: Path, base: Path) -> None:
+    rejection_root = base / "archive-rejections"
+    rejection_root.mkdir()
+
+    cases: list[tuple[str, Path, str]] = []
+    empty = rejection_root / "empty.zip"
+    with zipfile.ZipFile(empty, "w"):
+        pass
+    cases.append(("empty", empty, "archive is empty"))
+
+    malformed = rejection_root / "malformed.zip"
+    malformed.write_bytes(b"not a zip")
+    cases.append(("malformed", malformed, "could not be extracted"))
+
+    simple_specs = [
+        ("traversal", "../escape.txt", "unsafe path"),
+        ("absolute", "/absolute.txt", "unsafe path"),
+        ("drive", "C:/drive.txt", "drive path"),
+        ("control", f"root/bad{chr(1)}name", "control character"),
+    ]
+    for label, name, expected in simple_specs:
+        path = rejection_root / f"{label}.zip"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(name, "x")
+        cases.append((label, path, expected))
+
+    linked = rejection_root / "symlink.zip"
+    link_info = zipfile.ZipInfo("root/link")
+    link_info.create_system = 3
+    link_info.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(linked, "w") as archive:
+        archive.writestr(link_info, "target")
+    cases.append(("symlink", linked, "symbolic link"))
+
+    encrypted = rejection_root / "encrypted.zip"
+    with zipfile.ZipFile(encrypted, "w") as archive:
+        archive.writestr("root/file", "x")
+    patch_zip_flags(encrypted, 0x1)
+    cases.append(("encrypted", encrypted, "encrypted entry"))
+
+    excessive_entries = rejection_root / "too-many.zip"
+    with zipfile.ZipFile(excessive_entries, "w", compression=zipfile.ZIP_STORED) as archive:
+        for index in range(5001):
+            archive.writestr(f"root/{index}", b"")
+    cases.append(("too-many", excessive_entries, "too many entries"))
+
+    oversized = rejection_root / "oversized.zip"
+    with zipfile.ZipFile(oversized, "w") as archive:
+        archive.writestr("root/file", "x")
+    patch_zip_uncompressed_size(oversized, 256 * 1024 * 1024 + 1)
+    cases.append(("oversized", oversized, "extraction size limit"))
+
+    missing_package = rejection_root / "missing-package.zip"
+    with zipfile.ZipFile(missing_package, "w") as archive:
+        archive.writestr("root/README.md", "x")
+    cases.append(("missing-package", missing_package, "found 0"))
+
+    multiple_package = rejection_root / "multiple-package.zip"
+    with zipfile.ZipFile(multiple_package, "w") as archive:
+        for prefix in ("one", "two"):
+            archive.writestr(f"{prefix}/{PACKAGE_NAMES['A']}/scripts/install_package.py", "pass\n")
+    cases.append(("multiple-package", multiple_package, "found 2"))
+
+    package_prefix = f"{ARCHIVE_PREFIX}/{PACKAGE_NAMES['A']}"
+    manifest_path = f"{package_prefix}/MANIFEST.sha256"
+    readme_path = f"{package_prefix}/README.md"
+
+    duplicate_archive = rejection_root / "duplicate-archive.zip"
+    shutil.copy2(valid_archive, duplicate_archive)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        with zipfile.ZipFile(duplicate_archive, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(readme_path, "duplicate")
+    cases.append(("duplicate-archive", duplicate_archive, "duplicate path"))
+
+    missing_manifest = rejection_root / "missing-manifest.zip"
+    rewrite_archive(valid_archive, missing_manifest, remove={manifest_path})
+    cases.append(("missing-manifest", missing_manifest, "manifest"))
+
+    malformed_manifest = rejection_root / "malformed-manifest.zip"
+    rewrite_archive(valid_archive, malformed_manifest, replacements={manifest_path: "not-a-manifest\n"})
+    cases.append(("malformed-manifest", malformed_manifest, "malformed package manifest"))
+
+    with zipfile.ZipFile(valid_archive) as archive:
+        original_manifest = archive.read(manifest_path).decode("utf-8")
+    first_manifest_line = next(line for line in original_manifest.splitlines() if line.strip())
+    duplicate_manifest = rejection_root / "duplicate-manifest.zip"
+    rewrite_archive(valid_archive, duplicate_manifest, replacements={manifest_path: original_manifest + first_manifest_line + "\n"})
+    cases.append(("duplicate-manifest", duplicate_manifest, "duplicate package manifest"))
+
+    unlisted = rejection_root / "unlisted.zip"
+    rewrite_archive(valid_archive, unlisted, additions={f"{package_prefix}/unlisted.txt": "x"})
+    cases.append(("unlisted", unlisted, "unlisted"))
+
+    missing_listed = rejection_root / "missing-listed.zip"
+    rewrite_archive(valid_archive, missing_listed, remove={readme_path})
+    cases.append(("missing-listed", missing_listed, "missing"))
+
+    changed = rejection_root / "changed.zip"
+    rewrite_archive(valid_archive, changed, replacements={readme_path: "changed\n"})
+    cases.append(("changed", changed, "changed=["))
+
+    bytecode = rejection_root / "bytecode.zip"
+    rewrite_archive(valid_archive, bytecode, additions={f"{package_prefix}/scripts/__pycache__/audit.pyc": b"generated"})
+    cases.append(("bytecode", bytecode, "generated python artifact"))
+
+    for label, archive, expected in cases:
+        assert_archive_rejected(shell, archive, rejection_root / f"home-{label}", expected)
+
+
+def test_symlinked_uninstaller_rejection(shell: str, base: Path) -> None:
+    if not hasattr(os, "symlink"):
+        return
+    for case in ("active-package", "backup-package", "backup-root"):
+        home = base / f"symlink-uninstaller-{case}-home"
+        plugin_root = home / ".agents" / "plugins" / "plugins"
+        backup_root = home / ".agents" / "plugins" / "backups"
+        plugin_root.mkdir(parents=True)
+        outside = base / f"external-uninstaller-{case}"
+        external_package = outside / f"{PACKAGE_NAMES['A']}.backup-20260720-000000" if case == "backup-root" else outside
+        (external_package / "scripts").mkdir(parents=True)
+        marker = base / f"external-uninstaller-{case}-executed"
+        (external_package / "scripts" / "install_package.py").write_text(
+            "from pathlib import Path\n" + f"Path({str(marker)!r}).write_text('executed', encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        try:
+            if case == "active-package":
+                (plugin_root / PACKAGE_NAMES["A"]).symlink_to(outside, target_is_directory=True)
+                unsafe_path = plugin_root / PACKAGE_NAMES["A"]
+            elif case == "backup-package":
+                backup_root.mkdir(parents=True)
+                unsafe_path = backup_root / f"{PACKAGE_NAMES['A']}.backup-20260720-000000"
+                unsafe_path.symlink_to(outside, target_is_directory=True)
+            else:
+                unsafe_path = backup_root
+                unsafe_path.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            return
+        output = run(
+            [shell, str(ROOT / "install.sh"), "--option", "UNINSTALL", "--home", str(home), "--force"],
+            expect=1,
+        )
+        require("unsafe ams uninstaller path" in output.lower(), f"{case} uninstaller rejection was unclear")
+        require(not marker.exists(), f"root uninstall executed an external uninstaller through {case}")
+        require(unsafe_path.is_symlink(), f"failed safe discovery mutated the {case} symlink")
+
+
 def build_archive(destination: Path) -> None:
-    prefix = "adaptive-master-subagent-orchestration-test"
+    prefix = ARCHIVE_PREFIX
     included = [ROOT / "install.sh", ROOT / "install.ps1", *(ROOT / name for name in PACKAGE_NAMES.values())]
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for source in included:
@@ -272,6 +596,11 @@ def main() -> int:
         run([shell, str(ROOT / "install.sh")], env=empty_spark_env)
         require(len(list((base / "empty-spark-home/.codex/agents").glob("*.toml"))) == 15, "empty Spark list with exclusion failed")
 
+        print("[root-test] complete selector matrix", flush=True)
+        test_selector_matrix(shell, archive, base)
+        print("[root-test] interactive and piped menu", flush=True)
+        test_interactive_selection(shell, archive, base)
+
         print("[root-test] Option A CLI install", flush=True)
         home = base / "home"
         market = home / ".agents" / "plugins" / "marketplace.json"
@@ -320,6 +649,16 @@ def main() -> int:
         require(active_plugins(home) == [PACKAGE_NAMES["B"]], "Option switch left multiple active options")
         require(marketplace_plugins(home) == [PACKAGE_NAMES["B"]], "marketplace did not switch to Option B")
 
+        print("[root-test] B to C, C to A, and A reinstall", flush=True)
+        run([shell, str(ROOT / "install.sh"), "--option", "C", "--archive-path", str(archive), "--home", str(home)])
+        require(active_plugins(home) == [PACKAGE_NAMES["C"]], "B-to-C switch left conflicting plugins")
+        require(marketplace_plugins(home) == [PACKAGE_NAMES["C"]], "B-to-C switch left conflicting marketplace entries")
+        run([shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(archive), "--home", str(home)])
+        require(active_plugins(home) == [PACKAGE_NAMES["A"]], "C-to-A switch left conflicting plugins")
+        require(marketplace_plugins(home) == [PACKAGE_NAMES["A"]], "C-to-A switch left conflicting marketplace entries")
+        run([shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(archive), "--home", str(home)])
+        require(active_plugins(home) == [PACKAGE_NAMES["A"]], "A reinstall changed the selected plugin")
+
         print("[root-test] environment selector", flush=True)
         env_home = base / "env-home"
         env = dict(os.environ)
@@ -347,6 +686,17 @@ def main() -> int:
         require(not custom_codex.joinpath("ams-orchestration.toml").exists(), "custom CODEX_HOME uninstall left managed config")
         require(project_config.exists(), "uninstall removed project-local configuration")
 
+        print("[root-test] spaces, Unicode, nested, and long custom paths", flush=True)
+        complex_home = base / "home with spaces" / "用户-Δ" / ("nested-" + "h" * 72)
+        complex_codex = base / "codex with spaces" / "配置-λ" / ("nested-" + "c" * 72)
+        complex_env = dict(os.environ)
+        complex_env["CODEX_HOME"] = str(complex_codex)
+        run([shell, str(ROOT / "install.sh"), "--option", "C", "--archive-path", str(archive), "--home", str(complex_home), "--exclude-spark"], env=complex_env)
+        require_install_layout(complex_home, complex_codex, "C")
+        require(not (complex_home / ".codex").exists(), "complex custom path wrote to the default Codex location")
+        run([shell, str(ROOT / "install.sh"), "--option", "UNINSTALL", "--home", str(complex_home), "--force"], env=complex_env)
+        require(not complex_codex.joinpath("ams-orchestration.toml").exists(), "complex custom path uninstall left managed config")
+
         print("[root-test] offline uninstall using installed package", flush=True)
         fake_bin = base / "fake-bin"
         fake_bin.mkdir()
@@ -370,33 +720,11 @@ def main() -> int:
         require("No package-managed AMS installation was found" in second, "repeated root uninstall was not a local no-op")
         require(not curl_marker.exists(), "repeated root uninstall attempted a download")
 
-        print("[root-test] archive tamper rejection", flush=True)
-        tampered = base / "tampered.zip"
-        shutil.copy2(archive, tampered)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            with zipfile.ZipFile(tampered, "a", compression=zipfile.ZIP_DEFLATED) as zf:
-                zf.writestr(
-                    "adaptive-master-subagent-orchestration-test/"
-                    f"{PACKAGE_NAMES['A']}/README.md",
-                    "tampered duplicate",
-                )
-        output = run(
-            [shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(tampered), "--home", str(base / "tamper-home")],
-            expect=1,
-        )
-        require("duplicate path" in output.lower(), "duplicate archive path was not rejected")
+        print("[root-test] complete archive rejection matrix", flush=True)
+        test_archive_rejections(shell, archive, base)
 
-        print("[root-test] archive traversal rejection", flush=True)
-        unsafe = base / "unsafe.zip"
-        with zipfile.ZipFile(unsafe, "w") as zf:
-            zf.writestr("../escape.txt", "escape")
-        output = run(
-            [shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(unsafe), "--home", str(base / "unsafe-home")],
-            expect=1,
-        )
-        require("unsafe path" in output.lower(), "archive traversal was not rejected")
-        require(not (base / "escape.txt").exists(), "unsafe archive escaped extraction root")
+        print("[root-test] symlinked local uninstaller rejection", flush=True)
+        test_symlinked_uninstaller_rejection(shell, base)
 
         test_powershell_if_available(archive, base)
 

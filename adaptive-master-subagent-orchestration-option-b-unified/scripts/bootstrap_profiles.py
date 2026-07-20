@@ -282,6 +282,12 @@ def read_regular_text(path: Path) -> str | None:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def has_managed_marker(text: str) -> bool:
+    """Recognize ownership only when the package marker is the first line."""
+    lines = text.splitlines()
+    return bool(lines) and lines[0] == MANAGED_MARKER
+
+
 def plan_existing_managed(
     *, requested: str, installed_name: str, path: Path, expected_text: str, current: str, upgrade_managed: bool
 ) -> ProfilePlan:
@@ -321,7 +327,7 @@ def plan_profile(*, src: Path, destination: Path, model: str, upgrade_managed: b
     if current is not None:
         if current == source_text:
             return ProfilePlan(requested, requested, canonical, "preserved-identical")
-        if MANAGED_MARKER in current:
+        if has_managed_marker(current):
             return plan_existing_managed(
                 requested=requested,
                 installed_name=requested,
@@ -343,7 +349,7 @@ def plan_profile(*, src: Path, destination: Path, model: str, upgrade_managed: b
         if candidate_current is not None:
             if candidate_current == candidate_text:
                 return ProfilePlan(requested, installed_name, candidate, "preserved-nonconflicting")
-            if MANAGED_MARKER in candidate_current:
+            if has_managed_marker(candidate_current):
                 planned = plan_existing_managed(
                     requested=requested,
                     installed_name=installed_name,
@@ -369,7 +375,7 @@ def plan_legacy(destination: Path, upgrade_managed: bool) -> ProfilePlan | None:
         if legacy.exists() or legacy.is_symlink():
             return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-nonfile")
         return None
-    if MANAGED_MARKER not in current:
+    if not has_managed_marker(current):
         return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-user-authored")
     if not upgrade_managed:
         return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-managed")
@@ -402,7 +408,7 @@ def plan_managed_cleanup(destination: Path, selected_plans: list[ProfilePlan]) -
         if path in selected_paths:
             continue
         current = read_regular_text(path)
-        if current is None or MANAGED_MARKER not in current:
+        if current is None or not has_managed_marker(current):
             continue
         requested = requested_name_for_installed(path.stem)
         if requested is None:
@@ -456,14 +462,16 @@ def exclusive_lock(destination: Path) -> Iterator[None]:
                 handle.flush()
                 os.fsync(handle.fileno())
             break
-        except (FileExistsError, IsADirectoryError, PermissionError):
+        except (FileExistsError, IsADirectoryError, PermissionError) as exc:
             try:
                 metadata = lock_path.lstat()
                 age = time.time() - metadata.st_mtime
             except FileNotFoundError:
+                if isinstance(exc, PermissionError):
+                    raise SystemExit(f"Unable to create profile lock path {lock_path}: {exc}") from exc
                 continue
-            except OSError as exc:
-                raise SystemExit(f"Unable to inspect profile lock path {lock_path}: {exc}") from exc
+            except OSError as inspect_exc:
+                raise SystemExit(f"Unable to inspect profile lock path {lock_path}: {inspect_exc}") from inspect_exc
             if not stat.S_ISREG(metadata.st_mode):
                 raise SystemExit(f"Profile lock path is not a regular file: {lock_path}")
             if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
@@ -471,6 +479,8 @@ def exclusive_lock(destination: Path) -> Iterator[None]:
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                except OSError as remove_exc:
+                    raise SystemExit(f"Unable to remove stale profile lock path {lock_path}: {remove_exc}") from remove_exc
                 continue
             raise SystemExit(f"Another profile installation appears to be active: {lock_path}")
     try:
@@ -480,6 +490,8 @@ def exclusive_lock(destination: Path) -> Iterator[None]:
             lock_path.unlink()
         except FileNotFoundError:
             pass
+        except OSError as exc:
+            raise SystemExit(f"Unable to remove profile lock path {lock_path}: {exc}") from exc
 
 
 def validate_source_profiles(source_dir: Path) -> list[Path]:

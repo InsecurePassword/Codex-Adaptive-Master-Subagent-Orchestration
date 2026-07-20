@@ -361,6 +361,12 @@ def marketplace_text(data: dict[str, object]) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
+def has_managed_marker(text: str) -> bool:
+    """Recognize ownership only when the package marker is the first line."""
+    lines = text.splitlines()
+    return bool(lines) and lines[0] == MANAGED_MARKER
+
+
 def validate_config_text(text: str, path: Path) -> None:
     try:
         data = tomllib.loads(text)
@@ -381,7 +387,7 @@ def inspect_config(path: Path, initial_intensity: str) -> ConfigPlan:
     raw = path.read_text(encoding="utf-8", errors="strict")
     if "\\n" in raw and "\n" not in raw:
         normalized = raw.replace("\\n", "\n")
-        if MANAGED_MARKER not in normalized:
+        if not has_managed_marker(normalized):
             normalized = f"{MANAGED_MARKER}\n{normalized}"
         validate_config_text(normalized, path)
         return ConfigPlan("repair-legacy-newlines", normalized)
@@ -426,14 +432,16 @@ def install_lock(market_root: Path) -> Iterator[None]:
                 handle.flush()
                 os.fsync(handle.fileno())
             break
-        except (FileExistsError, IsADirectoryError, PermissionError):
+        except (FileExistsError, IsADirectoryError, PermissionError) as exc:
             try:
                 metadata = lock_path.lstat()
                 age = time.time() - metadata.st_mtime
             except FileNotFoundError:
+                if isinstance(exc, PermissionError):
+                    raise SystemExit(f"Unable to create install lock path {lock_path}: {exc}") from exc
                 continue
-            except OSError as exc:
-                raise SystemExit(f"Unable to inspect install lock path {lock_path}: {exc}") from exc
+            except OSError as inspect_exc:
+                raise SystemExit(f"Unable to inspect install lock path {lock_path}: {inspect_exc}") from inspect_exc
             if not stat.S_ISREG(metadata.st_mode):
                 raise SystemExit(f"Install lock path is not a regular file: {lock_path}")
             if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
@@ -441,6 +449,8 @@ def install_lock(market_root: Path) -> Iterator[None]:
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                except OSError as remove_exc:
+                    raise SystemExit(f"Unable to remove stale install lock path {lock_path}: {remove_exc}") from remove_exc
                 continue
             raise SystemExit(f"Another AMS installation or removal appears to be active: {lock_path}")
     try:
@@ -450,6 +460,8 @@ def install_lock(market_root: Path) -> Iterator[None]:
             lock_path.unlink()
         except FileNotFoundError:
             pass
+        except OSError as exc:
+            raise SystemExit(f"Unable to remove install lock path {lock_path}: {exc}") from exc
 
 
 def bootstrap_command(
@@ -835,7 +847,7 @@ def path_has_managed_marker(path: Path) -> bool:
     if not path.is_file() or path.is_symlink():
         return False
     try:
-        return MANAGED_MARKER in path.read_text(encoding="utf-8", errors="replace")
+        return has_managed_marker(path.read_text(encoding="utf-8", errors="replace"))
     except OSError:
         return False
 

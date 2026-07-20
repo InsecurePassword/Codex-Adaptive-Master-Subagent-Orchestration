@@ -34,6 +34,8 @@ Recovery is included in every runtime option. Direct subagents cannot create add
 
 The final installation-tool audit covered the root Bash and PowerShell installers, package wrappers, Python installers, profile installation, intensity configuration, update and package switching, rollback, locks, bounded subprocesses, archive extraction, uninstall, tests, and manifests. Codex runtime behavior was outside that installer-audit scope.
 
+Managed configuration and profile ownership now requires the package marker on the first line. The audit verifies that marker text embedded in user-authored TOML values or descriptions is preserved, that root uninstall refuses symlinked uninstaller paths, and that all three lock types fail explicitly on creation, inspection, stale-removal, or cleanup errors.
+
 The complete reproducible command is:
 
 ```sh

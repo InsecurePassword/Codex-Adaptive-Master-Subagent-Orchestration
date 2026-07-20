@@ -23,7 +23,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -U
 ### Linux
 
 ```sh
-python3 ./scripts/install_package.py --upgrade-managed --intensity auto
+python3 -B -E -s -S ./scripts/install_package.py --upgrade-managed --intensity auto
 ```
 
 Option C does not allow profile installation to be skipped. Restart Codex if the skill does not appear immediately.
@@ -45,7 +45,7 @@ For full intensity and configuration details, see the [main README](../README.md
 ## Validation
 
 ```sh
-python3 ./scripts/validate_package.py
+python3 -B -E -s -S ./scripts/validate_package.py
 ```
 
 For package layout, additional installer flags, and manual removal, see [Manual installation](../MANUAL-INSTALLATION.md).

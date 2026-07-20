@@ -187,4 +187,6 @@ sh ./install.sh --option UNINSTALL --force
 
 The uninstall path removes package-managed files while preserving pre-existing unmarked user configuration, unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration.
 
+Package ownership requires the managed marker on the first line. Marker text embedded in user-authored TOML values or descriptions is not treated as ownership. The root uninstallers execute only canonical local package uninstallers whose path components are regular directories and whose script is a regular file.
+
 Restart Codex after installation, package switching, or removal if the skill list does not update immediately.

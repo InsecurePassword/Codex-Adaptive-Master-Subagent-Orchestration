@@ -133,6 +133,45 @@ def test_lock(base:Path)->None:
     lock.mkdir()
     out=run(home,'--exclude-spark',expect=1); require('not a regular file' in out,'non-file install lock error was unclear')
     lock.rmdir()
+    lock.write_text('{malformed',encoding='utf-8'); os.utime(lock,(old,old))
+    run(home,'--exclude-spark'); require(not lock.exists(),'malformed stale install lock was not recovered')
+    if hasattr(os,'symlink'):
+        target=root/'install-lock-target'; target.write_text('target',encoding='utf-8')
+        try: lock.symlink_to(target)
+        except OSError: pass
+        else:
+            out=run(home,'--exclude-spark',expect=1); require('not a regular file' in out,'install lock symlink error was unclear'); lock.unlink()
+    module=load_module(); permission_root=base/'permission-install-lock'; permission_lock=permission_root/'.ams-install.lock'
+    original_open=module.os.open
+    def denied_open(path,*args,**kwargs):
+        if Path(path)==permission_lock: raise PermissionError('injected install lock creation denial')
+        return original_open(path,*args,**kwargs)
+    module.os.open=denied_open
+    try:
+        try:
+            with module.install_lock(permission_root): pass
+        except SystemExit as exc: require('Unable to create install lock path' in str(exc),f'install lock creation denial was unclear: {exc}')
+        else: raise AssertionError('install lock creation denial was not reported')
+    finally: module.os.open=original_open
+    permission_root.mkdir(parents=True,exist_ok=True); permission_lock.write_text('{}\n',encoding='utf-8')
+    original_lstat=module.Path.lstat
+    def denied_lstat(self,*args,**kwargs):
+        if self==permission_lock: raise PermissionError('injected install lock inspection denial')
+        return original_lstat(self,*args,**kwargs)
+    module.Path.lstat=denied_lstat
+    try:
+        try:
+            with module.install_lock(permission_root): pass
+        except SystemExit as exc: require('Unable to inspect install lock path' in str(exc),f'install lock inspection denial was unclear: {exc}')
+        else: raise AssertionError('install lock inspection denial was not reported')
+    finally:
+        module.Path.lstat=original_lstat; permission_lock.unlink(missing_ok=True)
+    cleanup_root=base/'cleanup-install-lock'; cleanup_lock=cleanup_root/'.ams-install.lock'
+    try:
+        with module.install_lock(cleanup_root):
+            require(cleanup_lock.exists(),'install lock was not created'); raise RuntimeError('injected install operation failure')
+    except RuntimeError: pass
+    require(not cleanup_lock.exists(),'install lock was not cleaned after failure')
 
 def main()->int:
     with tempfile.TemporaryDirectory(prefix=f'ams-install-{OPTION}-') as tmp:
@@ -165,6 +204,32 @@ def main()->int:
         require(user_config.read_text(encoding='utf-8')==user_config_text,'install changed a pre-existing user config')
         run(user_config_home,'--uninstall','--yes')
         require(user_config.read_text(encoding='utf-8')==user_config_text,'uninstall removed a pre-existing user config')
+
+        marker_value_home=base/'marker-value-config'; (marker_value_home/'.codex').mkdir(parents=True)
+        marker_value_config=marker_value_home/'.codex/ams-orchestration.toml'
+        marker_value_text=(
+            'schema_version = 1\n'
+            'intensity = "moderate"\n'
+            'note = "# managed-by: adaptive-master-subagent-orchestration"\n'
+        )
+        marker_value_config.write_text(marker_value_text,encoding='utf-8')
+        run(marker_value_home,'--exclude-spark','--upgrade-managed')
+        require(marker_value_config.read_text(encoding='utf-8')==marker_value_text,'marker text inside a TOML value was misclassified during install')
+        run(marker_value_home,'--uninstall','--yes')
+        require(marker_value_config.read_text(encoding='utf-8')==marker_value_text,'marker text inside a TOML value was misclassified as package ownership during uninstall')
+
+        indented_marker_home=base/'indented-marker-config'; (indented_marker_home/'.codex').mkdir(parents=True)
+        indented_marker_config=indented_marker_home/'.codex/ams-orchestration.toml'
+        indented_marker_text=(
+            '  # managed-by: adaptive-master-subagent-orchestration\n'
+            'schema_version = 1\n'
+            'intensity = "moderate"\n'
+        )
+        indented_marker_config.write_text(indented_marker_text,encoding='utf-8')
+        run(indented_marker_home,'--exclude-spark','--upgrade-managed')
+        require(indented_marker_config.read_text(encoding='utf-8')==indented_marker_text,'noncanonical marker comment was misclassified during install')
+        run(indented_marker_home,'--uninstall','--yes')
+        require(indented_marker_config.read_text(encoding='utf-8')==indented_marker_text,'noncanonical marker comment was misclassified as package ownership during uninstall')
 
         malformed=base/'malformed'; mp=malformed/'.agents/plugins/marketplace.json'; mp.parent.mkdir(parents=True); mp.write_text('{bad',encoding='utf-8')
         out=run(malformed,'--exclude-spark',expect=1); require('Cannot parse existing marketplace' in out,'malformed marketplace error unclear'); require(active(malformed)==[],'malformed state partially installed')

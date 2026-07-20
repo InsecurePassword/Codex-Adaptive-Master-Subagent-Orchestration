@@ -59,14 +59,16 @@ def config_lock(path: Path):
                 handle.flush()
                 os.fsync(handle.fileno())
             break
-        except (FileExistsError, IsADirectoryError, PermissionError):
+        except (FileExistsError, IsADirectoryError, PermissionError) as exc:
             try:
                 metadata = lock_path.lstat()
                 age = time.time() - metadata.st_mtime
             except FileNotFoundError:
+                if isinstance(exc, PermissionError):
+                    raise SystemExit(f"Unable to create intensity lock path {lock_path}: {exc}") from exc
                 continue
-            except OSError as exc:
-                raise SystemExit(f"Unable to inspect intensity lock path {lock_path}: {exc}") from exc
+            except OSError as inspect_exc:
+                raise SystemExit(f"Unable to inspect intensity lock path {lock_path}: {inspect_exc}") from inspect_exc
             if not stat.S_ISREG(metadata.st_mode):
                 raise SystemExit(f"Intensity lock path is not a regular file: {lock_path}")
             if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
@@ -74,6 +76,8 @@ def config_lock(path: Path):
                     lock_path.unlink()
                 except FileNotFoundError:
                     pass
+                except OSError as remove_exc:
+                    raise SystemExit(f"Unable to remove stale intensity lock path {lock_path}: {remove_exc}") from remove_exc
                 continue
             raise SystemExit(f"Another intensity update appears to be active: {lock_path}")
     try:
@@ -83,6 +87,8 @@ def config_lock(path: Path):
             lock_path.unlink()
         except FileNotFoundError:
             pass
+        except OSError as exc:
+            raise SystemExit(f"Unable to remove intensity lock path {lock_path}: {exc}") from exc
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
