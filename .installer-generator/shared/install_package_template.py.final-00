@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Install, update, switch, or uninstall Adaptive Master–Subagent Orchestration."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import datetime as dt
+import hashlib
+import json
+import os
+import shutil
+import signal
+import socket
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Iterator
+
+sys.dont_write_bytecode = True
+
+from process_utils import process_is_alive, run_bounded
+
+try:
+    import tomllib
+except ModuleNotFoundError as exc:  # pragma: no cover
+    raise SystemExit("Python 3.11+ is required because this installer uses tomllib.") from exc
+
+PLUGIN_NAME = __PLUGIN_NAME__
+OPTION = __OPTION__
+ALLOW_SKIP_PROFILES = __ALLOW_SKIP_PROFILES__
+EXPECTED_SKILLS = __EXPECTED_SKILLS__
+VERSION = "3.1.0"
+MANAGED_MARKER = "# managed-by: adaptive-master-subagent-orchestration"
+VALID_INTENSITIES = ("auto", "minimal", "moderate", "heavy", "extreme")
+VALID_SPARK_EFFORTS = ("low", "medium", "high")
+ALL_PLUGIN_NAMES = (
+    "adaptive-master-subagent-orchestration-option-a-two-skill",
+    "adaptive-master-subagent-orchestration-option-b-unified",
+    "adaptive-master-subagent-orchestration-option-c-installer-required",
+    "adaptive-master-subagent-orchestration-option-a-modular",
+    "adaptive-master-subagent-orchestration-option-c-lean",
+    "adaptive-master-subagent-orchestration",
+)
+LEGACY_SKILL_NAMES = ("adaptive-master-subagent-orchestration", "ams-orchestration", "ams-installer")
+LOCK_STALE_SECONDS = 2 * 60 * 60
+DEFAULT_PROFILE_TIMEOUT_SECONDS = 120
+
+
+@dataclass(frozen=True)
+class FileSnapshot:
+    existed: bool
+    data: bytes = b""
+    mode: int | None = None
+
+
+@dataclass(frozen=True)
+class ConfigPlan:
+    action: str
+    text: str | None = None
+
+
+@dataclass(frozen=True)
+class ProfileExpectation:
+    path: Path
+    expected_sha256: str | None
+    expected_absent: bool
+    before: FileSnapshot
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def positive_environment_integer(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be a positive integer; received: {raw}") from exc
+    if value <= 0:
+        raise SystemExit(f"{name} must be a positive integer; received: {raw}")
+    return value
+
+
+def lock_owner_is_live(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return (
+        data.get("host") == socket.gethostname()
+        and isinstance(data.get("pid"), int)
+        and process_is_alive(int(data["pid"]))
+    )
+
+
+def parse_spark_efforts(value: str) -> tuple[str, ...]:
+    values = tuple(dict.fromkeys(part.strip().lower() for part in value.split(",") if part.strip()))
+    invalid = sorted(set(values) - set(VALID_SPARK_EFFORTS))
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            f"unsupported Spark effort(s): {', '.join(invalid)}; allowed: {', '.join(VALID_SPARK_EFFORTS)}"
+        )
+    return values
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--home", type=Path, default=Path.home())
+    parser.add_argument("--skip-profiles", action="store_true")
+    parser.add_argument("--exclude-spark", action="store_true")
+    parser.add_argument("--spark-efforts", type=parse_spark_efforts, default=VALID_SPARK_EFFORTS)
+    parser.add_argument("--upgrade-managed", action="store_true")
+    parser.add_argument("--intensity", choices=VALID_INTENSITIES, default="auto")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--uninstall", action="store_true")
+    parser.add_argument("--yes", action="store_true", help="Confirm non-interactive uninstall.")
+    return parser.parse_args(argv)
+
+
+def normalize_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    home = args.home.expanduser().resolve(strict=False)
+    codex_home_value = os.environ.get("CODEX_HOME", "").strip()
+    codex_home = (
+        Path(codex_home_value).expanduser().resolve(strict=False)
+        if codex_home_value
+        else home / ".codex"
+    )
+    market_root = home / ".agents" / "plugins"
+    return home, codex_home, market_root
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def validate_manifest(root: Path) -> None:
+    manifest_path = root / "MANIFEST.sha256"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise SystemExit(f"Package manifest was not found or is not a regular file: {manifest_path}")
+    listed: dict[str, str] = {}
+    try:
+        lines = manifest_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"Package manifest could not be read: {manifest_path}: {exc}") from exc
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            expected, relative = line.split("  ", 1)
+        except ValueError as exc:
+            raise SystemExit(f"Malformed package manifest line {number}: {line}") from exc
+        if len(expected) != 64 or any(char not in "0123456789abcdefABCDEF" for char in expected):
+            raise SystemExit(f"Malformed package manifest digest on line {number}")
+        posix = PurePosixPath(relative)
+        if posix.is_absolute() or any(part in ("", ".", "..") for part in posix.parts):
+            raise SystemExit(f"Unsafe package manifest path on line {number}: {relative}")
+        normalized = posix.as_posix()
+        if normalized in listed:
+            raise SystemExit(f"Duplicate package manifest entry: {normalized}")
+        listed[normalized] = expected.lower()
+
+    actual: dict[str, str] = {}
+    for path in root.rglob("*"):
