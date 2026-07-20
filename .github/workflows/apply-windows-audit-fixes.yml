@@ -132,8 +132,8 @@ jobs:
           git status --short
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --cached --name-only | Select-String -SimpleMatch ".github/workflows/" -Quiet
-          if ($?) { throw "Workflow files remained staged unexpectedly." }
+          $workflowChanges = @(git diff --cached --name-only | Where-Object { $_ -like ".github/workflows/*" })
+          if ($workflowChanges.Count -ne 0) { throw "Workflow files remained staged unexpectedly: $($workflowChanges -join ', ')" }
 
       - name: Commit validated source corrections
         shell: pwsh
