@@ -26,7 +26,26 @@ jobs:
           fetch-depth: 0
 
       - name: Apply audited installer sources
-        run: python3 -B -E -s -S .installer-generator/apply.py
+        id: apply
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          python3 -B -E -s -S .installer-generator/apply.py > installer-apply.log 2>&1
+          status=$?
+          cat installer-apply.log
+          exit $status
+
+      - name: Upload generator failure
+        if: steps.apply.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-apply-error
+          path: installer-apply.log
+
+      - name: Stop after generator failure
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
 
       - name: Run complete offline installer audit
         run: python3 -B -E -s -S scripts/audit_installers.py
@@ -35,6 +54,7 @@ jobs:
         shell: bash
         run: |
           rm -rf .installer-generator .installer-payload
+          rm -f installer-apply.log
           rm -f .github/workflows/apply-installer-audit.yml
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
