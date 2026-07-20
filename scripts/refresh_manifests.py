@@ -19,7 +19,11 @@ GENERATED_SUFFIXES = {".pyc", ".pyo"}
 
 def package_manifest(package: Path) -> str:
     lines: list[str] = []
-    for path in sorted(package.rglob("*")):
+    paths = sorted(
+        package.rglob("*"),
+        key=lambda path: path.relative_to(package).as_posix(),
+    )
+    for path in paths:
         if path.is_symlink():
             raise RuntimeError(f"package contains a symbolic link: {path}")
         if not path.is_file() or path.name == "MANIFEST.sha256":
