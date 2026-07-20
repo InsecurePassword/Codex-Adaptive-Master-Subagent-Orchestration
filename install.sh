@@ -1,27 +1,22 @@
 #!/bin/sh
-# Adaptive Master-Subagent Orchestration remote installer
+# Adaptive Master-Subagent Orchestration installer
 # Version 3.1.0
 
 set -eu
 
 REPOSITORY="InsecurePassword/adaptive-master-subagent-orchestration"
-REF="main"
-RELEASE_VERSION="3.1.0"
-ARCHIVE_NAME="adaptive-master-subagent-orchestration-${REF}.zip"
-PUBLIC_ARCHIVE_URL="https://github.com/${REPOSITORY}/archive/refs/heads/${REF}.zip"
-PRIVATE_ARCHIVE_URL="https://api.github.com/repos/${REPOSITORY}/zipball/${REF}"
-MANAGED_MARKER="# managed-by: adaptive-master-subagent-orchestration"
-
-PLUGIN_NAMES="
-adaptive-master-subagent-orchestration-option-a-two-skill
-adaptive-master-subagent-orchestration-option-b-unified
-adaptive-master-subagent-orchestration-option-c-installer-required
-adaptive-master-subagent-orchestration-option-a-modular
-adaptive-master-subagent-orchestration-option-c-lean
-adaptive-master-subagent-orchestration
-"
-
+REF="${AMS_REF:-main}"
+INSTALL_HOME="${AMS_HOME:-$HOME}"
+SELECTED="${AMS_INSTALL_OPTION:-}"
+INTENSITY="${AMS_INTENSITY:-auto}"
+SPARK_EFFORTS="${AMS_SPARK_EFFORTS:-low,medium,high}"
+EXCLUDE_SPARK="${AMS_EXCLUDE_SPARK:-0}"
+FORCE_UNINSTALL="${AMS_UNINSTALL_FORCE:-0}"
+ARCHIVE_SOURCE="${AMS_ARCHIVE_PATH:-}"
+CONNECT_TIMEOUT="${AMS_CONNECT_TIMEOUT_SECONDS:-15}"
+DOWNLOAD_TIMEOUT="${AMS_DOWNLOAD_TIMEOUT_SECONDS:-120}"
 TEMP_ROOT=""
+
 cleanup() {
     if [ -n "$TEMP_ROOT" ] && [ -d "$TEMP_ROOT" ]; then
         rm -rf "$TEMP_ROOT"
@@ -29,28 +24,123 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+fail() {
+    printf '%s\n' "$*" >&2
+    exit 1
+}
+
+usage() {
+    cat <<'EOF'
+Usage: install.sh [OPTION] [arguments]
+
+OPTION may be A, B, C, UNINSTALL, or 1-4. When omitted, an interactive menu is shown.
+
+Arguments:
+  -o, --option VALUE          Bypass the menu and select A, B, C, or UNINSTALL
+      --home PATH             Installation home directory (default: $HOME)
+      --intensity MODE        auto|minimal|moderate|heavy|extreme
+      --spark-efforts LIST    Comma-separated low,medium,high values
+      --exclude-spark         Do not install optional Spark profiles
+  -f, --force                 Confirm non-interactive uninstall
+      --archive-path FILE     Use a local repository ZIP instead of downloading
+      --ref REF               Repository branch/ref to download (default: main)
+  -h, --help                  Show this help
+
+Equivalent environment variables:
+  AMS_INSTALL_OPTION, AMS_HOME, AMS_INTENSITY, AMS_SPARK_EFFORTS,
+  AMS_EXCLUDE_SPARK, AMS_UNINSTALL_FORCE, AMS_ARCHIVE_PATH, AMS_REF,
+  AMS_CONNECT_TIMEOUT_SECONDS, AMS_DOWNLOAD_TIMEOUT_SECONDS, GITHUB_TOKEN
+EOF
+}
+
 heading() {
     printf '\n%s\n' "$1"
     printf '%s\n' "$1" | sed 's/./=/g'
 }
 
-normalize_option() {
-    value=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
-    case "$value" in
-        1|A) printf '%s\n' "A" ;;
-        2|B) printf '%s\n' "B" ;;
-        3|C) printf '%s\n' "C" ;;
-        4|UNINSTALL|REMOVE) printf '%s\n' "UNINSTALL" ;;
-        *) printf 'Unsupported selection: %s\n' "$1" >&2; return 1 ;;
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+validate_positive_integer() {
+    case "$2" in
+        ''|*[!0-9]*|0) fail "$1 must be a positive integer; received: $2" ;;
     esac
 }
 
-prompt_selection() {
-    if [ ! -r /dev/tty ]; then
-        printf '%s\n' "Interactive input is unavailable. Set AMS_INSTALL_OPTION=A, B, C, or UNINSTALL." >&2
-        return 1
-    fi
+normalize_option() {
+    value=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
+    case "$value" in
+        1|A) printf '%s\n' A ;;
+        2|B) printf '%s\n' B ;;
+        3|C) printf '%s\n' C ;;
+        4|UNINSTALL|REMOVE) printf '%s\n' UNINSTALL ;;
+        *) fail "Unsupported selection: $1" ;;
+    esac
+}
 
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o|--option)
+            [ "$#" -ge 2 ] || fail "$1 requires a value"
+            SELECTED=$2
+            shift 2
+            ;;
+        --home)
+            [ "$#" -ge 2 ] || fail "$1 requires a path"
+            INSTALL_HOME=$2
+            shift 2
+            ;;
+        --intensity)
+            [ "$#" -ge 2 ] || fail "$1 requires a value"
+            INTENSITY=$2
+            shift 2
+            ;;
+        --spark-efforts)
+            [ "$#" -ge 2 ] || fail "$1 requires a value"
+            SPARK_EFFORTS=$2
+            shift 2
+            ;;
+        --exclude-spark)
+            EXCLUDE_SPARK=1
+            shift
+            ;;
+        -f|--force)
+            FORCE_UNINSTALL=1
+            shift
+            ;;
+        --archive-path)
+            [ "$#" -ge 2 ] || fail "$1 requires a path"
+            ARCHIVE_SOURCE=$2
+            shift 2
+            ;;
+        --ref)
+            [ "$#" -ge 2 ] || fail "$1 requires a value"
+            REF=$2
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*) fail "Unknown argument: $1" ;;
+        *)
+            [ -z "$SELECTED" ] || fail "Multiple installation options were supplied"
+            SELECTED=$1
+            shift
+            ;;
+    esac
+done
+[ "$#" -eq 0 ] || fail "Unexpected argument: $1"
+
+prompt_selection() {
+    if ! (: </dev/tty) 2>/dev/null; then
+        fail "Interactive input is unavailable. Use --option A, B, C, or UNINSTALL."
+    fi
     heading "Adaptive Master-Subagent Orchestration" >/dev/tty
     cat >/dev/tty <<'MENU'
 Choose one installation option:
@@ -63,238 +153,251 @@ Choose one installation option:
 MENU
     printf '%s' "Selection [1]: " >/dev/tty
     IFS= read -r choice </dev/tty || choice=""
-    [ -n "$choice" ] || choice="1"
+    [ -n "$choice" ] || choice=1
     normalize_option "$choice"
 }
 
-codex_home() {
-    if [ -n "${CODEX_HOME:-}" ]; then
-        printf '%s\n' "$CODEX_HOME"
-    else
-        printf '%s\n' "$HOME/.codex"
-    fi
-}
-
-is_plugin_name() {
-    candidate=$1
-    case "$candidate" in
-        adaptive-master-subagent-orchestration-option-a-two-skill|adaptive-master-subagent-orchestration-option-a-two-skill.backup-*|adaptive-master-subagent-orchestration-option-a-two-skill.installing-*|\
-        adaptive-master-subagent-orchestration-option-b-unified|adaptive-master-subagent-orchestration-option-b-unified.backup-*|adaptive-master-subagent-orchestration-option-b-unified.installing-*|\
-        adaptive-master-subagent-orchestration-option-c-installer-required|adaptive-master-subagent-orchestration-option-c-installer-required.backup-*|adaptive-master-subagent-orchestration-option-c-installer-required.installing-*|\
-        adaptive-master-subagent-orchestration-option-a-modular|adaptive-master-subagent-orchestration-option-a-modular.backup-*|adaptive-master-subagent-orchestration-option-a-modular.installing-*|\
-        adaptive-master-subagent-orchestration-option-c-lean|adaptive-master-subagent-orchestration-option-c-lean.backup-*|adaptive-master-subagent-orchestration-option-c-lean.installing-*|\
-        adaptive-master-subagent-orchestration|adaptive-master-subagent-orchestration.backup-*|adaptive-master-subagent-orchestration.installing-*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 confirm_uninstall() {
-    if [ "${AMS_UNINSTALL_FORCE:-0}" = "1" ]; then
+    if [ "$FORCE_UNINSTALL" = 1 ]; then
         return 0
     fi
-    if [ ! -r /dev/tty ]; then
-        printf '%s\n' "Uninstall requires confirmation. Set AMS_UNINSTALL_FORCE=1 for non-interactive removal." >&2
-        return 1
+    if ! (: </dev/tty) 2>/dev/null; then
+        fail "Uninstall requires confirmation. Use --force for non-interactive removal."
     fi
     cat >/dev/tty <<'NOTICE'
-This removes package-managed plugins, managed agent profiles, legacy skill directories,
-and the user-level AMS configuration. Project-local .codex configuration files and
-unrelated user files will not be removed.
+This removes package-managed AMS plugins, profiles, backups, legacy skill directories,
+and the user-level AMS configuration. Unrelated files and project-local configuration
+are preserved.
 NOTICE
     printf '%s' "Type REMOVE to continue: " >/dev/tty
     IFS= read -r confirmation </dev/tty || confirmation=""
-    [ "$confirmation" = "REMOVE" ]
-}
-
-uninstall_ams() {
-    heading "Uninstalling Adaptive Master-Subagent Orchestration"
-    if ! confirm_uninstall; then
-        printf '%s\n' "Uninstall cancelled."
-        return 0
-    fi
-
-    market_root="$HOME/.agents/plugins"
-    plugin_root="$market_root/plugins"
-    marketplace="$market_root/marketplace.json"
-    codex_dir=$(codex_home)
-    agents_dir="$codex_dir/agents"
-    config_path="$codex_dir/ams-orchestration.toml"
-
-    if [ -d "$plugin_root" ]; then
-        for path in "$plugin_root"/*; do
-            [ -d "$path" ] || continue
-            name=$(basename "$path")
-            if is_plugin_name "$name"; then
-                rm -rf "$path"
-                printf 'removed plugin directory: %s\n' "$path"
-            fi
-        done
-    fi
-
-    if [ -f "$marketplace" ]; then
-        command -v python3 >/dev/null 2>&1 || {
-            printf '%s\n' "python3 is required to safely update marketplace.json during uninstall." >&2
-            return 1
-        }
-        AMS_MARKETPLACE_PATH="$marketplace" AMS_PLUGIN_NAMES="$PLUGIN_NAMES" python3 <<'PY'
-import json
-import os
-from pathlib import Path
-
-path = Path(os.environ["AMS_MARKETPLACE_PATH"])
-names = {line.strip() for line in os.environ["AMS_PLUGIN_NAMES"].splitlines() if line.strip()}
-data = json.loads(path.read_text(encoding="utf-8"))
-plugins = data.get("plugins")
-if isinstance(plugins, list):
-    data["plugins"] = [item for item in plugins if not (isinstance(item, dict) and item.get("name") in names)]
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PY
-        printf 'updated marketplace registration: %s\n' "$marketplace"
-    fi
-
-    if [ -d "$agents_dir" ]; then
-        for path in "$agents_dir"/ams_*; do
-            [ -f "$path" ] || continue
-            if grep -Fq "$MANAGED_MARKER" "$path" 2>/dev/null; then
-                rm -f "$path"
-                printf 'removed managed profile: %s\n' "$path"
-            fi
-        done
-    fi
-
-    if [ -f "$config_path" ]; then
-        rm -f "$config_path"
-        printf 'removed user configuration: %s\n' "$config_path"
-    fi
-
-    legacy_skill_root="$HOME/.agents/skills"
-    for legacy_name in adaptive-master-subagent-orchestration ams-orchestration ams-installer; do
-        legacy_path="$legacy_skill_root/$legacy_name"
-        if [ -d "$legacy_path" ]; then
-            rm -rf "$legacy_path"
-            printf 'removed legacy skill directory: %s\n' "$legacy_path"
-        fi
-    done
-
-    printf '\n%s\n' "Uninstall complete. Restart Codex to refresh discovered plugins and agents."
-}
-
-require_command() {
-    command -v "$1" >/dev/null 2>&1 || {
-        printf 'Required command not found: %s\n' "$1" >&2
-        return 1
-    }
+    [ "$confirmation" = REMOVE ]
 }
 
 require_python311() {
     require_command python3
-    python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' || {
-        printf '%s\n' "Python 3.11 or later is required." >&2
-        return 1
-    }
+    python3 -I -S -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' \
+        || fail "Python 3.11 or later is required."
 }
 
-verify_package_manifest() {
-    package_root=$1
-    manifest="$package_root/MANIFEST.sha256"
-    [ -f "$manifest" ] || {
-        printf 'Package manifest was not found: %s\n' "$manifest" >&2
-        return 1
-    }
-    require_command sha256sum
-    (cd "$package_root" && sha256sum -c MANIFEST.sha256 >/dev/null)
-    printf '%s\n' "Selected package manifest verified."
+validate_settings() {
+    case "$INTENSITY" in auto|minimal|moderate|heavy|extreme) ;;
+        *) fail "Unsupported intensity: $INTENSITY" ;;
+    esac
+    old_ifs=$IFS
+    IFS=,
+    # Deliberate field splitting on comma-separated values.
+    set -- $SPARK_EFFORTS
+    IFS=$old_ifs
+    [ "$#" -gt 0 ] || fail "Spark effort list cannot be empty"
+    for effort in "$@"; do
+        trimmed=$(printf '%s' "$effort" | tr -d '[:space:]')
+        case "$trimmed" in low|medium|high) ;; *) fail "Unsupported Spark effort: $trimmed" ;; esac
+    done
+    case "$EXCLUDE_SPARK" in 0|1) ;; *) fail "AMS_EXCLUDE_SPARK must be 0 or 1" ;; esac
+    case "$FORCE_UNINSTALL" in 0|1) ;; *) fail "AMS_UNINSTALL_FORCE must be 0 or 1" ;; esac
+    validate_positive_integer AMS_CONNECT_TIMEOUT_SECONDS "$CONNECT_TIMEOUT"
+    validate_positive_integer AMS_DOWNLOAD_TIMEOUT_SECONDS "$DOWNLOAD_TIMEOUT"
+    case "$REF" in
+        ''|/*|*'..'*|*[!A-Za-z0-9._/-]*) fail "Unsupported repository ref: $REF" ;;
+    esac
 }
 
-download_archive() {
+prepare_archive() {
     destination=$1
+    if [ -n "$ARCHIVE_SOURCE" ]; then
+        [ -f "$ARCHIVE_SOURCE" ] || fail "Archive path is not a readable file: $ARCHIVE_SOURCE"
+        cp "$ARCHIVE_SOURCE" "$destination"
+        printf 'Using repository archive: %s\n' "$ARCHIVE_SOURCE"
+        return 0
+    fi
+
     require_command curl
+    archive_url="https://github.com/${REPOSITORY}/archive/refs/heads/${REF}.zip"
+    api_archive_url="https://api.github.com/repos/${REPOSITORY}/zipball/${REF}"
+    printf 'Downloading repository package for ref %s.\n' "$REF"
     if [ -n "${GITHUB_TOKEN:-}" ]; then
-        curl -fsSL --retry 3 --retry-delay 1 \
+        curl -fL --silent --show-error --retry 3 --retry-delay 1 \
+            --connect-timeout "$CONNECT_TIMEOUT" --max-time "$DOWNLOAD_TIMEOUT" \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "$PRIVATE_ARCHIVE_URL" -o "$destination"
+            "$api_archive_url" -o "$destination" \
+            || fail "Repository package download failed. Verify connectivity and repository access."
     else
-        if ! curl -fsSL --retry 3 --retry-delay 1 "$PUBLIC_ARCHIVE_URL" -o "$destination"; then
-            printf '%s\n' "Repository package download failed. The repository is private; set GITHUB_TOKEN to a token with repository read access and retry." >&2
-            return 1
-        fi
+        curl -fL --silent --show-error --retry 3 --retry-delay 1 \
+            --connect-timeout "$CONNECT_TIMEOUT" --max-time "$DOWNLOAD_TIMEOUT" \
+            "$archive_url" -o "$destination" \
+            || fail "Repository package download failed. Verify connectivity and repository access."
     fi
+    [ -s "$destination" ] || fail "Repository package download produced an empty file."
 }
 
-install_option() {
-    selected=$1
-    require_python311
-    require_command unzip
-
-    case "$selected" in
-        A) option_dir="adaptive-master-subagent-orchestration-option-a-two-skill" ;;
-        B) option_dir="adaptive-master-subagent-orchestration-option-b-unified" ;;
-        C) option_dir="adaptive-master-subagent-orchestration-option-c-installer-required" ;;
-        *) printf 'Internal error: unsupported option %s\n' "$selected" >&2; return 1 ;;
-    esac
-
-    TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ams-install.XXXXXX")
-    archive_path="$TEMP_ROOT/$ARCHIVE_NAME"
-    extract_path="$TEMP_ROOT/extracted"
-    mkdir -p "$extract_path"
-
-    if [ -n "${GITHUB_TOKEN:-}" ]; then
-        download_url=$PRIVATE_ARCHIVE_URL
-    else
-        download_url=$PUBLIC_ARCHIVE_URL
-    fi
-    printf 'Downloading repository package: %s\n' "$download_url"
-    download_archive "$archive_path"
-    unzip -q "$archive_path" -d "$extract_path"
-
-    package_root=$(find "$extract_path" -type d -name "$option_dir" -print | head -n 1)
-    [ -n "$package_root" ] || {
-        printf 'Selected package directory was not found after extraction: %s\n' "$option_dir" >&2
-        return 1
-    }
-    verify_package_manifest "$package_root"
-    installer="$package_root/scripts/install_package.py"
-    [ -f "$installer" ] || {
-        printf 'Selected package installer was not found: %s\n' "$installer" >&2
-        return 1
-    }
-
-    intensity=${AMS_INTENSITY:-auto}
-    spark_efforts=${AMS_SPARK_EFFORTS:-low,medium,high}
-
-    heading "Installing Option $selected"
-    if [ "${AMS_EXCLUDE_SPARK:-0}" = "1" ]; then
-        python3 "$installer" --home "$HOME" --upgrade-managed --intensity "$intensity" --spark-efforts "$spark_efforts" --exclude-spark
-    else
-        python3 "$installer" --home "$HOME" --upgrade-managed --intensity "$intensity" --spark-efforts "$spark_efforts"
-    fi
-
-    codex_dir=$(codex_home)
-    config_path="$codex_dir/ams-orchestration.toml"
-    if [ -f "$config_path" ] && grep -Fq '\n' "$config_path" 2>/dev/null; then
-        AMS_CONFIG_PATH="$config_path" python3 <<'PYCFG'
+safe_extract() {
+    archive=$1
+    destination=$2
+    python3 -I -S - "$archive" "$destination" <<'PY'
+from __future__ import annotations
 import os
-from pathlib import Path
-path = Path(os.environ["AMS_CONFIG_PATH"])
-text = path.read_text(encoding="utf-8")
-path.write_text(text.replace("\\n", "\n"), encoding="utf-8")
-PYCFG
-    fi
+import stat
+import sys
+import zipfile
+from pathlib import Path, PurePosixPath
 
-    printf '\nOption %s installed successfully. Restart Codex if it does not appear immediately.\n' "$selected"
+archive = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+max_entries = 5000
+max_bytes = 256 * 1024 * 1024
+seen: set[str] = set()
+try:
+    with zipfile.ZipFile(archive) as zf:
+        infos = zf.infolist()
+        if not infos:
+            raise SystemExit("Repository archive is empty.")
+        if len(infos) > max_entries:
+            raise SystemExit(f"Repository archive has too many entries: {len(infos)}")
+        total = 0
+        validated = []
+        for info in infos:
+            name = info.filename.replace("\\", "/")
+            if any(ord(char) < 32 or ord(char) == 127 for char in name):
+                raise SystemExit(f"Repository archive contains a control character in a path: {name!r}")
+            path = PurePosixPath(name)
+            if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+                raise SystemExit(f"Repository archive contains an unsafe path: {name}")
+            if path.parts and ":" in path.parts[0]:
+                raise SystemExit(f"Repository archive contains an unsupported drive path: {name}")
+            normalized = path.as_posix().rstrip("/")
+            if normalized in seen:
+                raise SystemExit(f"Repository archive contains a duplicate path: {name}")
+            seen.add(normalized)
+            mode = (info.external_attr >> 16) & 0xFFFF
+            if stat.S_ISLNK(mode):
+                raise SystemExit(f"Repository archive contains an unsupported symbolic link: {name}")
+            if info.flag_bits & 0x1:
+                raise SystemExit(f"Repository archive contains an encrypted entry: {name}")
+            total += info.file_size
+            if total > max_bytes:
+                raise SystemExit("Repository archive exceeds the extraction size limit.")
+            validated.append((info, path))
+        destination.mkdir(parents=True, exist_ok=True)
+        root = destination.resolve()
+        for info, path in validated:
+            target = destination.joinpath(*path.parts)
+            resolved_parent = target.parent.resolve(strict=False)
+            if os.path.commonpath((str(root), str(resolved_parent))) != str(root):
+                raise SystemExit(f"Repository archive escapes the extraction directory: {info.filename}")
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as source, target.open("wb") as output:
+                while True:
+                    block = source.read(1024 * 1024)
+                    if not block:
+                        break
+                    output.write(block)
+except (OSError, zipfile.BadZipFile) as exc:
+    raise SystemExit(f"Repository archive could not be extracted: {exc}") from exc
+PY
 }
 
-selection=${AMS_INSTALL_OPTION:-${1:-}}
-if [ -n "$selection" ]; then
-    selection=$(normalize_option "$selection")
+find_package_root() {
+    extract_path=$1
+    option_dir=$2
+    python3 -I -S - "$extract_path" "$option_dir" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+name = sys.argv[2]
+matches = [path for path in root.rglob(name) if path.is_dir() and path.name == name]
+if len(matches) != 1:
+    raise SystemExit(f"Expected exactly one package directory named {name} after extraction; found {len(matches)}.")
+print(matches[0])
+PY
+}
+
+find_installed_uninstaller() {
+    plugin_root="$INSTALL_HOME/.agents/plugins/plugins"
+    [ -d "$plugin_root" ] || return 1
+    for name in \
+        adaptive-master-subagent-orchestration-option-a-two-skill \
+        adaptive-master-subagent-orchestration-option-b-unified \
+        adaptive-master-subagent-orchestration-option-c-installer-required \
+        adaptive-master-subagent-orchestration-option-a-modular \
+        adaptive-master-subagent-orchestration-option-c-lean \
+        adaptive-master-subagent-orchestration
+    do
+        candidate="$plugin_root/$name/scripts/install_package.py"
+        if [ -f "$candidate" ] && [ ! -L "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+run_package_operation() {
+    installer=$1
+    selected=$2
+    if [ "$selected" = UNINSTALL ]; then
+        python3 -B -E -s -S "$installer" --home "$INSTALL_HOME" --uninstall --yes
+        return
+    fi
+
+    set -- --home "$INSTALL_HOME" --upgrade-managed --intensity "$INTENSITY" --spark-efforts "$SPARK_EFFORTS"
+    if [ "$EXCLUDE_SPARK" = 1 ]; then
+        set -- "$@" --exclude-spark
+    fi
+    python3 -B -E -s -S "$installer" "$@"
+}
+
+if [ -n "$SELECTED" ]; then
+    SELECTED=$(normalize_option "$SELECTED")
 else
-    selection=$(prompt_selection)
+    SELECTED=$(prompt_selection)
+fi
+validate_settings
+require_python311
+
+if [ "$SELECTED" = UNINSTALL ]; then
+    if ! confirm_uninstall; then
+        printf '%s\n' "Uninstall cancelled."
+        exit 0
+    fi
+    if installed_uninstaller=$(find_installed_uninstaller); then
+        heading "Uninstalling Adaptive Master-Subagent Orchestration"
+        run_package_operation "$installed_uninstaller" UNINSTALL
+        printf '\n%s\n' "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents."
+        exit 0
+    fi
 fi
 
-case "$selection" in
-    UNINSTALL) uninstall_ams ;;
-    A|B|C) install_option "$selection" ;;
-    *) printf 'Internal error: unsupported selection %s\n' "$selection" >&2; exit 1 ;;
+TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ams-install.XXXXXX")
+safe_ref=$(printf '%s' "$REF" | tr '/\\' '--')
+archive_path="$TEMP_ROOT/adaptive-master-subagent-orchestration-${safe_ref}.zip"
+extract_path="$TEMP_ROOT/extracted"
+prepare_archive "$archive_path"
+safe_extract "$archive_path" "$extract_path"
+
+case "$SELECTED" in
+    A) option_dir="adaptive-master-subagent-orchestration-option-a-two-skill" ;;
+    B) option_dir="adaptive-master-subagent-orchestration-option-b-unified" ;;
+    C|UNINSTALL) option_dir="adaptive-master-subagent-orchestration-option-c-installer-required" ;;
 esac
+package_root=$(find_package_root "$extract_path" "$option_dir")
+installer="$package_root/scripts/install_package.py"
+[ -f "$installer" ] && [ ! -L "$installer" ] || fail "Selected package installer was not found: $installer"
+
+if [ "$SELECTED" = UNINSTALL ]; then
+    heading "Uninstalling Adaptive Master-Subagent Orchestration"
+else
+    heading "Installing Option $SELECTED"
+fi
+run_package_operation "$installer" "$SELECTED"
+
+if [ "$SELECTED" = UNINSTALL ]; then
+    printf '\n%s\n' "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents."
+else
+    printf '\nOption %s installed successfully. Restart Codex if it does not appear immediately.\n' "$SELECTED"
+fi

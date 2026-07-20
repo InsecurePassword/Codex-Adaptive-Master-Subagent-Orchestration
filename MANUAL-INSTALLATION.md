@@ -1,6 +1,6 @@
 # Manual Installation
 
-Most users should use the interactive installer in the main [README](README.md). This guide is for users who clone the repository, install without the root installer, work offline, or need the full package layout.
+Most users should use the root installer described in the main [README](README.md). This guide is for cloned repositories, offline installation, direct package installation, and installer validation.
 
 Install exactly one package option.
 
@@ -10,7 +10,7 @@ Install exactly one package option.
 - Windows PowerShell 5.1+ on Windows, or a POSIX-compatible shell on Linux
 - A Codex installation that supports skills and custom agents
 
-`CODEX_HOME` may be set before installation to use a non-default Codex state directory.
+`CODEX_HOME` may be set to use a non-default Codex state directory. The root installers also accept `AMS_HOME` or their platform-specific home-directory argument for test or alternate installations.
 
 ## Repository layout
 
@@ -18,166 +18,160 @@ Install exactly one package option.
 adaptive-master-subagent-orchestration/
 |-- README.md
 |-- INSTALLATION.md
-|-- MANUAL-INSTALLATION.md
 |-- INSTALLER-USAGE.md
+|-- INSTALLER-AUDIT.md
+|-- MANUAL-INSTALLATION.md
 |-- install.ps1
 |-- install.sh
+|-- scripts/
+|   |-- audit_installers.py
+|   `-- process_utils.py
+|-- tests/
+|   `-- test_installers.py
 |-- adaptive-master-subagent-orchestration-option-a-two-skill/
-|   |-- .codex-plugin/
-|   |   `-- plugin.json
 |   |-- Install-Package.ps1
-|   |-- README.md
-|   |-- AUDIT.md
-|   |-- CHANGELOG.md
-|   |-- VERSION
-|   |-- PACKAGE-OPTION
 |   |-- MANIFEST.sha256
-|   |-- assets/
-|   |   `-- agent-profiles/
-|   |       |-- ams_sol_*.toml
-|   |       |-- ams_terra_*.toml
-|   |       |-- ams_luna_*.toml
-|   |       `-- ams_spark_*.toml
+|   |-- assets/agent-profiles/
 |   |-- config/
-|   |   `-- ams-orchestration.example.toml
 |   |-- scripts/
 |   |   |-- Install-AgentProfiles.ps1
 |   |   |-- Set-Intensity.ps1
 |   |   |-- bootstrap_profiles.py
 |   |   |-- install_package.py
+|   |   |-- process_utils.py
 |   |   |-- set_intensity.py
 |   |   |-- test_bootstrap.py
+|   |   |-- test_installation.py
+|   |   |-- test_intensity.py
 |   |   `-- validate_package.py
 |   `-- skills/
-|       |-- ams-installer/
-|       |   |-- SKILL.md
-|       |   `-- agents/openai.yaml
-|       `-- ams-orchestration/
-|           |-- SKILL.md
-|           `-- agents/openai.yaml
 |-- adaptive-master-subagent-orchestration-option-b-unified/
-|   |-- .codex-plugin/plugin.json
-|   |-- Install-Package.ps1
-|   |-- README.md
-|   |-- AUDIT.md
-|   |-- CHANGELOG.md
-|   |-- VERSION
-|   |-- PACKAGE-OPTION
-|   |-- MANIFEST.sha256
-|   |-- assets/agent-profiles/
-|   |-- config/
-|   |-- scripts/
-|   `-- skills/
-|       `-- adaptive-master-subagent-orchestration/
-|           |-- SKILL.md
-|           `-- agents/openai.yaml
+|   `-- ...same installer and validation structure...
 `-- adaptive-master-subagent-orchestration-option-c-installer-required/
-    |-- .codex-plugin/plugin.json
-    |-- Install-Package.ps1
-    |-- README.md
-    |-- AUDIT.md
-    |-- CHANGELOG.md
-    |-- VERSION
-    |-- PACKAGE-OPTION
-    |-- MANIFEST.sha256
-    |-- assets/agent-profiles/
-    |-- config/
-    |-- scripts/
-    `-- skills/
-        `-- ams-orchestration/
-            |-- SKILL.md
-            `-- agents/openai.yaml
+    `-- ...same installer and validation structure...
 ```
 
-Each option directory is a complete package root. Run its installer from that directory.
+Each option directory is a complete package root.
 
-## Option A — Recommended
+## Root installer without the menu
 
-Option A installs `$ams-installer` and `$ams-orchestration`.
+### Windows
 
-### Option A on Windows
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option A
+```
+
+### Linux
+
+```sh
+sh ./install.sh --option A
+```
+
+Use `B` or `C` for another package. See [Installer usage](INSTALLER-USAGE.md) for all command-line options, environment variables, offline ZIP installation, and uninstall commands.
+
+## Direct package installation
+
+### Option A — Recommended
+
+Installs `$ams-installer` and `$ams-orchestration`.
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-a-two-skill
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Option A on Linux
-
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-a-two-skill
-python3 ./scripts/install_package.py --upgrade-managed --intensity auto
+python3 -B -E -s -S ./scripts/install_package.py --upgrade-managed --intensity auto
 ```
 
-## Option B — Unified
+### Option B — Unified
 
-Option B installs `$adaptive-master-subagent-orchestration`.
-
-### Option B on Windows
+Installs `$adaptive-master-subagent-orchestration`.
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-b-unified
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Option B on Linux
-
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-b-unified
-python3 ./scripts/install_package.py --upgrade-managed --intensity auto
+python3 -B -E -s -S ./scripts/install_package.py --upgrade-managed --intensity auto
 ```
 
-## Option C — Lean runtime
+### Option C — Lean runtime
 
-Option C installs `$ams-orchestration` and requires profile installation.
-
-### Option C on Windows
+Installs `$ams-orchestration` and requires managed profile installation.
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-c-installer-required
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Option C on Linux
-
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-c-installer-required
-python3 ./scripts/install_package.py --upgrade-managed --intensity auto
+python3 -B -E -s -S ./scripts/install_package.py --upgrade-managed --intensity auto
 ```
 
 ## Package installer options
 
 | PowerShell | Python | Purpose |
 |---|---|---|
+| `-HomeDirectory <path>` | `--home <path>` | Use an alternate installation home |
 | `-UpgradeManaged` | `--upgrade-managed` | Back up and update older package-managed files |
-| `-ExcludeSpark` | `--exclude-spark` | Skip optional Spark profiles |
+| `-ExcludeSpark` | `--exclude-spark` | Skip optional Spark profiles and remove previously managed Spark profiles |
 | `-SparkEfforts low,medium,high` | `--spark-efforts low,medium,high` | Select Spark profiles |
 | `-SkipProfiles` | `--skip-profiles` | Skip profile installation where allowed; Option C rejects this |
 | `-Intensity <mode>` | `--intensity <mode>` | Set the initial intensity if no user configuration exists |
 | `-WhatIf` | `--dry-run` | Preview changes without installing |
+| `-Uninstall -Force` | `--uninstall --yes` | Remove package-managed installation data |
 
-## Validate a package
+## Validate installation tooling
 
-From the selected option directory:
+Run the complete repository-level audit:
 
 ```sh
-python3 ./scripts/validate_package.py
+python3 -B -E -s -S ./scripts/audit_installers.py
 ```
 
-The validator checks plugin structure, skill metadata, profile TOML, package checksums, installer behavior, intensity configuration, recovery rules, and option-specific setup rules.
+Run one package's installation-tool audit:
+
+```sh
+python3 -B -E -s -S ./scripts/validate_package.py --scripts-only
+```
+
+Run the complete package validator, including package and skill structure:
+
+```sh
+python3 -B -E -s -S ./scripts/validate_package.py
+```
+
+The scripts-only audit checks manifests, plugin metadata, Python and shell syntax, profile installation, intensity handling, dry-runs, updates, option replacement, rollback, locks, timeouts, and uninstall behavior.
+
+## Offline installation
+
+Pass a repository ZIP to the root installer:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option A -ArchivePath .\repository.zip
+```
+
+```sh
+sh ./install.sh --option A --archive-path ./repository.zip
+```
+
+The installer validates archive paths and the selected package manifest before installing.
 
 ## Uninstall
 
-Use menu option **4** in the root installer:
-
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/adaptive-master-subagent-orchestration/refs/heads/main/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option Uninstall -Force
 ```
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/InsecurePassword/adaptive-master-subagent-orchestration/refs/heads/main/install.sh | sh
+sh ./install.sh --option UNINSTALL --force
 ```
 
-For non-interactive uninstall and the exact removal scope, see [Installer usage](INSTALLER-USAGE.md).
+The uninstall path removes package-managed files while preserving unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration.
 
-Restart Codex after installation or removal if the skill list does not update immediately.
+Restart Codex after installation, package switching, or removal if the skill list does not update immediately.

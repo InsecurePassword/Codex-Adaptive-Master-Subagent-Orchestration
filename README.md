@@ -122,7 +122,15 @@ When both files exist, the project configuration takes precedence over the globa
 
 ## Installer configuration
 
-The remote installers support these environment variables:
+The installers support command-line option selection and environment variables. Examples:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option A
+```
+
+```sh
+sh ./install.sh --option A
+```
 
 | Variable | Purpose |
 |---|---|
@@ -133,7 +141,7 @@ The remote installers support these environment variables:
 | `AMS_UNINSTALL_FORCE=1` | Confirm non-interactive uninstall |
 | `CODEX_HOME` | Use a non-default Codex state directory |
 
-Advanced package flags, folder layouts, validation commands, and direct installer commands are documented in [Manual installation](MANUAL-INSTALLATION.md).
+All command-line switches, offline installation, package flags, folder layouts, validation commands, and uninstall details are documented in [Installer usage](INSTALLER-USAGE.md) and [Manual installation](MANUAL-INSTALLATION.md).
 
 ## Safety and project control
 
@@ -155,7 +163,8 @@ No license has been selected. Add one before redistributing the project.
 
 ## More information
 
-- [Installer usage](INSTALLER-USAGE.md) — automation and uninstall scope
+- [Installer usage](INSTALLER-USAGE.md) — command-line options, automation, offline installation, and uninstall scope
+- [Installer audit](INSTALLER-AUDIT.md) — corrected defects, guarantees, and test coverage
 - [Manual installation](MANUAL-INSTALLATION.md) — repository tree, direct package installation, and validation
 - [Option A package](adaptive-master-subagent-orchestration-option-a-two-skill/)
 - [Option B package](adaptive-master-subagent-orchestration-option-b-unified/)
