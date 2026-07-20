@@ -48,6 +48,13 @@ jobs:
       - name: Apply source transformations
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $TransformPath = Join-Path $PWD ".windows-audit-transform.py"
+          $Text = [System.IO.File]::ReadAllText($TransformPath, [System.Text.Encoding]::UTF8)
+          $Old = 'for name in ("install_package.py", "bootstrap_profiles.py", "set_intensity.py", "validate_package.py"):'
+          $New = 'for name in ("install_package.py", "bootstrap_profiles.py", "set_intensity.py"):'
+          if (-not $Text.Contains($Old)) { throw "Expected Python import target tuple was not found." }
+          [System.IO.File]::WriteAllText($TransformPath, $Text.Replace($Old, $New), [System.Text.UTF8Encoding]::new($false))
           python -B -E -s -S .\.windows-audit-transform.py *> .\windows-audit-transform.log
           $ExitCode = $LASTEXITCODE
           Get-Content -LiteralPath .\windows-audit-transform.log
