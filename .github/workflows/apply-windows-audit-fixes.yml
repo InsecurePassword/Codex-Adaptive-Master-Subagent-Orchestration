@@ -33,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $DiagnosticPath = Join-Path $env:RUNNER_TEMP "windows-audit-apply.log"
+          $DiagnosticPath = Join-Path $PWD "windows-audit-apply.log"
           Set-Content -LiteralPath $DiagnosticPath -Value "Windows audit remediation diagnostics" -Encoding utf8
 
           function Invoke-CheckedNative {
@@ -42,9 +42,13 @@ jobs:
               [Parameter(Mandatory = $true)][string]$Executable,
               [Parameter(Mandatory = $true)][string[]]$Arguments
             )
-            Add-Content -LiteralPath $DiagnosticPath -Value "`n=== $Label ===" -Encoding utf8
-            & $Executable @Arguments 2>&1 | Tee-Object -FilePath $DiagnosticPath -Append
+            $StagePath = Join-Path $env:RUNNER_TEMP ((($Label -replace "[^A-Za-z0-9_-]", "-") + ".log"))
+            & $Executable @Arguments *> $StagePath
             $ExitCode = $LASTEXITCODE
+            Add-Content -LiteralPath $DiagnosticPath -Value "`n=== $Label ===" -Encoding utf8
+            if (Test-Path -LiteralPath $StagePath) {
+              Get-Content -LiteralPath $StagePath -Raw | Add-Content -LiteralPath $DiagnosticPath -Encoding utf8
+            }
             Add-Content -LiteralPath $DiagnosticPath -Value "exit_code=$ExitCode" -Encoding utf8
             if ($ExitCode -ne 0) {
               throw "$Label failed with exit code $ExitCode."
@@ -106,6 +110,7 @@ jobs:
             }
             if ($failed) { throw "PowerShell parsing failed." }
 
+            Remove-Item -LiteralPath $DiagnosticPath -Force
             Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
             $parts | Remove-Item -Force
             Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
@@ -126,9 +131,10 @@ jobs:
             throw
           }
 
-      - name: Upload remediation transcript
+      - name: Upload remediation diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: windows-audit-apply-failure
-          path: ${{ runner.temp }}\windows-audit-apply.log
+          path: windows-audit-apply.log
+          if-no-files-found: error
