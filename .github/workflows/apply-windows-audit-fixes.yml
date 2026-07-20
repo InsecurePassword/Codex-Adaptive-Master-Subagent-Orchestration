@@ -114,7 +114,7 @@ jobs:
           }
           if ($failed) { exit 1 }
 
-      - name: Remove audit staging files
+      - name: Remove staging and restore workflow files
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -122,17 +122,20 @@ jobs:
           Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
           Remove-Item -LiteralPath .\windows-audit-transform.log -Force -ErrorAction SilentlyContinue
           $parts | Remove-Item -Force
-          Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
+          git restore -- .github/workflows/release-audit.yml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Stage and validate exact diff
+      - name: Stage and validate non-workflow diff
         shell: pwsh
         run: |
           git add --all
           git status --short
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --name-only | Select-String -SimpleMatch ".github/workflows/" -Quiet
+          if ($?) { throw "Workflow files remained staged unexpectedly." }
 
-      - name: Commit exact Windows audit corrections
+      - name: Commit validated source corrections
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
@@ -140,26 +143,8 @@ jobs:
           git commit -m "Complete independent Windows installation audit coverage"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Push isolated audit branch
+      - name: Push validated source corrections
         shell: pwsh
         run: |
           git push origin HEAD:windows-final-third-party-audit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Export validated commit after push rejection
-        if: failure()
-        shell: pwsh
-        run: |
-          git format-patch -1 --stdout HEAD | Set-Content -LiteralPath .\windows-audit-final.patch -Encoding utf8
-          git archive --format=zip --output=.\windows-audit-final.zip HEAD
-          git show --stat --oneline HEAD
-
-      - name: Upload validated Windows audit commit
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-audit-final-commit
-          path: |
-            windows-audit-final.patch
-            windows-audit-final.zip
-          if-no-files-found: error
