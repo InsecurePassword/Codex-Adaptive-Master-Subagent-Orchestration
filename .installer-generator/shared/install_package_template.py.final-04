@@ -1,0 +1,134 @@
+    with install_lock(market_root):
+        clean_stale_transactions(market_root)
+        validate_manifest(src)
+        validate_plugin_metadata(src)
+        marketplace = load_marketplace(marketplace_path)
+        config_plan = inspect_config(config_path, args.intensity)
+        if not args.skip_profiles:
+            profile_summary = run_bootstrap(
+                src,
+                codex_home,
+                args,
+                dry_run=True,
+                transaction_id=profile_transaction,
+                json_output=True,
+            )
+        expectations = profile_expectations(profile_summary) if profile_summary is not None else []
+
+        plugin_root.mkdir(parents=True, exist_ok=True)
+        backup_root = market_root / "backups"
+        transaction_root = market_root / f".ams-transaction-{uuid.uuid4().hex}"
+        staged_plugin = transaction_root / "new-plugin"
+        old_root = transaction_root / "old-plugins"
+        transaction_root.mkdir(parents=True)
+        new_plugin = plugin_root / PLUGIN_NAME
+        selected_identical = packages_identical(src, new_plugin)
+        if not selected_identical:
+            copy_package(src, staged_plugin)
+
+        marketplace_state = snapshot_file(marketplace_path)
+        config_state = snapshot_file(config_path)
+        desired_marketplace = marketplace_text(marketplace_for_install(marketplace)).encode("utf-8")
+        expected_marketplace_after = marketplace_state.data
+        expected_config_after = config_state.data
+        old_locations: list[tuple[Path, Path]] = []
+        committed_backups: list[Path] = []
+        new_plugin_created = False
+        try:
+            for name in ALL_PLUGIN_NAMES:
+                original = plugin_root / name
+                if selected_identical and original == new_plugin:
+                    continue
+                if not original.exists() and not original.is_symlink():
+                    continue
+                if not original.is_dir() or original.is_symlink():
+                    raise SystemExit(f"Active plugin path is not a regular directory: {original}")
+                staged_old = old_root / name
+                staged_old.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(original, staged_old)
+                old_locations.append((original, staged_old))
+
+            if not selected_identical:
+                os.replace(staged_plugin, new_plugin)
+                new_plugin_created = True
+            if not marketplace_state.existed or marketplace_state.data != desired_marketplace:
+                atomic_write_bytes(marketplace_path, desired_marketplace, marketplace_state.mode)
+                expected_marketplace_after = desired_marketplace
+            if config_plan.text is not None:
+                expected_config_after = config_plan.text.encode("utf-8")
+                atomic_write_bytes(config_path, expected_config_after, config_state.mode)
+
+            backup_root.mkdir(parents=True, exist_ok=True)
+            for original, staged_old in old_locations:
+                backup_path = next_backup_path(backup_root, original.name)
+                os.replace(staged_old, backup_path)
+                committed_backups.append(backup_path)
+
+            if not args.skip_profiles:
+                run_bootstrap(
+                    new_plugin,
+                    codex_home,
+                    args,
+                    dry_run=False,
+                    transaction_id=profile_transaction,
+                    json_output=False,
+                )
+        except BaseException as exc:
+            # Move committed plugin backups back into the transaction staging area first.
+            rollback_errors: list[str] = []
+            for index, backup_path in enumerate(committed_backups):
+                try:
+                    staged_old = old_locations[index][1]
+                    if backup_path.exists() or backup_path.is_symlink():
+                        staged_old.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(backup_path, staged_old)
+                except Exception as move_exc:
+                    rollback_errors.append(f"restage plugin backup {backup_path}: {move_exc}")
+            rollback_errors.extend(rollback_plugin_moves(
+                src=src,
+                new_plugin=new_plugin,
+                old_locations=old_locations,
+                remove_new_plugin=new_plugin_created,
+            ))
+            if expected_marketplace_after != marketplace_state.data:
+                try:
+                    restore_file_if_unchanged(marketplace_path, marketplace_state, expected_marketplace_after)
+                except Exception as restore_exc:
+                    rollback_errors.append(f"restore {marketplace_path}: {restore_exc}")
+            if expected_config_after != config_state.data:
+                try:
+                    restore_file_if_unchanged(config_path, config_state, expected_config_after)
+                except Exception as restore_exc:
+                    rollback_errors.append(f"restore {config_path}: {restore_exc}")
+            rollback_errors.extend(restore_profile_expectations(expectations))
+            rollback_errors.extend(cleanup_profile_transaction_backups(codex_home, profile_transaction))
+            if rollback_errors:
+                raise SystemExit(
+                    f"Installation failed: {exc}; rollback also reported: {'; '.join(rollback_errors)}"
+                ) from exc
+            raise
+        finally:
+            try:
+                shutil.rmtree(transaction_root)
+            except FileNotFoundError:
+                pass
+            except OSError as cleanup_error:
+                print(f"warning: could not remove transaction directory {transaction_root}: {cleanup_error}", file=sys.stderr)
+
+    print(f"plugin registered: {PLUGIN_NAME}")
+    for backup_path in committed_backups:
+        print(f"previous plugin backup: {backup_path}")
+    if config_plan.action == "create":
+        print(f"created intensity config: {config_path}")
+    elif config_plan.action == "repair-legacy-newlines":
+        print(f"repaired legacy intensity config: {config_path}")
+    else:
+        print(f"preserved intensity config: {config_path}")
+    print("Restart Codex if the plugin or profiles are not detected immediately.")
+    return 0
+
+
+def path_has_managed_marker(path: Path) -> bool:
+    if not path.is_file() or path.is_symlink():
+        return False
+    try:
