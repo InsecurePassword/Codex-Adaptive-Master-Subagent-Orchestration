@@ -1,0 +1,127 @@
+ined")
+
+
+def test_manifest_rejection(base: Path) -> None:
+    copied = base / "tampered-package"
+    shutil.copytree(ROOT, copied)
+    (copied / "README.md").write_text((copied / "README.md").read_text(encoding="utf-8") + "\ntampered\n", encoding="utf-8")
+    installer = copied / "scripts" / "install_package.py"
+    home = base / "tampered-home"
+    result = run_bounded(
+        [sys.executable, "-E", "-s", "-S", str(installer), "--home", str(home), "--dry-run"],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=COMMAND_TIMEOUT,
+    )
+    require(result.returncode != 0, "tampered package was accepted")
+    require("manifest verification failed" in (result.stdout + result.stderr).lower(), "tamper error was unclear")
+    require(not home.exists(), "tampered package mutated home")
+
+
+def test_install_lock(base: Path) -> None:
+    home = base / "lock-home"
+    market_root = home / ".agents" / "plugins"
+    market_root.mkdir(parents=True)
+    lock = market_root / ".ams-install.lock"
+    old = time.time() - (3 * 60 * 60)
+    lock.write_text(json.dumps({"pid": os.getpid(), "host": socket.gethostname()}) + "\n", encoding="utf-8")
+    os.utime(lock, (old, old))
+    output = run(home, "--dry-run", "--exclude-spark")
+    require("would-install" in output or "would-preserve" in output, "dry-run unexpectedly acquired the install lock")
+    output = run(home, "--exclude-spark", expect=1)
+    require("appears to be active" in output, "live install lock was not enforced")
+    require(lock.exists(), "live install lock was removed")
+
+    lock.write_text(json.dumps({"pid": 99999999, "host": socket.gethostname()}) + "\n", encoding="utf-8")
+    os.utime(lock, (old, old))
+    run(home, "--exclude-spark")
+    require(not lock.exists(), "dead stale install lock was not cleared")
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory(prefix=f"ams-install-tests-{OPTION.lower()}-") as tmp:
+        base = Path(tmp)
+
+        step("dry-run")
+        dry_home = base / "dry-home"
+        run(dry_home, "--dry-run", "--exclude-spark")
+        require(not dry_home.exists(), "install dry-run mutated home")
+
+        step("initial install and option replacement")
+        home = base / "home"
+        market_path = home / ".agents" / "plugins" / "marketplace.json"
+        market_path.parent.mkdir(parents=True)
+        other_option = next(name for name in ALL_NAMES if name not in {PLUGIN, "adaptive-master-subagent-orchestration"})
+        unrelated_market = {
+            "name": "existing-marketplace",
+            "plugins": [
+                {"name": "unrelated", "source": {"source": "local", "path": "./plugins/unrelated"}},
+                {"name": other_option, "source": {"source": "local", "path": f"./plugins/{other_option}"}},
+            ],
+        }
+        market_path.write_text(json.dumps(unrelated_market, indent=2) + "\n", encoding="utf-8")
+        unrelated_plugin = home / ".agents" / "plugins" / "plugins" / "unrelated"
+        unrelated_plugin.mkdir(parents=True)
+        (unrelated_plugin / "keep.txt").write_text("keep", encoding="utf-8")
+        old_option_plugin = home / ".agents" / "plugins" / "plugins" / other_option
+        old_option_plugin.mkdir(parents=True)
+        (old_option_plugin / "old.txt").write_text("old option", encoding="utf-8")
+
+        run(home, "--exclude-spark", "--upgrade-managed", "--intensity", "heavy")
+        require(active_ams_plugins(home) == [PLUGIN], f"wrong active plugins: {active_ams_plugins(home)}")
+        require(ams_marketplace_entries(home) == [PLUGIN], "marketplace did not contain exactly the selected option")
+        require((unrelated_plugin / "keep.txt").read_text(encoding="utf-8") == "keep", "unrelated plugin changed")
+        require(any(item.get("name") == "unrelated" for item in marketplace(home)["plugins"]), "unrelated entry lost")
+        backups = home / ".agents" / "plugins" / "backups"
+        require(any(path.name.startswith(other_option + ".backup-") for path in backups.iterdir()), "old option was not backed up")
+        agents = home / ".codex" / "agents"
+        require(len(list(agents.glob("*.toml"))) == 15, "exclude-spark install did not create 15 profiles")
+        config_path = home / ".codex" / "ams-orchestration.toml"
+        config_text = config_path.read_text(encoding="utf-8")
+        require("\\n" not in config_text, "config contains literal backslash-n sequences")
+        config = tomllib.loads(config_text)
+        require(config == {"schema_version": 1, "intensity": "heavy"}, f"config mismatch: {config}")
+
+        step("identical reinstall")
+        before_backups = sorted(backups.iterdir())
+        run(home, "--exclude-spark", "--upgrade-managed")
+        after_backups = sorted(backups.iterdir())
+        require(before_backups == after_backups, "identical reinstall created an unnecessary backup")
+
+        step("legacy config repair")
+        config_path.write_text('schema_version = 1\\nintensity = "extreme"\\n', encoding="utf-8")
+        run(home, "--exclude-spark", "--upgrade-managed")
+        repaired = config_path.read_text(encoding="utf-8")
+        require("\\n" not in repaired, "legacy config encoding was not repaired")
+        require(tomllib.loads(repaired)["intensity"] == "extreme", "legacy repair changed intensity")
+
+        step("invalid config preflight")
+        config_path.write_text("this is not toml", encoding="utf-8")
+        sentinel = home / ".agents" / "plugins" / "plugins" / PLUGIN / "sentinel.txt"
+        sentinel.write_text("preserve", encoding="utf-8")
+        output = run(home, "--exclude-spark", expect=1)
+        require("invalid orchestration configuration" in output.lower(), "invalid config error was unclear")
+        require(sentinel.read_text(encoding="utf-8") == "preserve", "invalid config changed plugin")
+        config_path.write_text('schema_version = 1\nintensity = "auto"\n', encoding="utf-8")
+
+        step("skip-profile policy")
+        if OPTION == "C":
+            output = run(base / "option-c-skip", "--skip-profiles", expect=1)
+            require("requires profile installation" in output, "Option C skip-profiles rule not enforced")
+        else:
+            skip_home = base / "skip-home"
+            run(skip_home, "--skip-profiles")
+            require(not (skip_home / ".codex" / "agents").exists(), "skip-profiles installed profiles")
+
+        step("invalid marketplace preflight")
+        invalid_home = base / "invalid-market-home"
+        invalid_market = invalid_home / ".agents" / "plugins" / "marketplace.json"
+        invalid_market.parent.mkdir(parents=True)
+        invalid_market.write_text('{"plugins": {}}\n', encoding="utf-8")
+        output = run(invalid_home, "--exclude-spark", expect=1)
+        require("plugins' value must be a list" in output, "invalid marketplace error was unclear")
+        require(not (invalid_home / ".agents" / "plugins" / "plugins").exists(), "invalid marketplace installed plugin")
+
+        step("CODEX_HOME override")
+      
