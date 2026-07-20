@@ -37,8 +37,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - name: Check out audited revision
+      - name: Check out exact audited revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -128,8 +130,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out audited revision
+      - name: Check out exact audited revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
