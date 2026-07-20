@@ -1,4 +1,4 @@
-# Native Windows PowerShell release audit
+# Native Windows PowerShell release audit v4
 name: Release audit
 
 on:
