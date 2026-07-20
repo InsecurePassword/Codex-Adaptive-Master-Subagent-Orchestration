@@ -1,0 +1,88 @@
+name: Final Windows installation audit
+
+on:
+  push:
+    branches:
+      - final-windows-installation-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-audit:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact audited revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Record Windows environment
+        shell: pwsh
+        run: |
+          git status --short
+          git rev-parse HEAD
+          python --version
+          powershell.exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Parse every PowerShell file in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ': ' + (($errors | ForEach-Object Message) -join '; '))
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Parse every PowerShell file in PowerShell 7
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ': ' + (($errors | ForEach-Object Message) -join '; '))
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Verify manifests and Windows documentation
+        shell: pwsh
+        run: |
+          python -B -E -s -S .\scripts\refresh_manifests.py --check
+          python -B -E -s -S .\scripts\audit_markdown.py
+
+      - name: Run native Windows root installer tests
+        shell: pwsh
+        run: python -B -E -s -S .\tests\test_windows_installers.py
+
+      - name: Run all package validators on Windows
+        shell: pwsh
+        run: |
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-a-two-skill\scripts\validate_package.py
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-b-unified\scripts\validate_package.py
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-c-installer-required\scripts\validate_package.py
+
+      - name: Verify clean checkout state
+        shell: pwsh
+        run: |
+          $dirty = git status --short
+          if ($dirty) {
+            $dirty
+            throw 'Windows audit generated or modified repository files.'
+          }
