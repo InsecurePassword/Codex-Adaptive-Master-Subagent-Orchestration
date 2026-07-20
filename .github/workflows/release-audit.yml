@@ -4,10 +4,21 @@ on:
   pull_request:
     branches:
       - main
+      - post-merge-release-audit
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      audit_scope:
+        description: Audit platform
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
 
 concurrency:
   group: release-audit-${{ github.workflow }}-${{ github.ref }}
@@ -17,14 +28,104 @@ permissions:
   contents: read
 
 jobs:
-  audit:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
+  windows-audit:
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      inputs.audit_scope == 'all' ||
+      inputs.audit_scope == 'windows'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out audited revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Record Windows environment
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+          Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
+          & pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion'
+          python --version
+          git --version
+          git status --short
+          git rev-parse HEAD
+
+      - name: Parse PowerShell with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $failed = $false
+          Get-ChildItem -LiteralPath $PWD -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Parse PowerShell with PowerShell 7
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $failed = $false
+          Get-ChildItem -LiteralPath $PWD -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count) {
+              $failed = $true
+              Write-Error ($_.FullName + ": " + (($errors | ForEach-Object Message) -join "; "))
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Run required Windows audit commands
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -B -E -s -S .\scripts\refresh_manifests.py --check
+          python -B -E -s -S .\scripts\audit_markdown.py
+          python -B -E -s -S .\scripts\audit_installers.py
+          python -B -E -s -S .\tests\test_windows_installers.py
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-a-two-skill\scripts\validate_package.py
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-b-unified\scripts\validate_package.py
+          python -B -E -s -S .\adaptive-master-subagent-orchestration-option-c-installer-required\scripts\validate_package.py
+
+      - name: Verify clean audited checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          git diff --exit-code
+          $status = git status --porcelain
+          if ($status) {
+            Write-Error "Audit left repository changes:`n$status"
+            exit 1
+          }
+
+  linux-audit:
+    if: >-
+      github.event_name == 'push' ||
+      inputs.audit_scope == 'all' ||
+      inputs.audit_scope == 'linux'
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Check out audited revision
@@ -35,32 +136,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify clean checkout
-        shell: bash
-        run: |
-          git status --short
-          test -z "$(git status --short)"
-          git rev-parse HEAD
-
       - name: Run complete installer and Markdown audit
-        id: release_audit
-        continue-on-error: true
         shell: bash
         run: |
-          set +e
-          log="release-audit-${RUNNER_OS}.log"
-          python -B -E -s -S scripts/audit_installers.py > "$log" 2>&1
-          status=$?
-          cat "$log"
-          exit $status
-
-      - name: Upload audit failure
-        if: steps.release_audit.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-audit-${{ runner.os }}-failure
-          path: release-audit-${{ runner.os }}.log
-
-      - name: Stop after audit failure
-        if: steps.release_audit.outcome == 'failure'
-        run: exit 1
+          set -euo pipefail
+          python -B -E -s -S scripts/audit_installers.py
