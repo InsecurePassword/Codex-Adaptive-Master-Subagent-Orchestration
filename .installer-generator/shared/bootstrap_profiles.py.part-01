@@ -1,0 +1,176 @@
+_ok=True)
+        descriptor, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.restore.", dir=str(path.parent))
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(state.data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if state.mode is not None:
+                os.chmod(tmp_name, state.mode)
+            os.replace(tmp_name, path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+    elif path.exists() or path.is_symlink():
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+
+
+def next_backup_path(path: Path) -> Path:
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    candidate = path.with_name(f"{path.name}.bak-{stamp}")
+    index = 2
+    while candidate.exists() or candidate.is_symlink():
+        candidate = path.with_name(f"{path.name}.bak-{stamp}-{index}")
+        index += 1
+    return candidate
+
+
+def read_regular_text(path: Path) -> str | None:
+    if not path.exists() and not path.is_symlink():
+        return None
+    if not path.is_file() or path.is_symlink():
+        return None
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def plan_existing_managed(
+    *, requested: str, installed_name: str, path: Path, expected_text: str, current: str, upgrade_managed: bool
+) -> ProfilePlan:
+    if current == expected_text:
+        return ProfilePlan(requested, installed_name, path, "preserved-identical")
+    if not valid_profile(current, installed_name):
+        return ProfilePlan(
+            requested,
+            installed_name,
+            path,
+            "repaired-managed-malformed",
+            text=expected_text,
+            needs_backup=True,
+        )
+    if upgrade_managed:
+        return ProfilePlan(
+            requested,
+            installed_name,
+            path,
+            "upgraded-managed",
+            text=expected_text,
+            needs_backup=True,
+        )
+    return ProfilePlan(requested, installed_name, path, "preserved-managed-different")
+
+
+def plan_profile(*, src: Path, destination: Path, model: str, upgrade_managed: bool) -> ProfilePlan:
+    requested = src.stem
+    source_text = replace_model(src.read_text(encoding="utf-8"), model)
+    if not valid_profile(source_text, requested):
+        raise SystemExit(f"Bundled profile is invalid: {src}")
+
+    canonical = destination / src.name
+    current = read_regular_text(canonical)
+    if current is None and not canonical.exists() and not canonical.is_symlink():
+        return ProfilePlan(requested, requested, canonical, "created", text=source_text)
+    if current is not None:
+        if current == source_text:
+            return ProfilePlan(requested, requested, canonical, "preserved-identical")
+        if MANAGED_MARKER in current:
+            return plan_existing_managed(
+                requested=requested,
+                installed_name=requested,
+                path=canonical,
+                expected_text=source_text,
+                current=current,
+                upgrade_managed=upgrade_managed,
+            )
+
+    index = 1
+    while index <= MAX_PROFILE_ALIASES:
+        suffix = "_adaptive" if index == 1 else f"_adaptive_{index}"
+        installed_name = requested + suffix
+        candidate = destination / f"{installed_name}.toml"
+        candidate_text = replace_name(source_text, installed_name)
+        candidate_current = read_regular_text(candidate)
+        if candidate_current is None and not candidate.exists() and not candidate.is_symlink():
+            return ProfilePlan(requested, installed_name, candidate, "created-nonconflicting", text=candidate_text)
+        if candidate_current is not None:
+            if candidate_current == candidate_text:
+                return ProfilePlan(requested, installed_name, candidate, "preserved-nonconflicting")
+            if MANAGED_MARKER in candidate_current:
+                planned = plan_existing_managed(
+                    requested=requested,
+                    installed_name=installed_name,
+                    path=candidate,
+                    expected_text=candidate_text,
+                    current=candidate_current,
+                    upgrade_managed=upgrade_managed,
+                )
+                if planned.action == "preserved-identical":
+                    planned.action = "preserved-nonconflicting"
+                return planned
+        index += 1
+    raise SystemExit(
+        f"Unable to allocate a nonconflicting profile name for {requested}; "
+        f"checked {MAX_PROFILE_ALIASES} managed aliases in {destination}"
+    )
+
+
+def plan_legacy(destination: Path, upgrade_managed: bool) -> ProfilePlan | None:
+    legacy = destination / f"{LEGACY_SPARK}.toml"
+    current = read_regular_text(legacy)
+    if current is None:
+        if legacy.exists() or legacy.is_symlink():
+            return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-nonfile")
+        return None
+    if MANAGED_MARKER not in current:
+        return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-user-authored")
+    if not upgrade_managed:
+        return ProfilePlan(LEGACY_SPARK, LEGACY_SPARK, legacy, "preserved-legacy-managed")
+    return ProfilePlan(
+        LEGACY_SPARK,
+        LEGACY_SPARK,
+        legacy,
+        "retired-legacy-managed",
+        delete=True,
+        needs_backup=True,
+    )
+
+
+def requested_name_for_installed(name: str) -> str | None:
+    if name in EXPECTED_PROFILE_NAMES:
+        return name
+    match = re.fullmatch(r"(.+)_adaptive(?:_\d+)?", name)
+    if match and match.group(1) in EXPECTED_PROFILE_NAMES:
+        return match.group(1)
+    return None
+
+
+def plan_managed_cleanup(destination: Path, selected_plans: list[ProfilePlan]) -> list[ProfilePlan]:
+    if not destination.is_dir():
+        return []
+    selected_paths = {plan.path for plan in selected_plans}
+    selected_names = {plan.requested_name for plan in selected_plans}
+    cleanup: list[ProfilePlan] = []
+    for path in sorted(destination.glob("ams_*.toml")):
+        if path in selected_paths:
+            continue
+        current = read_regular_text(path)
+        if current is None or MANAGED_MARKER not in current:
+            continue
+        requested = requested_name_for_installed(path.stem)
+        if requested is None:
+            continue
+        action = (
+            "retired-unselected-managed"
+            if requested.startswith("ams_spark_") and requested not in selected_names
+            else "retired-duplicate-managed"
+        )
+        cleanup.append(
+            ProfilePlan(
+                requested,
+                path.stem,
+                path,
+                action,
+                delete=True,
+               
