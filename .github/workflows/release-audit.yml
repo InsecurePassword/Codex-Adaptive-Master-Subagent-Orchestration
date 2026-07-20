@@ -35,6 +35,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verify clean checkout
+        shell: bash
+        run: |
+          git status --short
+          test -z "$(git status --short)"
+          git rev-parse HEAD
+
       - name: Run complete installer and Markdown audit
         id: release_audit
         continue-on-error: true
