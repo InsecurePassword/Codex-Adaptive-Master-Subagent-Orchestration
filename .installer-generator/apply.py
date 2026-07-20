@@ -43,11 +43,14 @@ SHARED_FILES = (
 
 
 def shared_source(name: str) -> Path:
-    direct = SHARED / name
-    if direct.is_file():
-        return direct
     final_parts = sorted(SHARED.glob(name + ".final-*"))
-    parts = final_parts or sorted(SHARED.glob(name + ".part-*"))
+    if final_parts:
+        parts = final_parts
+    else:
+        direct = SHARED / name
+        if direct.is_file():
+            return direct
+        parts = sorted(SHARED.glob(name + ".part-*"))
     if not parts:
         raise FileNotFoundError(f"No staged source found for {name}")
     target = ASSEMBLED / name
