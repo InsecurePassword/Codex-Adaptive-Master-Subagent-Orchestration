@@ -1,0 +1,116 @@
+_home.is_dir():
+        targets.extend(codex_home.glob(".ams-orchestration.toml.ams-uninstalling-*"))
+    legacy_root = home / ".agents" / "skills"
+    for name in LEGACY_SKILL_NAMES:
+        path = legacy_root / name
+        if path.exists() or path.is_symlink():
+            targets.append(path)
+        if legacy_root.is_dir():
+            targets.extend(legacy_root.glob(f".{name}.ams-uninstalling-*"))
+    return list(dict.fromkeys(targets))
+
+
+def make_writable(path: Path) -> None:
+    try:
+        if path.is_dir() and not path.is_symlink():
+            for child in path.rglob("*"):
+                try:
+                    os.chmod(child, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if child.is_dir() else 0))
+                except OSError:
+                    pass
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if path.is_dir() else 0))
+    except OSError:
+        pass
+
+
+def remove_staged(path: Path) -> None:
+    last_error: OSError | None = None
+    for attempt in range(3):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+            make_writable(path)
+            time.sleep(0.1 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+
+
+def uninstall(args: argparse.Namespace) -> int:
+    if not args.yes and not args.dry_run:
+        raise SystemExit("Uninstall requires --yes. Use --dry-run to preview removal.")
+    home, codex_home, market_root = normalize_paths(args)
+    marketplace_path = market_root / "marketplace.json"
+    marketplace = load_marketplace(marketplace_path)
+    targets = uninstall_targets(home, codex_home, market_root)
+    if args.dry_run:
+        for target in targets:
+            print(f"would-remove: {target}")
+        if marketplace_path.exists() or marketplace_path.is_symlink():
+            print(f"would-remove AMS marketplace registrations from: {marketplace_path}")
+        return 0
+    if not targets and not marketplace_path.exists() and not marketplace_path.is_symlink():
+        print("No package-managed AMS installation was found.")
+        return 0
+
+    with install_lock(market_root):
+        marketplace = load_marketplace(marketplace_path)
+        targets = uninstall_targets(home, codex_home, market_root)
+        marketplace_state = snapshot_file(marketplace_path)
+        token = uuid.uuid4().hex
+        staged: list[tuple[Path, Path]] = []
+        try:
+            for target in targets:
+                staged_path = target.with_name(f".{target.name}.ams-uninstalling-{token}")
+                os.replace(target, staged_path)
+                staged.append((target, staged_path))
+            if marketplace_state.existed:
+                atomic_write_text(marketplace_path, marketplace_text(marketplace_for_uninstall(marketplace)), marketplace_state.mode)
+        except BaseException as exc:
+            errors: list[str] = []
+            for original, staged_path in reversed(staged):
+                try:
+                    if staged_path.exists() or staged_path.is_symlink():
+                        os.replace(staged_path, original)
+                except Exception as restore_exc:
+                    errors.append(f"restore {original}: {restore_exc}")
+            try:
+                restore_file(marketplace_path, marketplace_state)
+            except Exception as restore_exc:
+                errors.append(f"restore {marketplace_path}: {restore_exc}")
+            if errors:
+                raise SystemExit(f"Uninstall failed: {exc}; rollback also reported: {'; '.join(errors)}") from exc
+            raise
+
+        cleanup_errors: list[str] = []
+        for _, staged_path in staged:
+            try:
+                remove_staged(staged_path)
+            except Exception as exc:
+                cleanup_errors.append(f"{staged_path}: {exc}")
+        if cleanup_errors:
+            print(
+                "warning: uninstall completed, but some staged files could not be deleted and will be retried on a later removal: "
+                + "; ".join(cleanup_errors),
+                file=sys.stderr,
+            )
+
+    print("Uninstall complete. Restart Codex to refresh discovered plugins and agents.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.uninstall:
+        return uninstall(args)
+    return install(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
