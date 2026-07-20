@@ -318,23 +318,33 @@ PY
 }
 
 find_installed_uninstaller() {
-    plugin_root="$INSTALL_HOME/.agents/plugins/plugins"
-    [ -d "$plugin_root" ] || return 1
-    for name in \
-        adaptive-master-subagent-orchestration-option-a-two-skill \
-        adaptive-master-subagent-orchestration-option-b-unified \
-        adaptive-master-subagent-orchestration-option-c-installer-required \
-        adaptive-master-subagent-orchestration-option-a-modular \
-        adaptive-master-subagent-orchestration-option-c-lean \
-        adaptive-master-subagent-orchestration
-    do
-        candidate="$plugin_root/$name/scripts/install_package.py"
-        if [ -f "$candidate" ] && [ ! -L "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done
-    return 1
+    python3 -I -S - "$INSTALL_HOME" <<'PY'
+from pathlib import Path
+import sys
+names = (
+    "adaptive-master-subagent-orchestration-option-a-two-skill",
+    "adaptive-master-subagent-orchestration-option-b-unified",
+    "adaptive-master-subagent-orchestration-option-c-installer-required",
+    "adaptive-master-subagent-orchestration-option-a-modular",
+    "adaptive-master-subagent-orchestration-option-c-lean",
+    "adaptive-master-subagent-orchestration",
+)
+home = Path(sys.argv[1]).expanduser().resolve(strict=False)
+plugin_root = home / ".agents" / "plugins" / "plugins"
+for name in names:
+    candidate = plugin_root / name / "scripts" / "install_package.py"
+    if candidate.is_file() and not candidate.is_symlink():
+        print(candidate)
+        raise SystemExit(0)
+backup_root = home / ".agents" / "plugins" / "backups"
+for name in names:
+    for backup in sorted(backup_root.glob(f"{name}.backup-*"), reverse=True):
+        candidate = backup / "scripts" / "install_package.py"
+        if candidate.is_file() and not candidate.is_symlink():
+            print(candidate)
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
 }
 
 run_package_operation() {
@@ -371,6 +381,8 @@ if [ "$SELECTED" = UNINSTALL ]; then
         printf '\n%s\n' "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents."
         exit 0
     fi
+    printf '%s\n' "No package-managed AMS installation was found."
+    exit 0
 fi
 
 TEMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/ams-install.XXXXXX")

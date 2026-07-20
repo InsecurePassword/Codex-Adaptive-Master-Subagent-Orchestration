@@ -363,6 +363,12 @@ def main() -> int:
         require(not curl_marker.exists(), "offline uninstall attempted a download")
         require(active_plugins(home) == [], "offline uninstall left an active option")
         require((unrelated / "keep.txt").exists(), "offline uninstall removed unrelated plugin")
+        second = run(
+            [shell, str(ROOT / "install.sh"), "--option", "UNINSTALL", "--home", str(home), "--force"],
+            env=offline_env,
+        )
+        require("No package-managed AMS installation was found" in second, "repeated root uninstall was not a local no-op")
+        require(not curl_marker.exists(), "repeated root uninstall attempted a download")
 
         print("[root-test] archive tamper rejection", flush=True)
         tampered = base / "tampered.zip"

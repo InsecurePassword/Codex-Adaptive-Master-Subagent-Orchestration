@@ -277,21 +277,45 @@ function Get-PackageRoot {
 }
 
 function Get-InstalledUninstaller {
-    $PluginRoot = Join-Path $HomeDirectory ".agents\plugins\plugins"
-    if (-not (Test-Path -LiteralPath $PluginRoot -PathType Container)) { return $null }
-    $Names = @(
-        "adaptive-master-subagent-orchestration-option-a-two-skill",
-        "adaptive-master-subagent-orchestration-option-b-unified",
-        "adaptive-master-subagent-orchestration-option-c-installer-required",
-        "adaptive-master-subagent-orchestration-option-a-modular",
-        "adaptive-master-subagent-orchestration-option-c-lean",
-        "adaptive-master-subagent-orchestration"
-    )
-    foreach ($Name in $Names) {
-        $Candidate = Join-Path (Join-Path $PluginRoot $Name) "scripts\install_package.py"
-        if (Test-Path -LiteralPath $Candidate -PathType Leaf) { return $Candidate }
+    param([Parameter(Mandatory = $true)]$Python)
+    $Finder = @'
+from pathlib import Path
+import sys
+names = (
+    "adaptive-master-subagent-orchestration-option-a-two-skill",
+    "adaptive-master-subagent-orchestration-option-b-unified",
+    "adaptive-master-subagent-orchestration-option-c-installer-required",
+    "adaptive-master-subagent-orchestration-option-a-modular",
+    "adaptive-master-subagent-orchestration-option-c-lean",
+    "adaptive-master-subagent-orchestration",
+)
+home = Path(sys.argv[1]).expanduser().resolve(strict=False)
+plugin_root = home / ".agents" / "plugins" / "plugins"
+for name in names:
+    candidate = plugin_root / name / "scripts" / "install_package.py"
+    if candidate.is_file() and not candidate.is_symlink():
+        print(candidate)
+        raise SystemExit(0)
+backup_root = home / ".agents" / "plugins" / "backups"
+for name in names:
+    for backup in sorted(backup_root.glob(f"{name}.backup-*"), reverse=True):
+        candidate = backup / "scripts" / "install_package.py"
+        if candidate.is_file() and not candidate.is_symlink():
+            print(candidate)
+            raise SystemExit(0)
+raise SystemExit(3)
+'@
+    $Output = & $Python.Executable @($Python.Prefix + @("-B", "-E", "-s", "-S", "-c", $Finder, $HomeDirectory))
+    $Code = $LASTEXITCODE
+    if ($Code -eq 0) {
+        $Candidate = [string]($Output | Select-Object -Last 1)
+        if ([string]::IsNullOrWhiteSpace($Candidate)) {
+            throw "Installed AMS uninstaller discovery returned an empty path."
+        }
+        return $Candidate.Trim()
     }
-    return $null
+    if ($Code -eq 3) { return $null }
+    throw "Installed AMS uninstaller discovery failed with exit code $Code."
 }
 
 try {
@@ -345,7 +369,7 @@ try {
 
     $Python = Resolve-Python311
     if ($Selected -eq "UNINSTALL") {
-        $InstalledUninstaller = Get-InstalledUninstaller
+        $InstalledUninstaller = Get-InstalledUninstaller -Python $Python
         if (-not [string]::IsNullOrWhiteSpace($InstalledUninstaller)) {
             Write-Heading "Uninstalling Adaptive Master-Subagent Orchestration"
             Invoke-ResolvedPython -Python $Python -Arguments @($InstalledUninstaller, "--home", $HomeDirectory, "--uninstall", "--yes")
@@ -353,6 +377,8 @@ try {
             Write-Host "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
             exit 0
         }
+        Write-Host "No package-managed AMS installation was found."
+        exit 0
     }
     $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-install-" + [Guid]::NewGuid().ToString("N"))
     $ArchiveFile = Join-Path $TempRoot $ArchiveName
