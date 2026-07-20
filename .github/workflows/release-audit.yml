@@ -1,0 +1,76 @@
+name: Release audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - post-merge-release-audit
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.prepare.outputs.changed }}
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply post-merge corrections when staged
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f scripts/apply_post_merge_audit_fixes.py ]]; then
+            python -B -E -s -S scripts/apply_post_merge_audit_fixes.py
+            rm scripts/apply_post_merge_audit_fixes.py
+          fi
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python -B -E -s -S scripts/audit_installers.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Complete post-merge release audit [skip ci]"
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  audit:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out audited revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run complete installer and Markdown audit
+        run: python -B -E -s -S scripts/audit_installers.py
