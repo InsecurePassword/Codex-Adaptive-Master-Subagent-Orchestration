@@ -21,14 +21,17 @@ adaptive-master-subagent-orchestration/
 |-- INSTALLER-USAGE.md
 |-- INSTALLER-AUDIT.md
 |-- MANUAL-INSTALLATION.md
+|-- .gitattributes
 |-- install.ps1
 |-- install.sh
 |-- scripts/
 |   |-- audit_installers.py
 |   |-- audit_markdown.py
-|   `-- process_utils.py
+|   |-- process_utils.py
+|   `-- refresh_manifests.py
 |-- tests/
-|   `-- test_installers.py
+|   |-- test_installers.py
+|   `-- test_windows_installers.py
 |-- adaptive-master-subagent-orchestration-option-a-two-skill/
 |   |-- Install-Package.ps1
 |   |-- MANIFEST.sha256
@@ -148,6 +151,15 @@ python3 -B -E -s -S ./scripts/validate_package.py
 ```
 
 The scripts-only audit checks manifests, plugin metadata, Python and shell syntax, profile installation, intensity handling, dry-runs, updates, option replacement, rollback, locks, timeouts, and uninstall behavior.
+
+After changing any packaged file, refresh all three manifests from the repository root:
+
+```sh
+python3 -B -E -s -S ./scripts/refresh_manifests.py
+python3 -B -E -s -S ./scripts/refresh_manifests.py --check
+```
+
+The first command rewrites the manifests from the exact package bytes. The second verifies that no manifest is stale.
 
 ## Offline installation
 
