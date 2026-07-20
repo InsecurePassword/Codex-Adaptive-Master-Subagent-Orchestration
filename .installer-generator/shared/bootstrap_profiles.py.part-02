@@ -1,0 +1,174 @@
+  needs_backup=True,
+            )
+        )
+    return cleanup
+
+
+def dry_run_action(action: str) -> str:
+    replacements = {
+        "created": "would-create",
+        "created-nonconflicting": "would-create-nonconflicting",
+        "repaired-managed-malformed": "would-repair-managed-malformed",
+        "upgraded-managed": "would-upgrade-managed",
+        "retired-legacy-managed": "would-retire-legacy-managed",
+        "retired-unselected-managed": "would-retire-unselected-managed",
+        "retired-duplicate-managed": "would-retire-duplicate-managed",
+    }
+    return replacements.get(action, action)
+
+
+@contextlib.contextmanager
+def exclusive_lock(destination: Path) -> Iterator[None]:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = destination.parent / f".{destination.name}.ams-profile-install.lock"
+    payload = {
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "created": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    while True:
+        try:
+            descriptor = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle)
+                handle.write("\n")
+            break
+        except FileExistsError:
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
+                try:
+                    lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            raise SystemExit(f"Another profile installation appears to be active: {lock_path}")
+    try:
+        yield
+    finally:
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def validate_source_profiles(source_dir: Path) -> list[Path]:
+    sources = sorted(source_dir.glob("*.toml"))
+    names = {source.stem for source in sources}
+    if names != EXPECTED_PROFILE_NAMES:
+        missing = sorted(EXPECTED_PROFILE_NAMES - names)
+        extra = sorted(names - EXPECTED_PROFILE_NAMES)
+        raise SystemExit(f"Profile asset set mismatch; missing={missing}, extra={extra}")
+    for source in sources:
+        if not source.is_file() or source.is_symlink():
+            raise SystemExit(f"Profile asset is not a regular file: {source}")
+    return sources
+
+
+def build_plan(args: argparse.Namespace) -> tuple[list[ProfilePlan], set[str]]:
+    selected_spark = set() if args.exclude_spark else set(args.spark_efforts)
+    for label, value in (("Sol", args.sol_model), ("Terra", args.terra_model), ("Luna", args.luna_model)):
+        validate_model_id(value, label)
+    if selected_spark:
+        validate_model_id(args.spark_model, "Spark")
+
+    root = Path(__file__).resolve().parents[1]
+    source_dir = root / "assets" / "agent-profiles"
+    if not source_dir.is_dir():
+        raise SystemExit(f"Profile assets not found: {source_dir}")
+    sources = validate_source_profiles(source_dir)
+
+    plans: list[ProfilePlan] = []
+    for source in sources:
+        if source.stem.startswith("ams_spark_"):
+            effort = source.stem.removeprefix("ams_spark_")
+            if effort not in selected_spark:
+                continue
+            model = args.spark_model
+        elif source.stem.startswith("ams_sol_"):
+            model = args.sol_model
+        elif source.stem.startswith("ams_terra_"):
+            model = args.terra_model
+        elif source.stem.startswith("ams_luna_"):
+            model = args.luna_model
+        else:
+            raise SystemExit(f"Unexpected bundled profile: {source.name}")
+        plans.append(
+            plan_profile(src=source, destination=args.destination, model=model, upgrade_managed=args.upgrade_managed)
+        )
+    plans.extend(plan_managed_cleanup(args.destination, plans))
+    legacy = plan_legacy(args.destination, args.upgrade_managed)
+    if legacy is not None:
+        plans.append(legacy)
+    return plans, selected_spark
+
+
+def apply_plan(destination: Path, plans: list[ProfilePlan]) -> None:
+    destination_existed = destination.exists()
+    snapshots: dict[Path, FileSnapshot] = {}
+    created_backups: list[Path] = []
+    changed: list[Path] = []
+    destination.mkdir(parents=True, exist_ok=True)
+    try:
+        for plan in plans:
+            if plan.text is None and not plan.delete:
+                continue
+            if plan.path not in snapshots:
+                snapshots[plan.path] = snapshot(plan.path)
+            if plan.needs_backup and snapshots[plan.path].existed:
+                backup_path = next_backup_path(plan.path)
+                shutil.copy2(plan.path, backup_path)
+                created_backups.append(backup_path)
+                plan.backup_path = backup_path
+            changed.append(plan.path)
+            if plan.delete:
+                plan.path.unlink()
+            elif plan.text is not None:
+                atomic_write(plan.path, plan.text, snapshots[plan.path].mode)
+    except BaseException as exc:
+        rollback_errors: list[str] = []
+        for path in reversed(changed):
+            try:
+                restore(path, snapshots[path])
+            except Exception as restore_exc:
+                rollback_errors.append(f"restore {path}: {restore_exc}")
+        for backup_path in created_backups:
+            try:
+                backup_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as remove_exc:
+                rollback_errors.append(f"remove backup {backup_path}: {remove_exc}")
+        if not destination_existed:
+            try:
+                destination.rmdir()
+            except OSError:
+                pass
+        if rollback_errors:
+            raise SystemExit(
+                f"Profile installation failed: {exc}; rollback also reported: {'; '.join(rollback_errors)}"
+            ) from exc
+        raise
+
+
+def summary_for(args: argparse.Namespace, plans: list[ProfilePlan], selected_spark: set[str]) -> dict[str, object]:
+    profiles: list[dict[str, str]] = []
+    for plan in plans:
+        action = dry_run_action(plan.action) if args.dry_run else plan.action
+        profiles.append(
+            {
+                "requested_name": plan.requested_name,
+                "installed_name": plan.installed_name,
+                "path": str(plan.path),
+                "action": action,
+                "backup": str(plan.backup_path) if plan.backup_path else "",
+            }
+        )
+    return {
+        "destination": str(args.destination),
+        "dry_run": args.dry_run,
+        "spark_included": not args.exclude_spark,
+        "spark_efforts": sorted(selected_spark, key=VALID_SPARK_EFFORTS.index),
+        "profiles": pr
