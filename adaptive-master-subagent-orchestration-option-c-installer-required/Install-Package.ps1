@@ -3,8 +3,7 @@ param(
     [string]$HomeDirectory = $HOME,
     [switch]$SkipProfiles,
     [switch]$ExcludeSpark,
-    [ValidateSet("low", "medium", "high")]
-    [string[]]$SparkEfforts = @("low", "medium", "high"),
+    [object]$SparkEfforts = "low,medium,high",
     [switch]$UpgradeManaged,
     [ValidateSet("auto", "minimal", "moderate", "heavy", "extreme")]
     [string]$Intensity = "auto",
@@ -15,6 +14,26 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
+
+function ConvertTo-SparkEffortList {
+    param([AllowNull()][object]$Value)
+
+    $Values = @()
+    foreach ($Entry in @($Value)) {
+        if ($null -eq $Entry) { continue }
+        foreach ($Part in ([string]$Entry).Split(",")) {
+            $Normalized = $Part.Trim().ToLowerInvariant()
+            if ([string]::IsNullOrWhiteSpace($Normalized)) { continue }
+            if (@("low", "medium", "high") -notcontains $Normalized) {
+                throw "Unsupported Spark effort value: $Part"
+            }
+            if ($Values -notcontains $Normalized) {
+                $Values += $Normalized
+            }
+        }
+    }
+    return $Values
+}
 
 function Resolve-Python311 {
     $Candidates = @()
@@ -40,6 +59,8 @@ function Resolve-Python311 {
 }
 
 $ResolvedPython = Resolve-Python311
+$SparkEffortValues = @(ConvertTo-SparkEffortList -Value $SparkEfforts)
+if (-not $ExcludeSpark -and $SparkEffortValues.Count -eq 0) { throw "SparkEfforts cannot be empty unless Spark is excluded." }
 $Installer = Join-Path $PSScriptRoot "scripts\install_package.py"
 if (-not (Test-Path -LiteralPath $Installer -PathType Leaf)) {
     throw "Package installer was not found: $Installer"
@@ -60,7 +81,7 @@ if ($Uninstall) {
     }
 }
 else {
-    $Arguments += @("--spark-efforts", ($SparkEfforts -join ","), "--intensity", $Intensity)
+    $Arguments += @("--spark-efforts", ($SparkEffortValues -join ","), "--intensity", $Intensity)
     if ($SkipProfiles) { $Arguments += "--skip-profiles" }
     if ($ExcludeSpark) { $Arguments += "--exclude-spark" }
     if ($UpgradeManaged) { $Arguments += "--upgrade-managed" }

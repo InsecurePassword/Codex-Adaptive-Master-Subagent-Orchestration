@@ -13,6 +13,7 @@
 - Restricted managed-file ownership to an exact first-line marker so marker text inside user-authored TOML values or profile descriptions is preserved.
 - Refused root uninstallers reached through symlinked or non-regular path components.
 - Added explicit lock diagnostics and regression coverage for permission errors, malformed locks, symlinks, stale owners, and cleanup after failures.
+- Made native PowerShell Spark-effort selection comma-safe and made packaged Python utilities resolve their sibling runtime dependency explicitly on long Windows paths.
 
 ## 3.1.0
 

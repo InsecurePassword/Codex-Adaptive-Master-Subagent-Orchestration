@@ -12,8 +12,7 @@ param(
     [ValidateSet("auto", "minimal", "moderate", "heavy", "extreme")]
     [string]$Intensity = "auto",
 
-    [ValidateSet("low", "medium", "high")]
-    [string[]]$SparkEfforts = @("low", "medium", "high"),
+    [object]$SparkEfforts = "low,medium,high",
 
     [switch]$ExcludeSpark,
     [switch]$Force,
@@ -52,6 +51,26 @@ function Get-PositiveEnvironmentInteger {
         throw "$Name must be a positive integer; received: $Value"
     }
     return $Parsed
+}
+
+function ConvertTo-SparkEffortList {
+    param([AllowNull()][object]$Value)
+
+    $Values = @()
+    foreach ($Entry in @($Value)) {
+        if ($null -eq $Entry) { continue }
+        foreach ($Part in ([string]$Entry).Split(",")) {
+            $Normalized = $Part.Trim().ToLowerInvariant()
+            if ([string]::IsNullOrWhiteSpace($Normalized)) { continue }
+            if (@("low", "medium", "high") -notcontains $Normalized) {
+                throw "Unsupported Spark effort value: $Part"
+            }
+            if ($Values -notcontains $Normalized) {
+                $Values += $Normalized
+            }
+        }
+    }
+    return $Values
 }
 
 function Get-NormalizedOption {
@@ -276,6 +295,374 @@ function Get-PackageRoot {
     return $Matches[0].FullName
 }
 
+function Invoke-LocalFallbackUninstall {
+    param([Parameter(Mandatory = $true)]$Python)
+
+    $Cleaner = @'
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import shutil
+import socket
+import stat
+import sys
+import tempfile
+import time
+import uuid
+from pathlib import Path
+
+MARKER = "# managed-by: adaptive-master-subagent-orchestration"
+LOCK_STALE_SECONDS = 2 * 60 * 60
+NAMES = (
+    "adaptive-master-subagent-orchestration-option-a-two-skill",
+    "adaptive-master-subagent-orchestration-option-b-unified",
+    "adaptive-master-subagent-orchestration-option-c-installer-required",
+    "adaptive-master-subagent-orchestration-option-a-modular",
+    "adaptive-master-subagent-orchestration-option-c-lean",
+    "adaptive-master-subagent-orchestration",
+)
+LEGACY_SKILLS = ("adaptive-master-subagent-orchestration", "ams-orchestration", "ams-installer")
+
+
+def fail(message: str) -> None:
+    raise SystemExit(message)
+
+
+def lstat(path: Path):
+    try:
+        return path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        fail(f"Unable to inspect managed path {path}: {exc}")
+
+
+def is_reparse(metadata) -> bool:
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def is_regular_file(path: Path) -> bool:
+    metadata = lstat(path)
+    return metadata is not None and stat.S_ISREG(metadata.st_mode) and not is_reparse(metadata)
+
+
+def managed_file(path: Path) -> bool:
+    if not is_regular_file(path):
+        return False
+    try:
+        with path.open("r", encoding="utf-8", errors="strict") as handle:
+            first = handle.readline().rstrip("\r\n")
+    except (OSError, UnicodeDecodeError) as exc:
+        fail(f"Unable to inspect package ownership marker in {path}: {exc}")
+    return first == MARKER
+
+
+def process_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    kernel32.GetExitCodeProcess.restype = ctypes.c_int
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ctypes.get_last_error() == 5
+    try:
+        exit_code = ctypes.c_uint32()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def inspect_lock(path: Path, label: str) -> bool:
+    metadata = lstat(path)
+    if metadata is None:
+        return False
+    if not stat.S_ISREG(metadata.st_mode) or is_reparse(metadata):
+        fail(f"{label} lock path is not a regular file: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = {}
+    live = (
+        data.get("host") == socket.gethostname()
+        and isinstance(data.get("pid"), int)
+        and process_is_alive(int(data["pid"]))
+    )
+    age = time.time() - metadata.st_mtime
+    if live or age <= LOCK_STALE_SECONDS:
+        fail(f"Another AMS operation appears to be active: {path}")
+    return True
+
+
+def recognized(name: str) -> bool:
+    return any(
+        name == package
+        or name.startswith(f"{package}.backup-")
+        or name.startswith(f"{package}.installing-")
+        or name.startswith(f".{package}.ams-uninstalling-")
+        or (name.startswith(f".{package}.backup-") and ".ams-uninstalling-" in name)
+        for package in NAMES
+    )
+
+
+def safe_children(path: Path) -> list[Path]:
+    metadata = lstat(path)
+    if metadata is None:
+        return []
+    if not stat.S_ISDIR(metadata.st_mode) or is_reparse(metadata):
+        fail(f"Expected a regular directory, found another path type: {path}")
+    try:
+        return list(path.iterdir())
+    except OSError as exc:
+        fail(f"Unable to enumerate managed directory {path}: {exc}")
+
+
+def collect_targets(home: Path, codex_home: Path, market_root: Path) -> list[Path]:
+    targets: list[Path] = []
+    plugin_root = market_root / "plugins"
+    backup_root = market_root / "backups"
+    for path in safe_children(plugin_root):
+        if recognized(path.name):
+            targets.append(path)
+    for path in safe_children(backup_root):
+        if recognized(path.name):
+            targets.append(path)
+    for path in safe_children(market_root):
+        if path.name.startswith(".ams-transaction-"):
+            targets.append(path)
+
+    agents = codex_home / "agents"
+    for path in safe_children(agents):
+        if managed_file(path) or (path.name.startswith(".ams_") and ".ams-uninstalling-" in path.name):
+            targets.append(path)
+
+    config = codex_home / "ams-orchestration.toml"
+    if managed_file(config):
+        targets.append(config)
+    for path in safe_children(codex_home):
+        if path.name.startswith(".ams-orchestration.toml.ams-uninstalling-") and managed_file(path):
+            targets.append(path)
+
+    legacy_root = home / ".agents" / "skills"
+    for name in LEGACY_SKILLS:
+        path = legacy_root / name
+        if lstat(path) is not None:
+            targets.append(path)
+    for path in safe_children(legacy_root):
+        if any(path.name.startswith(f".{name}.ams-uninstalling-") for name in LEGACY_SKILLS):
+            targets.append(path)
+
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in targets:
+        key = os.path.normcase(os.path.abspath(path))
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
+def marketplace_update(path: Path) -> tuple[bytes | None, bytes | None]:
+    metadata = lstat(path)
+    if metadata is None:
+        return None, None
+    if not stat.S_ISREG(metadata.st_mode) or is_reparse(metadata):
+        fail(f"Marketplace path is not a regular file: {path}")
+    try:
+        original = path.read_bytes()
+        data = json.loads(original.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        fail(f"Cannot parse existing marketplace {path}: {exc}")
+    if not isinstance(data, dict):
+        fail(f"Marketplace root must be a JSON object: {path}")
+    plugins = data.get("plugins")
+    if plugins is None:
+        plugins = []
+    if not isinstance(plugins, list):
+        fail(f"Marketplace 'plugins' value must be a list: {path}")
+    filtered = [
+        item
+        for item in plugins
+        if not (isinstance(item, dict) and item.get("name") in NAMES)
+    ]
+    if filtered == plugins:
+        return original, original
+    data["plugins"] = filtered
+    desired = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    return original, desired
+
+
+def atomic_write(path: Path, data: bytes) -> None:
+    descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+
+
+def make_writable(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError:
+        return
+    if stat.S_ISDIR(metadata.st_mode) and not is_reparse(metadata):
+        try:
+            children = list(path.rglob("*"))
+        except OSError:
+            children = []
+        for child in children:
+            try:
+                os.chmod(child, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if child.is_dir() else 0))
+            except OSError:
+                pass
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if stat.S_ISDIR(metadata.st_mode) else 0))
+    except OSError:
+        pass
+
+
+def remove_path(path: Path) -> None:
+    last_error: OSError | None = None
+    for attempt in range(5):
+        metadata = lstat(path)
+        if metadata is None:
+            return
+        try:
+            if stat.S_ISDIR(metadata.st_mode) and not is_reparse(metadata):
+                shutil.rmtree(path)
+            elif stat.S_ISDIR(metadata.st_mode):
+                os.rmdir(path)
+            else:
+                path.unlink()
+            return
+        except OSError as exc:
+            last_error = exc
+            make_writable(path)
+            time.sleep(0.1 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+
+
+home = Path(sys.argv[1]).expanduser().resolve(strict=False)
+codex_value = sys.argv[2].strip() if len(sys.argv) > 2 else ""
+codex_home = (
+    Path(codex_value).expanduser().resolve(strict=False)
+    if codex_value
+    else home / ".codex"
+)
+market_root = home / ".agents" / "plugins"
+
+for lock_path, label in (
+    (market_root / ".ams-install.lock", "Install"),
+    (codex_home / ".agents.ams-profile-install.lock", "Profile"),
+    (codex_home / ".ams-orchestration-config.lock", "Intensity"),
+):
+    if inspect_lock(lock_path, label):
+        try:
+            lock_path.unlink()
+        except OSError as exc:
+            fail(f"Unable to remove stale {label.lower()} lock path {lock_path}: {exc}")
+
+targets = collect_targets(home, codex_home, market_root)
+marketplace_path = market_root / "marketplace.json"
+marketplace_before, marketplace_after = marketplace_update(marketplace_path)
+
+if not targets and marketplace_before == marketplace_after:
+    print("No package-managed AMS installation was found.")
+    raise SystemExit(0)
+
+token = uuid.uuid4().hex
+staged: list[tuple[Path, Path]] = []
+marketplace_written = False
+try:
+    for target in targets:
+        staged_path = target.with_name(f".{target.name}.ams-uninstalling-{token}")
+        if lstat(staged_path) is not None:
+            fail(f"Uninstall staging path already exists: {staged_path}")
+        try:
+            os.replace(target, staged_path)
+        except OSError as exc:
+            fail(f"Unable to stage managed path {target} for removal: {exc}")
+        staged.append((target, staged_path))
+    if marketplace_before is not None and marketplace_after != marketplace_before:
+        atomic_write(marketplace_path, marketplace_after or b"")
+        marketplace_written = True
+except BaseException as exc:
+    errors: list[str] = []
+    for original, staged_path in reversed(staged):
+        try:
+            if lstat(staged_path) is not None:
+                if lstat(original) is not None:
+                    raise RuntimeError(f"rollback refused to overwrite concurrent path: {original}")
+                os.replace(staged_path, original)
+        except Exception as restore_exc:
+            errors.append(f"restore {original}: {restore_exc}")
+    if marketplace_written and marketplace_before is not None:
+        try:
+            if marketplace_path.read_bytes() != marketplace_after:
+                raise RuntimeError("rollback refused to overwrite a concurrent marketplace change")
+            atomic_write(marketplace_path, marketplace_before)
+        except Exception as restore_exc:
+            errors.append(f"restore {marketplace_path}: {restore_exc}")
+    if errors:
+        fail(f"Fallback uninstall failed: {exc}; rollback also reported: {'; '.join(errors)}")
+    raise
+
+cleanup_errors: list[str] = []
+for _, staged_path in staged:
+    try:
+        remove_path(staged_path)
+    except OSError as exc:
+        cleanup_errors.append(f"{staged_path}: {exc}")
+if cleanup_errors:
+    print(
+        "warning: fallback uninstall completed, but staged paths remain for a later removal: "
+        + "; ".join(cleanup_errors),
+        file=sys.stderr,
+    )
+
+print("Fallback uninstall complete.")
+'@
+
+    $CleanerPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-fallback-uninstall-" + [Guid]::NewGuid().ToString("N") + ".py")
+    $Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($CleanerPath, $Cleaner, $Utf8NoBom)
+    try {
+        Invoke-ResolvedPython -Python $Python -Arguments @($CleanerPath, $HomeDirectory, [string]$env:CODEX_HOME)
+    }
+    finally {
+        Remove-Item -LiteralPath $CleanerPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-InstalledUninstaller {
     param([Parameter(Mandatory = $true)]$Python)
     $Finder = @'
@@ -387,21 +774,16 @@ try {
         $Intensity = $EnvironmentIntensity
     }
     if (-not $PSBoundParameters.ContainsKey("SparkEfforts") -and -not [string]::IsNullOrWhiteSpace($env:AMS_SPARK_EFFORTS)) {
-        $EnvironmentSparkEfforts = @($env:AMS_SPARK_EFFORTS.Split(",") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
-        foreach ($Effort in $EnvironmentSparkEfforts) {
-            if (@("low", "medium", "high") -notcontains $Effort) {
-                throw "Unsupported AMS_SPARK_EFFORTS value: $Effort"
-            }
-        }
-        $SparkEfforts = $EnvironmentSparkEfforts
+        $SparkEfforts = $env:AMS_SPARK_EFFORTS
     }
+    $SparkEffortValues = @(ConvertTo-SparkEffortList -Value $SparkEfforts)
     if ($env:AMS_EXCLUDE_SPARK -notin @($null, "", "0", "1")) {
         throw "AMS_EXCLUDE_SPARK must be 0 or 1; received: $($env:AMS_EXCLUDE_SPARK)"
     }
     if ($env:AMS_UNINSTALL_FORCE -notin @($null, "", "0", "1")) {
         throw "AMS_UNINSTALL_FORCE must be 0 or 1; received: $($env:AMS_UNINSTALL_FORCE)"
     }
-    if (-not ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") -and $SparkEfforts.Count -eq 0) {
+    if (-not ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") -and $SparkEffortValues.Count -eq 0) {
         throw "SparkEfforts cannot be empty unless Spark is excluded."
     }
 
@@ -422,7 +804,10 @@ try {
             Write-Host "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
             exit 0
         }
-        Write-Host "No package-managed AMS installation was found."
+        Write-Heading "Removing orphaned Adaptive Master-Subagent managed state"
+        Invoke-LocalFallbackUninstall -Python $Python
+        Write-Host ""
+        Write-Host "Uninstall completed successfully. Restart Codex to refresh discovered plugins and agents." -ForegroundColor Green
         exit 0
     }
     $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-install-" + [Guid]::NewGuid().ToString("N"))
@@ -453,7 +838,7 @@ try {
         }
         else {
             Write-Heading "Installing Option $Selected"
-            $Arguments = @($Installer, "--home", $HomeDirectory, "--upgrade-managed", "--intensity", $Intensity, "--spark-efforts", ($SparkEfforts -join ","))
+            $Arguments = @($Installer, "--home", $HomeDirectory, "--upgrade-managed", "--intensity", $Intensity, "--spark-efforts", ($SparkEffortValues -join ","))
             if ($ExcludeSpark -or $env:AMS_EXCLUDE_SPARK -eq "1") { $Arguments += "--exclude-spark" }
             Invoke-ResolvedPython -Python $Python -Arguments $Arguments
             Write-Host ""

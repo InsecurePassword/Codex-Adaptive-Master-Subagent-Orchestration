@@ -74,6 +74,8 @@ Values `1`, `2`, `3`, and `4` may be used in place of `A`, `B`, `C`, and `UNINST
 
 `CODEX_HOME` may be set separately when Codex data should be stored outside the default `.codex` directory.
 
+When invoking a `.ps1` file through native `powershell.exe -File` or `pwsh -File`, pass `-SparkEfforts` as one comma-separated value, such as `-SparkEfforts low,medium`. Both Windows PowerShell 5.1 and PowerShell 7 have a native `-File` limitation that cannot transmit a true array argument.
+
 ## Offline installation
 
 Download or create a ZIP of the repository, then pass it directly to the root installer:
@@ -104,7 +106,7 @@ Uninstall removes only recognized package-managed data:
 - the user-level `ams-orchestration.toml` when it carries the package-managed marker
 - recognized legacy user-level skill directories
 
-Pre-existing unmarked user configuration, unrelated files, and project-level `.codex` configuration remain unchanged.
+Pre-existing unmarked user configuration, unrelated files, and project-level `.codex` configuration remain unchanged. If every local package copy is missing or damaged, the root Windows uninstaller performs an embedded offline ownership-safe cleanup instead of downloading an archive.
 
 The managed marker establishes ownership only when it is the first line of the file. The same text inside a TOML value, description, or later comment does not make a user-authored file package-managed. Root uninstall also refuses any discovered uninstaller path containing a symbolic link or another non-regular path component.
 
@@ -112,8 +114,11 @@ The managed marker establishes ownership only when it is the first line of the f
 
 Run the complete offline audit from the repository root:
 
-```sh
-python3 -B -E -s -S ./scripts/audit_installers.py
+```powershell
+python -B -E -s -S .\scripts\refresh_manifests.py --check
+python -B -E -s -S .\scripts\audit_markdown.py
+python -B -E -s -S .\scripts\audit_installers.py
+python -B -E -s -S .\tests\test_windows_installers.py
 ```
 
 The audit checks shell and Python syntax, native PowerShell execution on Windows CI, root installer integration, every package installer, installation paths, rollback, locking, option switching, archive validation, uninstall ownership, package manifests, and every Markdown file and local link.
