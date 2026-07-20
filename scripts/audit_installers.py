@@ -17,6 +17,8 @@ from process_utils import run_bounded
 
 PACKAGE_PREFIX = "adaptive-master-subagent-orchestration-option-"
 COMMAND_TIMEOUT = 180
+TEXT_SUFFIXES = {".sh", ".py", ".ps1", ".md", ".toml", ".json", ".yaml", ".yml", ".sha256"}
+TEXT_NAMES = {"VERSION", "PACKAGE-OPTION", ".gitattributes"}
 
 
 def fail(message: str) -> None:
@@ -35,6 +37,23 @@ def run(command: list[str], *, timeout: int = COMMAND_TIMEOUT) -> None:
         fail(f"command timed out after {timeout}s: {command}")
     if result.returncode != 0:
         fail(f"command failed ({result.returncode}): {command}")
+
+
+def line_ending_audit() -> None:
+    print("[audit] reproducible LF line endings")
+    attributes = ROOT / ".gitattributes"
+    if not attributes.is_file() or "* text=auto eol=lf" not in attributes.read_text(encoding="utf-8"):
+        fail(".gitattributes does not enforce LF for repository text files")
+    bad: list[Path] = []
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or ".git" in path.parts:
+            continue
+        if path.suffix.lower() not in TEXT_SUFFIXES and path.name not in TEXT_NAMES:
+            continue
+        if b"\r" in path.read_bytes():
+            bad.append(path)
+    if bad:
+        fail("text files contain CR or CRLF bytes: " + ", ".join(str(path.relative_to(ROOT)) for path in bad))
 
 
 def python_syntax_audit() -> None:
@@ -121,6 +140,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    line_ending_audit()
     python_syntax_audit()
     shell_syntax_audit()
     powershell_syntax_audit()
