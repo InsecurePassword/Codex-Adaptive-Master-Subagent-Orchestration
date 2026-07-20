@@ -114,21 +114,34 @@ jobs:
           }
           if ($failed) { exit 1 }
 
-      - name: Commit exact Windows audit corrections
+      - name: Remove audit staging files
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $parts = @(Get-ChildItem -LiteralPath .github -Filter ".windows-audit-payload-*")
           Remove-Item -LiteralPath .\.windows-audit-transform.py -Force
           Remove-Item -LiteralPath .\windows-audit-transform.log -Force -ErrorAction SilentlyContinue
           $parts | Remove-Item -Force
           Remove-Item -LiteralPath .\.github\workflows\apply-windows-audit-fixes.yml -Force
+
+      - name: Stage and validate exact diff
+        shell: pwsh
+        run: |
           git add --all
+          git status --short
           git diff --cached --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git status --short
+
+      - name: Commit exact Windows audit corrections
+        shell: pwsh
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Complete independent Windows installation audit coverage"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Push isolated audit branch
+        shell: pwsh
+        run: |
           git push origin HEAD:windows-final-third-party-audit
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
