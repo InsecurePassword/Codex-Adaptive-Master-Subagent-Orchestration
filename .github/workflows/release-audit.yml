@@ -7,76 +7,17 @@ on:
   push:
     branches:
       - main
-      - post-merge-release-audit
   workflow_dispatch:
 
+concurrency:
+  group: release-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.prepare.outputs.changed }}
-    steps:
-      - name: Check out source branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Apply post-merge corrections when staged
-        id: prepare
-        continue-on-error: true
-        shell: bash
-        run: |
-          set +e
-          {
-            set -euo pipefail
-            if [[ -f scripts/apply_post_merge_audit_fixes.py ]]; then
-              python -B -E -s -S scripts/apply_post_merge_audit_fixes.py
-              rm scripts/apply_post_merge_audit_fixes.py
-            fi
-            if [[ -f scripts/patch_markdown_audit.py ]]; then
-              python -B -E -s -S scripts/patch_markdown_audit.py
-              rm scripts/patch_markdown_audit.py
-            fi
-            if git diff --quiet && git diff --cached --quiet; then
-              echo "changed=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            python -B -E -s -S scripts/audit_installers.py
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git diff --cached --check
-            git commit -m "Complete post-merge release audit [skip ci]"
-            git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          } > prepare-audit.log 2>&1
-          status=$?
-          cat prepare-audit.log
-          exit $status
-
-      - name: Upload preparation failure
-        if: steps.prepare.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: post-merge-prepare-error
-          path: prepare-audit.log
-
-      - name: Stop after preparation failure
-        if: steps.prepare.outcome == 'failure'
-        run: exit 1
-
   audit:
-    needs: prepare
-    if: needs.prepare.outputs.changed == 'false'
     strategy:
       fail-fast: false
       matrix:
