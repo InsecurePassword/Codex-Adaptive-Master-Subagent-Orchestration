@@ -10,6 +10,11 @@ from process_utils import run_bounded
 PLUGIN_NAME=__PLUGIN_NAME__
 OPTION=__OPTION__
 EXPECTED_SKILLS=__EXPECTED_SKILLS__
+PACKAGE_LABELS={
+    'A':'Option A — Two-skill automated setup',
+    'B':'Option B — Unified conditional bootstrap',
+    'C':'Option C — Installer-required lean runtime',
+}
 TIMEOUT=180
 
 def require(c:bool,m:str)->None:
@@ -27,7 +32,7 @@ def manifest_check()->None:
 
 def structure_check(*, scripts_only: bool)->None:
     require((ROOT/'VERSION').read_text().strip()=='3.1.0','VERSION mismatch')
-    require((ROOT/'PACKAGE-OPTION').read_text().strip()==OPTION,'PACKAGE-OPTION mismatch')
+    require((ROOT/'PACKAGE-OPTION').read_text().strip()==PACKAGE_LABELS[OPTION],'PACKAGE-OPTION mismatch')
     data=json.loads((ROOT/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))
     require(data.get('name')==PLUGIN_NAME,'plugin name mismatch'); require(data.get('version')=='3.1.0','plugin version mismatch'); require(data.get('skills')=='./skills/','skills path mismatch')
     skills=sorted(p.name for p in (ROOT/'skills').iterdir() if p.is_dir())
