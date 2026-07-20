@@ -1,0 +1,88 @@
+ if intensity not in VALID_INTENSITIES:
+        raise SystemExit(f"Invalid or missing intensity in {path}: {intensity!r}")
+
+
+def inspect_config(path: Path, initial_intensity: str) -> ConfigPlan:
+    if not path.exists() and not path.is_symlink():
+        return ConfigPlan("create", f'schema_version = 1\nintensity = "{initial_intensity}"\n')
+    if not path.is_file() or path.is_symlink():
+        raise SystemExit(f"Configuration path is not a regular file: {path}")
+    raw = path.read_text(encoding="utf-8", errors="strict")
+    if "\\n" in raw and "\n" not in raw:
+        normalized = raw.replace("\\n", "\n")
+        validate_config_text(normalized, path)
+        return ConfigPlan("repair-legacy-newlines", normalized)
+    validate_config_text(raw, path)
+    return ConfigPlan("preserve")
+
+
+def copy_package(src: Path, dst: Path) -> None:
+    shutil.copytree(
+        src,
+        dst,
+        symlinks=False,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"),
+    )
+
+
+def next_backup_path(backup_root: Path, name: str) -> Path:
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    candidate = backup_root / f"{name}.backup-{stamp}"
+    index = 2
+    while candidate.exists() or candidate.is_symlink():
+        candidate = backup_root / f"{name}.backup-{stamp}-{index}"
+        index += 1
+    return candidate
+
+
+@contextlib.contextmanager
+def install_lock(market_root: Path) -> Iterator[None]:
+    market_root.mkdir(parents=True, exist_ok=True)
+    lock_path = market_root / ".ams-install.lock"
+    payload = {
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "created": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    while True:
+        try:
+            descriptor = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle)
+                handle.write("\n")
+            break
+        except FileExistsError:
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if age > LOCK_STALE_SECONDS and not lock_owner_is_live(lock_path):
+                try:
+                    lock_path.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+            raise SystemExit(f"Another AMS installation or removal appears to be active: {lock_path}")
+    try:
+        yield
+    finally:
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def bootstrap_command(
+    root: Path,
+    codex_home: Path,
+    args: argparse.Namespace,
+    *,
+    dry_run: bool,
+) -> list[str]:
+    command = [
+        sys.executable,
+        "-E",
+        "-s",
+        "-S",
+        str(root / "scripts" / "bootstrap_profiles.py"),
+        "--destination"
