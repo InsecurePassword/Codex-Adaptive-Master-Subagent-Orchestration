@@ -1,6 +1,6 @@
 # Manual Installation
 
-Most users should use the interactive remote installer in the main [README](README.md). This guide is for users who clone the repository, install without the remote bootstrap script, work offline, or need the full package layout.
+Most users should use the interactive installer in the main [README](README.md). This guide is for users who clone the repository, install without the root installer, work offline, or need the full package layout.
 
 Install exactly one package option.
 
@@ -17,11 +17,11 @@ Install exactly one package option.
 ```text
 adaptive-master-subagent-orchestration/
 |-- README.md
+|-- INSTALLATION.md
 |-- MANUAL-INSTALLATION.md
 |-- INSTALLER-USAGE.md
 |-- install.ps1
 |-- install.sh
-|-- adaptive-master-subagent-orchestration-all-options-v3.1.0.zip
 |-- adaptive-master-subagent-orchestration-option-a-two-skill/
 |   |-- .codex-plugin/
 |   |   `-- plugin.json
@@ -58,6 +58,12 @@ adaptive-master-subagent-orchestration/
 |-- adaptive-master-subagent-orchestration-option-b-unified/
 |   |-- .codex-plugin/plugin.json
 |   |-- Install-Package.ps1
+|   |-- README.md
+|   |-- AUDIT.md
+|   |-- CHANGELOG.md
+|   |-- VERSION
+|   |-- PACKAGE-OPTION
+|   |-- MANIFEST.sha256
 |   |-- assets/agent-profiles/
 |   |-- config/
 |   |-- scripts/
@@ -68,6 +74,12 @@ adaptive-master-subagent-orchestration/
 `-- adaptive-master-subagent-orchestration-option-c-installer-required/
     |-- .codex-plugin/plugin.json
     |-- Install-Package.ps1
+    |-- README.md
+    |-- AUDIT.md
+    |-- CHANGELOG.md
+    |-- VERSION
+    |-- PACKAGE-OPTION
+    |-- MANIFEST.sha256
     |-- assets/agent-profiles/
     |-- config/
     |-- scripts/
@@ -83,14 +95,14 @@ Each option directory is a complete package root. Run its installer from that di
 
 Option A installs `$ams-installer` and `$ams-orchestration`.
 
-### Windows
+### Option A on Windows
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-a-two-skill
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Linux
+### Option A on Linux
 
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-a-two-skill
@@ -101,14 +113,14 @@ python3 ./scripts/install_package.py --upgrade-managed --intensity auto
 
 Option B installs `$adaptive-master-subagent-orchestration`.
 
-### Windows
+### Option B on Windows
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-b-unified
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Linux
+### Option B on Linux
 
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-b-unified
@@ -119,14 +131,14 @@ python3 ./scripts/install_package.py --upgrade-managed --intensity auto
 
 Option C installs `$ams-orchestration` and requires profile installation.
 
-### Windows
+### Option C on Windows
 
 ```powershell
 cd .\adaptive-master-subagent-orchestration-option-c-installer-required
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-Package.ps1 -UpgradeManaged -Intensity auto
 ```
 
-### Linux
+### Option C on Linux
 
 ```sh
 cd ./adaptive-master-subagent-orchestration-option-c-installer-required
@@ -141,7 +153,7 @@ python3 ./scripts/install_package.py --upgrade-managed --intensity auto
 | `-ExcludeSpark` | `--exclude-spark` | Skip optional Spark profiles |
 | `-SparkEfforts low,medium,high` | `--spark-efforts low,medium,high` | Select Spark profiles |
 | `-SkipProfiles` | `--skip-profiles` | Skip profile installation where allowed; Option C rejects this |
-| `-Intensity <mode>` | `--intensity <mode>` | Set the initial intensity if no user config exists |
+| `-Intensity <mode>` | `--intensity <mode>` | Set the initial intensity if no user configuration exists |
 | `-WhatIf` | `--dry-run` | Preview changes without installing |
 
 ## Validate a package
@@ -152,11 +164,11 @@ From the selected option directory:
 python3 ./scripts/validate_package.py
 ```
 
-The validator checks plugin structure, skill metadata, profile TOML, package checksums, installer behavior, intensity configuration, recovery rules, and option-specific bootstrap boundaries.
+The validator checks plugin structure, skill metadata, profile TOML, package checksums, installer behavior, intensity configuration, recovery rules, and option-specific setup rules.
 
 ## Uninstall
 
-The easiest safe uninstall is menu option **4** in the root remote installer:
+Use menu option **4** in the root installer:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/adaptive-master-subagent-orchestration/refs/heads/main/install.ps1' | iex"
