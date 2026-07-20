@@ -305,8 +305,16 @@ for name in names:
             raise SystemExit(0)
 raise SystemExit(3)
 '@
-    $Output = & $Python.Executable @($Python.Prefix + @("-B", "-E", "-s", "-S", "-c", $Finder, $HomeDirectory))
-    $Code = $LASTEXITCODE
+    $FinderPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ams-find-uninstaller-" + [Guid]::NewGuid().ToString("N") + ".py")
+    $Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($FinderPath, $Finder, $Utf8NoBom)
+    try {
+        $Output = & $Python.Executable @($Python.Prefix + @("-B", "-E", "-s", "-S", $FinderPath, $HomeDirectory))
+        $Code = $LASTEXITCODE
+    }
+    finally {
+        Remove-Item -LiteralPath $FinderPath -Force -ErrorAction SilentlyContinue
+    }
     if ($Code -eq 0) {
         $Candidate = [string]($Output | Select-Object -Last 1)
         if ([string]::IsNullOrWhiteSpace($Candidate)) {
