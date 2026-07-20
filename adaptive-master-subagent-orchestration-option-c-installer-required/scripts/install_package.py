@@ -375,12 +375,14 @@ def validate_config_text(text: str, path: Path) -> None:
 
 def inspect_config(path: Path, initial_intensity: str) -> ConfigPlan:
     if not path.exists() and not path.is_symlink():
-        return ConfigPlan("create", f'schema_version = 1\nintensity = "{initial_intensity}"\n')
+        return ConfigPlan("create", f'{MANAGED_MARKER}\nschema_version = 1\nintensity = "{initial_intensity}"\n')
     if not path.is_file() or path.is_symlink():
         raise SystemExit(f"Configuration path is not a regular file: {path}")
     raw = path.read_text(encoding="utf-8", errors="strict")
     if "\\n" in raw and "\n" not in raw:
         normalized = raw.replace("\\n", "\n")
+        if MANAGED_MARKER not in normalized:
+            normalized = f"{MANAGED_MARKER}\n{normalized}"
         validate_config_text(normalized, path)
         return ConfigPlan("repair-legacy-newlines", normalized)
     validate_config_text(raw, path)
@@ -870,10 +872,14 @@ def uninstall_targets(home: Path, codex_home: Path, market_root: Path) -> list[P
             or (path.name.startswith(".ams_") and ".ams-uninstalling-" in path.name)
         )
     config = codex_home / "ams-orchestration.toml"
-    if config.exists() or config.is_symlink():
+    if path_has_managed_marker(config):
         targets.append(config)
     if codex_home.is_dir():
-        targets.extend(codex_home.glob(".ams-orchestration.toml.ams-uninstalling-*"))
+        targets.extend(
+            path
+            for path in codex_home.glob(".ams-orchestration.toml.ams-uninstalling-*")
+            if path_has_managed_marker(path)
+        )
     legacy_root = home / ".agents" / "skills"
     for name in LEGACY_SKILL_NAMES:
         path = legacy_root / name

@@ -46,6 +46,8 @@ The repository audit performs:
 - unsafe archive and checksum rejection tests
 - unrelated-file preservation tests
 - generated-artifact checks
+- repository-wide Markdown structure, readability, and local-link checks
+- native Windows PowerShell installation, option switching, path-placement, and uninstall checks
 
 Run the complete audit from the repository root:
 
@@ -61,4 +63,4 @@ INSTALLER AUDIT PASSED
 
 ## Platform note
 
-The full Python and POSIX integration matrix is executable on Linux. Windows-specific PowerShell behavior is executed when `powershell.exe` or `pwsh` is available; otherwise the audit performs static PowerShell checks. A native Windows release check remains appropriate whenever a Windows runtime is explicitly required.
+The release workflow runs the complete audit on both Ubuntu and Windows. Windows CI executes the PowerShell installer for Options A, B, and C, verifies package switching and file placement, and runs uninstall. Local systems without PowerShell still receive static PowerShell checks.

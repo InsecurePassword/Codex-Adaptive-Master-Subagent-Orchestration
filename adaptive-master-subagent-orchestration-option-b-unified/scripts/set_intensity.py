@@ -25,6 +25,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover
     raise SystemExit("Python 3.11+ is required because this utility uses tomllib.") from exc
 
 VALID = ("auto", "minimal", "moderate", "heavy", "extreme")
+MANAGED_MARKER = "# managed-by: adaptive-master-subagent-orchestration"
 LOCK_STALE_SECONDS = 2 * 60 * 60
 
 
@@ -171,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{path}: {mode or 'unset (effective default: auto)'}")
         return 0
 
-    text = f'schema_version = 1\nintensity = "{args.mode}"\n'
+    text = f'{MANAGED_MARKER}\nschema_version = 1\nintensity = "{args.mode}"\n'
     if args.dry_run:
         print(f"would-write {path}\n{text}", end="")
     else:

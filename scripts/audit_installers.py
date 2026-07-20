@@ -85,6 +85,11 @@ def no_generated_artifacts() -> None:
         fail("generated Python artifacts are present: " + ", ".join(str(path) for path in bad))
 
 
+def markdown_audit() -> None:
+    print("[audit] Markdown structure and links")
+    run([sys.executable, "-B", "-E", "-s", "-S", str(ROOT / "scripts" / "audit_markdown.py")], timeout=60)
+
+
 def root_integration_tests() -> None:
     print("[audit] root installer integration")
     run(
@@ -120,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     shell_syntax_audit()
     powershell_syntax_audit()
     no_generated_artifacts()
+    markdown_audit()
     if not args.skip_root_tests:
         root_integration_tests()
     if not args.skip_package_tests:

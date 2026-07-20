@@ -101,10 +101,10 @@ Uninstall removes only recognized package-managed data:
 - Adaptive Master–Subagent plugin directories and managed staging or backup directories
 - matching marketplace entries
 - agent profiles carrying the package-managed marker
-- the user-level `ams-orchestration.toml`
+- the user-level `ams-orchestration.toml` when it carries the package-managed marker
 - recognized legacy user-level skill directories
 
-Unrelated files and project-level `.codex` configuration remain unchanged.
+Pre-existing unmarked user configuration, unrelated files, and project-level `.codex` configuration remain unchanged.
 
 ## Verify the installers
 
@@ -114,4 +114,4 @@ Run the complete offline audit from the repository root:
 python3 -B -E -s -S ./scripts/audit_installers.py
 ```
 
-The audit checks shell and Python syntax, PowerShell syntax when a PowerShell runtime is available, root installer integration, every package installer, rollback, locking, option switching, archive validation, uninstall, and package manifests.
+The audit checks shell and Python syntax, native PowerShell execution on Windows CI, root installer integration, every package installer, installation paths, rollback, locking, option switching, archive validation, uninstall ownership, package manifests, and every Markdown file and local link.

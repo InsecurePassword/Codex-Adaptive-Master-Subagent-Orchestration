@@ -142,7 +142,10 @@ def main()->int:
         require(active(home)==[PLUGIN],'install did not activate only selected plugin')
         plugins=[x['name'] for x in market(home)['plugins'] if isinstance(x,dict) and x.get('name') in ALL_PLUGIN_NAMES]
         require(plugins==[PLUGIN],'marketplace registration wrong')
-        config=tomllib.loads((home/'.codex/ams-orchestration.toml').read_text(encoding='utf-8')); require(config['intensity']=='heavy','intensity not written')
+        config_path=home/'.codex/ams-orchestration.toml'
+        config_text=config_path.read_text(encoding='utf-8')
+        config=tomllib.loads(config_text); require(config['intensity']=='heavy','intensity not written')
+        require(MANAGED in config_text,'new user config was not marked as package-managed')
         require(len(list((home/'.codex/agents').glob('*.toml')))==15,'exclude-spark count wrong')
         run(home,'--exclude-spark','--intensity','extreme','--upgrade-managed')
         config=tomllib.loads((home/'.codex/ams-orchestration.toml').read_text(encoding='utf-8')); require(config['intensity']=='heavy','existing config was overwritten')
@@ -150,6 +153,15 @@ def main()->int:
 
         legacy=base/'legacy'; (legacy/'.codex').mkdir(parents=True); (legacy/'.codex/ams-orchestration.toml').write_text('schema_version = 1\\nintensity = "moderate"\\n',encoding='utf-8')
         run(legacy,'--exclude-spark'); require(tomllib.loads((legacy/'.codex/ams-orchestration.toml').read_text())['intensity']=='moderate','legacy newline config not repaired')
+
+        user_config_home=base/'user-config'; (user_config_home/'.codex').mkdir(parents=True)
+        user_config=user_config_home/'.codex/ams-orchestration.toml'
+        user_config_text='schema_version = 1\nintensity = "moderate"\n'
+        user_config.write_text(user_config_text,encoding='utf-8')
+        run(user_config_home,'--exclude-spark','--upgrade-managed')
+        require(user_config.read_text(encoding='utf-8')==user_config_text,'install changed a pre-existing user config')
+        run(user_config_home,'--uninstall','--yes')
+        require(user_config.read_text(encoding='utf-8')==user_config_text,'uninstall removed a pre-existing user config')
 
         malformed=base/'malformed'; mp=malformed/'.agents/plugins/marketplace.json'; mp.parent.mkdir(parents=True); mp.write_text('{bad',encoding='utf-8')
         out=run(malformed,'--exclude-spark',expect=1); require('Cannot parse existing marketplace' in out,'malformed marketplace error unclear'); require(active(malformed)==[],'malformed state partially installed')
@@ -167,6 +179,7 @@ def main()->int:
         run(home,'--uninstall','--yes')
         require(active(home)==[],'uninstall left AMS plugin'); require((unrelated/'keep').exists(),'uninstall removed unrelated plugin')
         require(not list((home/'.codex/agents').glob('ams_*.toml')),'uninstall left managed profiles')
+        require(not config_path.exists(),'uninstall left a package-managed user config')
         run(home,'--uninstall','--yes')
     print(f'INSTALLATION TESTS PASSED: option {OPTION}')
     return 0

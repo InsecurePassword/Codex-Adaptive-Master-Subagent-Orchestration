@@ -25,6 +25,7 @@ adaptive-master-subagent-orchestration/
 |-- install.sh
 |-- scripts/
 |   |-- audit_installers.py
+|   |-- audit_markdown.py
 |   `-- process_utils.py
 |-- tests/
 |   `-- test_installers.py
@@ -172,6 +173,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option Un
 sh ./install.sh --option UNINSTALL --force
 ```
 
-The uninstall path removes package-managed files while preserving unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration.
+The uninstall path removes package-managed files while preserving pre-existing unmarked user configuration, unrelated profiles, marketplace entries, plugins, and project-level `.codex` configuration.
 
 Restart Codex after installation, package switching, or removal if the skill list does not update immediately.

@@ -95,6 +95,15 @@ def marketplace_plugins(home: Path) -> list[str]:
     )
 
 
+def require_install_layout(home: Path, codex_home: Path, option: str) -> None:
+    plugin = home / ".agents" / "plugins" / "plugins" / PACKAGE_NAMES[option]
+    require((plugin / ".codex-plugin" / "plugin.json").is_file(), f"Option {option} plugin metadata is misplaced")
+    require((plugin / "scripts" / "install_package.py").is_file(), f"Option {option} installer is missing from installed plugin")
+    require((home / ".agents" / "plugins" / "marketplace.json").is_file(), "marketplace file is misplaced")
+    require((codex_home / "agents").is_dir(), "managed profiles directory is misplaced")
+    require((codex_home / "ams-orchestration.toml").is_file(), "user configuration is misplaced")
+
+
 def test_process_tree_timeout(base: Path) -> None:
     marker = base / "orphan-marker"
     code = (
@@ -226,20 +235,17 @@ def test_powershell_if_available(archive: Path, base: Path) -> None:
     ]
     run(command)
     require(active_plugins(home) == [PACKAGE_NAMES["A"]], "PowerShell install selected the wrong option")
-    run(
-        [
-            executable,
-            "-NoProfile",
-            "-File",
-            str(ROOT / "install.ps1"),
-            "-Option",
-            "Uninstall",
-            "-HomeDirectory",
-            str(home),
-            "-Force",
-        ]
-    )
-    require(active_plugins(home) == [], "PowerShell uninstall left an active plugin")
+    require_install_layout(home, home / ".codex", "A")
+    run([executable, "-NoProfile", "-File", str(ROOT / "install.ps1"), "-Option", "B", "-ArchivePath", str(archive), "-HomeDirectory", str(home)])
+    require(active_plugins(home) == [PACKAGE_NAMES["B"]], "PowerShell option switch left multiple active plugins")
+    require_install_layout(home, home / ".codex", "B")
+    c_home = base / "powershell-c-home"
+    run([executable, "-NoProfile", "-File", str(ROOT / "install.ps1"), "-Option", "C", "-ArchivePath", str(archive), "-HomeDirectory", str(c_home), "-ExcludeSpark"])
+    require(active_plugins(c_home) == [PACKAGE_NAMES["C"]], "PowerShell Option C installed the wrong plugin")
+    require_install_layout(c_home, c_home / ".codex", "C")
+    for uninstall_home in (home, c_home):
+        run([executable, "-NoProfile", "-File", str(ROOT / "install.ps1"), "-Option", "Uninstall", "-HomeDirectory", str(uninstall_home), "-Force"])
+        require(active_plugins(uninstall_home) == [], "PowerShell uninstall left an active plugin")
 
 
 def main() -> int:
@@ -307,6 +313,7 @@ def main() -> int:
         config = tomllib.loads((home / ".codex" / "ams-orchestration.toml").read_text(encoding="utf-8"))
         require(config["intensity"] == "heavy", "CLI intensity was not applied")
         require(len(list((home / ".codex" / "agents").glob("*.toml"))) == 15, "exclude-spark was ignored")
+        require_install_layout(home, home / ".codex", "A")
 
         print("[root-test] positional Option B switch", flush=True)
         run([shell, str(ROOT / "install.sh"), "B", "--archive-path", str(archive), "--home", str(home)])
@@ -324,6 +331,21 @@ def main() -> int:
         )
         run([shell, str(ROOT / "install.sh")], env=env)
         require(active_plugins(env_home) == [PACKAGE_NAMES["C"]], "environment selector did not install Option C")
+
+        print("[root-test] custom CODEX_HOME placement", flush=True)
+        custom_home = base / "custom-home"
+        custom_codex = base / "custom-codex"
+        custom_env = dict(os.environ)
+        custom_env["CODEX_HOME"] = str(custom_codex)
+        run([shell, str(ROOT / "install.sh"), "--option", "A", "--archive-path", str(archive), "--home", str(custom_home), "--exclude-spark"], env=custom_env)
+        require_install_layout(custom_home, custom_codex, "A")
+        require(not (custom_home / ".codex").exists(), "custom CODEX_HOME install also wrote to the default home")
+        project_config = custom_home / "project" / ".codex" / "ams-orchestration.toml"
+        project_config.parent.mkdir(parents=True)
+        project_config.write_text('schema_version = 1\nintensity = "minimal"\n', encoding="utf-8")
+        run([shell, str(ROOT / "install.sh"), "--option", "UNINSTALL", "--home", str(custom_home), "--force"], env=custom_env)
+        require(not custom_codex.joinpath("ams-orchestration.toml").exists(), "custom CODEX_HOME uninstall left managed config")
+        require(project_config.exists(), "uninstall removed project-local configuration")
 
         print("[root-test] offline uninstall using installed package", flush=True)
         fake_bin = base / "fake-bin"

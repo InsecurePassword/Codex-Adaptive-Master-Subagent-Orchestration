@@ -205,14 +205,18 @@ def audit_file(path: Path, errors: list[str], anchor_cache: dict[Path, set[str]]
 
     if in_fence:
         fail(errors, path, in_fence[2], "unclosed fenced code block")
-    if h1_count != 1:
+    if path.name == "SKILL.md":
+        if h1_count > 1:
+            fail(errors, path, None, f"expected at most one H1 heading, found {h1_count}")
+    elif h1_count != 1:
         fail(errors, path, None, f"expected exactly one H1 heading, found {h1_count}")
 
     if path.name in USER_DOC_NAMES:
         paragraphs = re.split(r"\n\s*\n", text)
         for paragraph in paragraphs:
             compact = " ".join(paragraph.split())
-            if compact and not compact.startswith(("#", "-", "*", "|", "```", "~~~", ">")) and len(compact) > 900:
+            is_list = bool(re.match(r"^\d+[.)]\s", compact))
+            if compact and not is_list and not compact.startswith(("#", "-", "*", "|", "```", "~~~", ">")) and len(compact) > 900:
                 fail(errors, path, None, "contains a paragraph longer than 900 characters; split it for readability")
 
 
