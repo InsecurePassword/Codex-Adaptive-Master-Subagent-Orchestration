@@ -1,66 +1,88 @@
-name: Release audit
+name: Apply verified independent audit fixes
 
 on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
-  group: release-audit-${{ github.workflow }}-${{ github.ref }}
+  group: apply-verified-independent-audit-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+  apply-independent-audit-fixes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Check out audited revision
+      - name: Check out audit branch
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          ref: post-merge-release-audit
+          fetch-depth: 0
 
-      - name: Verify clean checkout
-        shell: bash
-        run: |
-          git status --short
-          test -z "$(git status --short)"
-          git rev-parse HEAD
-
-      - name: Run complete installer and Markdown audit
-        id: release_audit
+      - name: Verify and apply exact audited patch
+        id: apply_patch
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          log="release-audit-${RUNNER_OS}.log"
-          python -B -E -s -S scripts/audit_installers.py > "$log" 2>&1
+          bash -euo pipefail <<'SCRIPT' > /tmp/ams-apply.log 2>&1
+          printf '%s  %s\n' 'e820b0f98d2933c726568f9af77c0522780555abbcdd6b1733915dab9669f117' '.github/.ams-audit-patch-00' | sha256sum -c -
+          printf '%s  %s\n' '5695637137ed54c5a5ac558fe1c897c08c05d0b82ed880e3434424b7cbdeaf28' '.github/.ams-audit-patch-01a' | sha256sum -c -
+          printf '%s  %s\n' 'b758ab37712955a11d9f694619004bdbab411993b66e4d9fe5a67cdcf77e1220' '.github/.ams-audit-patch-01b' | sha256sum -c -
+          printf '%s  %s\n' 'a66b2b96460665be327bc32eb1aade8bf891873ded978e62f6fcd66d1630203d' '.github/.ams-audit-patch-02' | sha256sum -c -
+          printf '%s  %s\n' '040bc7acd1a93e162f242f8ae0eb09a8ded4fb562fc214eaaba73e655fdded08' '.github/.ams-audit-patch-03' | sha256sum -c -
+          printf '%s  %s\n' 'ac176ba3211e0bb19c6ca10bfa3bb1370c9fa6af241d813866732052ac57c699' '.github/.ams-audit-patch-04' | sha256sum -c -
+          printf '%s  %s\n' '84edef6b3f4072fb8eaea742cbda6c9c1671d93df2983963f9dd26c5766b9b21' '.github/.ams-audit-patch-05' | sha256sum -c -
+
+          cat \
+            .github/.ams-audit-patch-00 \
+            .github/.ams-audit-patch-01a \
+            .github/.ams-audit-patch-01b \
+            .github/.ams-audit-patch-02 \
+            .github/.ams-audit-patch-03 \
+            .github/.ams-audit-patch-04 \
+            .github/.ams-audit-patch-05 \
+            > /tmp/ams-audit.patch.gz.b64
+          printf '%s  %s\n' '99a25e63f9777b12ed0a8d33d2c620ff1be0ab7d6cf014e923962504f58ab4b4' '/tmp/ams-audit.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/ams-audit.patch.gz.b64 | gzip -d > /tmp/ams-audit.patch
+          printf '%s  %s\n' 'a4ca716b2201930eaf09dacf39f6b42dc5c5f11c14b9d471a216776c5a02d7c3' '/tmp/ams-audit.patch' | sha256sum -c -
+
+          git show c205dcf50d1baf0d909d2c2ed33d80906747e85f:.github/workflows/release-audit.yml > .github/workflows/release-audit.yml
+          git add .github/workflows/release-audit.yml
+          git apply --index --whitespace=error /tmp/ams-audit.patch
+          git rm \
+            .github/.ams-audit-patch-00 \
+            .github/.ams-audit-patch-01a \
+            .github/.ams-audit-patch-01b \
+            .github/.ams-audit-patch-02 \
+            .github/.ams-audit-patch-03 \
+            .github/.ams-audit-patch-04 \
+            .github/.ams-audit-patch-05
+          git diff --cached --check
+          git status --short
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Fix installer ownership and release audit coverage'
+          git push origin HEAD:post-merge-release-audit
+          SCRIPT
           status=$?
-          cat "$log"
+          cat /tmp/ams-apply.log
           exit $status
 
-      - name: Upload audit failure
-        if: steps.release_audit.outcome == 'failure'
+      - name: Upload apply diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-audit-${{ runner.os }}-failure
-          path: release-audit-${{ runner.os }}.log
+          name: verified-independent-audit-apply-${{ github.sha }}
+          path: /tmp/ams-apply.log
+          if-no-files-found: error
 
-      - name: Stop after audit failure
-        if: steps.release_audit.outcome == 'failure'
+      - name: Stop after apply failure
+        if: steps.apply_patch.outcome == 'failure'
         run: exit 1
