@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Regression tests for bootstrap_profiles.py using only the Python standard library."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from types import ModuleType
+
+sys.dont_write_bytecode = True
+
+from process_utils import run_bounded
+
+ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP = ROOT / "scripts" / "bootstrap_profiles.py"
+MANAGED = "# managed-by: adaptive-master-subagent-orchestration"
+COMMAND_TIMEOUT = 20
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def run(destination: Path, *args: str, expect: int = 0) -> dict[str, object] | str:
+    command = [
+        sys.executable,
+        "-B",
+        "-E",
+        "-s",
+        "-S",
+        str(BOOTSTRAP),
+        "--destination",
+        str(destination),
+        "--json",
+        *args,
+    ]
+    try:
+        result = run_bounded(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=COMMAND_TIMEOUT,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(f"bootstrap command timed out after {COMMAND_TIMEOUT}s: {command}") from exc
+    if result.returncode != expect:
+        raise AssertionError(
+            f"command returned {result.returncode}, expected {expect}: {command}\n"
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+    if expect != 0:
+        return (result.stderr or "") + (result.stdout or "")
+    return json.loads(result.stdout or "{}")
+
+
+def backup_files(path: Path) -> list[Path]:
+    return sorted(path.parent.glob(path.name + ".bak-*"))
+
+
+def load_bootstrap_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("ams_bootstrap_under_test", BOOTSTRAP)
+    if spec is None or spec.loader is None:
+        raise AssertionError("could not load bootstrap module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_transaction_rollback(base: Path) -> None:
+    module = load_bootstrap_module()
+    destination = base / "rollback"
+    args = module.parse_args(["--destination", str(destination), "--exclude-spark"])
+    original = module.atomic_write
+    calls = 0
+
+    def failing_write(path: Path, text: str, mode: int | None = None) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected write failure")
+        original(path, text, mode)
+
+    module.atomic_write = failing_write
+    try:
+        try:
+            module.run(args)
+        except OSError as exc:
+            require("injected write failure" in str(exc), f"unexpected rollback exception: {exc}")
+        else:
+            raise AssertionError("rollback test did not fail as expected")
+    finally:
+        module.atomic_write = original
+    require(not destination.exists(), "failed transaction left a destination directory")
+    lock = destination.parent / f".{destination.name}.ams-profile-install.lock"
+    require(not lock.exists(), "failed transaction left the profile lock")
+
+
+def test_rollback_preserves_concurrent_change(base: Path) -> None:
+    module = load_bootstrap_module()
+    destination = base / "rollback-concurrent"
+    args = module.parse_args(["--destination", str(destination), "--exclude-spark"])
+    original = module.atomic_write
+    first_path: Path | None = None
+    calls = 0
+
+    def failing_write(path: Path, text: str, mode: int | None = None) -> None:
+        nonlocal calls, first_path
+        calls += 1
+        if calls == 1:
+            original(path, text, mode)
+            first_path = path
+            return
+        if first_path is not None:
+            first_path.write_text("concurrent user content\n", encoding="utf-8")
+        raise OSError("injected write failure after concurrent edit")
+
+    module.atomic_write = failing_write
+    try:
+        try:
+            module.run(args)
+        except SystemExit as exc:
+            require("rollback refused" in str(exc), f"concurrent rollback conflict was not reported: {exc}")
+        else:
+            raise AssertionError("concurrent rollback test did not fail as expected")
+    finally:
+        module.atomic_write = original
+    require(first_path is not None and first_path.exists(), "concurrent file disappeared")
+    require(first_path.read_text(encoding="utf-8") == "concurrent user content\n", "rollback overwrote concurrent content")
+
+
+def test_lock_handling(base: Path) -> None:
+    destination = base / "lock-test" / "agents"
+    destination.parent.mkdir(parents=True)
+    lock = destination.parent / f".{destination.name}.ams-profile-install.lock"
+    live = {"pid": os.getpid(), "host": socket.gethostname(), "created": "old"}
+    lock.write_text(json.dumps(live) + "\n", encoding="utf-8")
+    old = time.time() - (3 * 60 * 60)
+    os.utime(lock, (old, old))
+    output = run(destination, "--exclude-spark", expect=1)
+    require("appears to be active" in output, "live stale-looking lock was not preserved")
+    require(lock.exists(), "live lock was removed")
+
+    lock.write_text(json.dumps({"pid": 99999999, "host": socket.gethostname()}) + "\n", encoding="utf-8")
+    os.utime(lock, (old, old))
+    run(destination, "--exclude-spark")
+    require(not lock.exists(), "dead stale lock was not cleared")
+
+    lock.mkdir()
+    output = run(destination, "--exclude-spark", expect=1)
+    require("not a regular file" in output, "non-file lock error was unclear")
+
+
+def main() -> int:
+    with tempfile.TemporaryDirectory(prefix="ams-bootstrap-tests-") as tmp:
+        base = Path(tmp)
+
+        dry = base / "dry"
+        report = run(dry, "--dry-run", "--transaction-id", "txn_test_123")
+        require(not dry.exists(), "dry-run created destination")
+        require(len(report["profiles"]) == 18, "dry-run did not plan all profiles")
+        require(
+            all(isinstance(item.get("expected_sha256"), str) and not item.get("expected_absent") for item in report["profiles"]),
+            "dry-run mutation expectations were incomplete",
+        )
+
+        full = base / "full"
+        report = run(full)
+        require(len(list(full.glob("*.toml"))) == 18, "full install did not create 18 profiles")
