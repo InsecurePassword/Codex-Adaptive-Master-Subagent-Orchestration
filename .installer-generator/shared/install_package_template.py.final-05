@@ -1,0 +1,148 @@
+        return MANAGED_MARKER in path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
+def uninstall_targets(home: Path, codex_home: Path, market_root: Path) -> list[Path]:
+    targets: list[Path] = []
+    plugin_root = market_root / "plugins"
+    backup_root = market_root / "backups"
+    if plugin_root.is_dir():
+        for path in plugin_root.iterdir():
+            if any(
+                path.name == name
+                or path.name.startswith(f"{name}.backup-")
+                or path.name.startswith(f"{name}.installing-")
+                or path.name.startswith(f".{name}.ams-uninstalling-")
+                for name in ALL_PLUGIN_NAMES
+            ):
+                targets.append(path)
+    if backup_root.is_dir():
+        for path in backup_root.iterdir():
+            if any(
+                path.name.startswith(f"{name}.backup-")
+                or (path.name.startswith(f".{name}.backup-") and ".ams-uninstalling-" in path.name)
+                for name in ALL_PLUGIN_NAMES
+            ):
+                targets.append(path)
+    if market_root.is_dir():
+        targets.extend(path for path in market_root.glob(".ams-transaction-*") if path.is_dir() and not path.is_symlink())
+
+    agents = codex_home / "agents"
+    if agents.is_dir():
+        targets.extend(
+            path
+            for path in agents.iterdir()
+            if path_has_managed_marker(path)
+            or (path.name.startswith(".ams_") and ".ams-uninstalling-" in path.name)
+        )
+    config = codex_home / "ams-orchestration.toml"
+    if config.exists() or config.is_symlink():
+        targets.append(config)
+    if codex_home.is_dir():
+        targets.extend(codex_home.glob(".ams-orchestration.toml.ams-uninstalling-*"))
+    legacy_root = home / ".agents" / "skills"
+    for name in LEGACY_SKILL_NAMES:
+        path = legacy_root / name
+        if path.exists() or path.is_symlink():
+            targets.append(path)
+        if legacy_root.is_dir():
+            targets.extend(legacy_root.glob(f".{name}.ams-uninstalling-*"))
+    return list(dict.fromkeys(targets))
+
+
+def make_writable(path: Path) -> None:
+    try:
+        if path.is_dir() and not path.is_symlink():
+            for child in path.rglob("*"):
+                try:
+                    os.chmod(child, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if child.is_dir() else 0))
+                except OSError:
+                    pass
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if path.is_dir() else 0))
+    except OSError:
+        pass
+
+
+def remove_staged(path: Path) -> None:
+    last_error: OSError | None = None
+    for attempt in range(5):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+            make_writable(path)
+            time.sleep(0.1 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+
+
+def uninstall(args: argparse.Namespace) -> int:
+    if not args.yes and not args.dry_run:
+        raise SystemExit("Uninstall requires --yes. Use --dry-run to preview removal.")
+    home, codex_home, market_root = normalize_paths(args)
+    marketplace_path = market_root / "marketplace.json"
+    marketplace = load_marketplace(marketplace_path)
+    targets = uninstall_targets(home, codex_home, market_root)
+    if args.dry_run:
+        for target in targets:
+            print(f"would-remove: {target}")
+        if marketplace_path.exists() or marketplace_path.is_symlink():
+            print(f"would-remove AMS marketplace registrations from: {marketplace_path}")
+        return 0
+    if not targets and not marketplace_path.exists() and not marketplace_path.is_symlink():
+        print("No package-managed AMS installation was found.")
+        return 0
+
+    with install_lock(market_root):
+        clean_stale_transactions(market_root)
+        marketplace = load_marketplace(marketplace_path)
+        targets = uninstall_targets(home, codex_home, market_root)
+        marketplace_state = snapshot_file(marketplace_path)
+        desired_marketplace = marketplace_text(marketplace_for_uninstall(marketplace)).encode("utf-8")
+        token = uuid.uuid4().hex
+        staged: list[tuple[Path, Path]] = []
+        marketplace_written = False
+        try:
+            for target in targets:
+                staged_path = target.with_name(f".{target.name}.ams-uninstalling-{token}")
+                if staged_path.exists() or staged_path.is_symlink():
+                    raise SystemExit(f"Uninstall staging path already exists: {staged_path}")
+                os.replace(target, staged_path)
+                staged.append((target, staged_path))
+            if marketplace_state.existed and marketplace_state.data != desired_marketplace:
+                atomic_write_bytes(marketplace_path, desired_marketplace, marketplace_state.mode)
+                marketplace_written = True
+        except BaseException as exc:
+            errors: list[str] = []
+            for original, staged_path in reversed(staged):
+                try:
+                    if staged_path.exists() or staged_path.is_symlink():
+                        if original.exists() or original.is_symlink():
+                            raise RuntimeError(f"rollback refused to overwrite concurrent path: {original}")
+                        os.replace(staged_path, original)
+                except Exception as restore_exc:
+                    errors.append(f"restore {original}: {restore_exc}")
+            if marketplace_written:
+                try:
+                    restore_file_if_unchanged(marketplace_path, marketplace_state, desired_marketplace)
+                except Exception as restore_exc:
+                    errors.append(f"restore {marketplace_path}: {restore_exc}")
+            if errors:
+                raise SystemExit(f"Uninstall failed: {exc}; rollback also reported: {'; '.join(errors)}") from exc
+            raise
+
+        cleanup_errors: list[str] = []
+        for _, staged_path in staged:
+            try:
+                remove_staged(staged_path)
+            except Exception as exc:
+                cleanup_errors.append(f"{staged_path}: {exc}")
+        if cleanup_errors:
+            print(
