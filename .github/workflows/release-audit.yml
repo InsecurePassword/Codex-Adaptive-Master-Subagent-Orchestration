@@ -1,4 +1,4 @@
-name: Apply verified independent audit fixes
+name: Apply verified independent audit source fixes
 
 on:
   pull_request:
@@ -7,14 +7,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: apply-verified-independent-audit-${{ github.ref }}
+  group: apply-verified-independent-audit-source-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
-  apply-independent-audit-fixes:
+  apply-independent-audit-source-fixes:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,7 +24,7 @@ jobs:
           ref: post-merge-release-audit
           fetch-depth: 0
 
-      - name: Verify and apply exact audited patch
+      - name: Verify and apply exact audited source patch
         id: apply_patch
         continue-on-error: true
         shell: bash
@@ -52,9 +52,7 @@ jobs:
           base64 -d /tmp/ams-audit.patch.gz.b64 | gzip -d > /tmp/ams-audit.patch
           printf '%s  %s\n' 'a4ca716b2201930eaf09dacf39f6b42dc5c5f11c14b9d471a216776c5a02d7c3' '/tmp/ams-audit.patch' | sha256sum -c -
 
-          git show c205dcf50d1baf0d909d2c2ed33d80906747e85f:.github/workflows/release-audit.yml > .github/workflows/release-audit.yml
-          git add .github/workflows/release-audit.yml
-          git apply --index --whitespace=error /tmp/ams-audit.patch
+          git apply --index --whitespace=error --exclude=.github/workflows/release-audit.yml /tmp/ams-audit.patch
           git rm \
             .github/.ams-audit-patch-00 \
             .github/.ams-audit-patch-01a \
@@ -79,7 +77,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: verified-independent-audit-apply-${{ github.sha }}
+          name: verified-independent-audit-source-apply-${{ github.sha }}
           path: /tmp/ams-apply.log
           if-no-files-found: error
 
