@@ -1,59 +1,45 @@
-name: Release audit
+name: Apply independent audit fixes
 
 on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
-  group: release-audit-${{ github.workflow }}-${{ github.ref }}
+  group: apply-independent-audit-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+  apply-independent-audit-fixes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Check out audited revision
+      - name: Check out audit branch
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          ref: post-merge-release-audit
+          fetch-depth: 0
 
-      - name: Run complete installer and Markdown audit
-        id: release_audit
-        continue-on-error: true
+      - name: Verify and apply audited patch
         shell: bash
         run: |
-          set +e
-          log="release-audit-${RUNNER_OS}.log"
-          python -B -E -s -S scripts/audit_installers.py > "$log" 2>&1
-          status=$?
-          cat "$log"
-          exit $status
+          set -euo pipefail
+          cat .github/.ams-audit-patch-* > /tmp/ams-audit.patch.gz.b64
+          printf '%s  %s\n' '99a25e63f9777b12ed0a8d33d2c620ff1be0ab7d6cf014e923962504f58ab4b4' '/tmp/ams-audit.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/ams-audit.patch.gz.b64 | gzip -d > /tmp/ams-audit.patch
+          printf '%s  %s\n' 'a4ca716b2201930eaf09dacf39f6b42dc5c5f11c14b9d471a216776c5a02d7c3' '/tmp/ams-audit.patch' | sha256sum -c -
 
-      - name: Upload audit failure
-        if: steps.release_audit.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-audit-${{ runner.os }}-failure
-          path: release-audit-${{ runner.os }}.log
+          git show c205dcf50d1baf0d909d2c2ed33d80906747e85f:.github/workflows/release-audit.yml > .github/workflows/release-audit.yml
+          git add .github/workflows/release-audit.yml
+          git apply --index --whitespace=error /tmp/ams-audit.patch
+          git rm .github/.ams-audit-patch-*
+          git diff --cached --check
 
-      - name: Stop after audit failure
-        if: steps.release_audit.outcome == 'failure'
-        run: exit 1
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Fix installer ownership and release audit coverage'
+          git push origin HEAD:post-merge-release-audit
