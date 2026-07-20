@@ -1,19 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Added interactive Windows and Linux installers at the repository root.
+- Made Option A the default recommended installer choice.
+- Added managed uninstall as menu option 4.
+- Simplified the root and package READMEs.
+- Moved detailed package setup into `MANUAL-INSTALLATION.md`.
+- Removed download instructions based on repository visibility.
+- Corrected orchestration terminology so `extreme` is consistently the highest intensity.
+
 ## 3.1.0
 
-- Reorganized distribution options into the requested A/B/C order and semantics.
-- Added interrupted-project recovery directly to permanent runtime skills where applicable.
-- Option A now contains exactly two skills: installer and runtime.
-- Option B retains one unified skill with strictly conditional bootstrap.
-- Option C contains one bootstrap-free runtime and requires deterministic installation.
-- Re-audited original authority, routing, safety, continuity, recovery, and terminal-state invariants.
-- Rebuilt README in the required six-section order.
-
-## 3.1.0
-
-- Added persistent `auto`, `minimal`, `moderate`, `heavy`, and `extreme` orchestration intensity.
-- Defined `auto` as the unchanged prior adaptive behavior and default.
-- Added package option C: Option C — Lean preinstalled runtime.
-- Preserved 15 Sol/Terra/Luna and 3 Spark effort profiles.
-- Added plugin manifest, marketplace installer, intensity setter, deterministic validation, and first-pass audit.
+- Reorganized the release into Options A, B, and C.
+- Added interrupted-project recovery to each runtime option.
+- Added persistent `auto`, `minimal`, `moderate`, `heavy`, and `extreme` intensity modes.
+- Preserved 15 Sol/Terra/Luna profiles and 3 optional Spark profiles.
+- Added plugin manifests, profile installers, intensity configuration, validation, and package audits.
