@@ -125,3 +125,49 @@ def test_rollback_reports_backup_restage_failure(base:Path)->None:
 
 def test_lock(base:Path)->None:
     home=base/'lock'; root=home/'.agents/plugins'; root.mkdir(parents=True)
+    lock=root/'.ams-install.lock'; lock.write_text(json.dumps({'pid':os.getpid(),'host':socket.gethostname()})+'\n',encoding='utf-8')
+    old=time.time()-3*60*60; os.utime(lock,(old,old))
+    out=run(home,'--exclude-spark',expect=1); require('appears to be active' in out,'live lock not enforced'); require(lock.exists(),'live lock removed')
+    lock.write_text(json.dumps({'pid':99999999,'host':socket.gethostname()})+'\n',encoding='utf-8'); os.utime(lock,(old,old))
+    run(home,'--exclude-spark'); require(not lock.exists(),'dead stale lock not removed')
+
+def main()->int:
+    with tempfile.TemporaryDirectory(prefix=f'ams-install-{OPTION}-') as tmp:
+        base=Path(tmp)
+        test_manifest_strict(base)
+        home=base/'home'
+        out=run(home,'--dry-run','--exclude-spark','--intensity','heavy')
+        require('would-install plugin' in out,'dry-run output unclear'); require(not (home/'.agents').exists(),'dry-run mutated home')
+        run(home,'--exclude-spark','--intensity','heavy','--upgrade-managed')
+        require(active(home)==[PLUGIN],'install did not activate only selected plugin')
+        plugins=[x['name'] for x in market(home)['plugins'] if isinstance(x,dict) and x.get('name') in ALL_PLUGIN_NAMES]
+        require(plugins==[PLUGIN],'marketplace registration wrong')
+        config=tomllib.loads((home/'.codex/ams-orchestration.toml').read_text(encoding='utf-8')); require(config['intensity']=='heavy','intensity not written')
+        require(len(list((home/'.codex/agents').glob('*.toml')))==15,'exclude-spark count wrong')
+        run(home,'--exclude-spark','--intensity','extreme','--upgrade-managed')
+        config=tomllib.loads((home/'.codex/ams-orchestration.toml').read_text(encoding='utf-8')); require(config['intensity']=='heavy','existing config was overwritten')
+        require(not list((home/'.agents/plugins/plugins'/PLUGIN).rglob('__pycache__')),'installed plugin contains bytecode cache')
+
+        legacy=base/'legacy'; (legacy/'.codex').mkdir(parents=True); (legacy/'.codex/ams-orchestration.toml').write_text('schema_version = 1\\nintensity = "moderate"\\n',encoding='utf-8')
+        run(legacy,'--exclude-spark'); require(tomllib.loads((legacy/'.codex/ams-orchestration.toml').read_text())['intensity']=='moderate','legacy newline config not repaired')
+
+        malformed=base/'malformed'; mp=malformed/'.agents/plugins/marketplace.json'; mp.parent.mkdir(parents=True); mp.write_text('{bad',encoding='utf-8')
+        out=run(malformed,'--exclude-spark',expect=1); require('Cannot parse existing marketplace' in out,'malformed marketplace error unclear'); require(active(malformed)==[],'malformed state partially installed')
+
+        if OPTION=='C':
+            out=run(base/'skip','--skip-profiles',expect=1); require('requires profile installation' in out,'Option C skip rejection unclear')
+        else:
+            skip=base/'skip'; run(skip,'--skip-profiles'); require(not (skip/'.codex/agents').exists(),'skip-profiles installed profiles')
+
+        out=run(base/'badtimeout','--exclude-spark',env={'AMS_PROFILE_TIMEOUT_SECONDS':'0'},expect=1); require('positive integer' in out,'invalid timeout error unclear')
+        test_rollback(base); test_rollback_reports_backup_restage_failure(base); test_lock(base)
+
+        unrelated=home/'.agents/plugins/plugins/unrelated'; unrelated.mkdir(); (unrelated/'keep').write_text('keep',encoding='utf-8')
+        data=market(home); data['plugins'].append({'name':'unrelated','source':{'source':'local','path':'./plugins/unrelated'}}); (home/'.agents/plugins/marketplace.json').write_text(json.dumps(data,indent=2)+'\n',encoding='utf-8')
+        run(home,'--uninstall','--yes')
+        require(active(home)==[],'uninstall left AMS plugin'); require((unrelated/'keep').exists(),'uninstall removed unrelated plugin')
+        require(not list((home/'.codex/agents').glob('ams_*.toml')),'uninstall left managed profiles')
+        run(home,'--uninstall','--yes')
+    print(f'INSTALLATION TESTS PASSED: option {OPTION}')
+    return 0
+if __name__=='__main__': raise SystemExit(main())
