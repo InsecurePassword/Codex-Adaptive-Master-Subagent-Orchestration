@@ -9,7 +9,8 @@ sys.dont_write_bytecode = True
 ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=ROOT/'scripts'/'install_package.py'
 PLUGIN=json.loads((ROOT/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))['name']
-OPTION=(ROOT/'PACKAGE-OPTION').read_text(encoding='utf-8').strip()
+PACKAGE_OPTION_LABEL=(ROOT/'PACKAGE-OPTION').read_text(encoding='utf-8').strip()
+OPTION=PACKAGE_OPTION_LABEL.split()[1]
 MANAGED='# managed-by: adaptive-master-subagent-orchestration'
 sys.path.insert(0,str(ROOT/'scripts'))
 from process_utils import run_bounded
