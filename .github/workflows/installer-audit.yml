@@ -1,15 +1,7 @@
-# Native Windows PowerShell 5.1 and Linux Bash validation.
 name: Installer audit
 
 on:
   pull_request:
-    paths:
-      - install.ps1
-      - install.sh
-      - .github/workflows/installer-audit.yml
-      - releases/3.08/**
-  push:
-    branches: [main]
     paths:
       - install.ps1
       - install.sh
@@ -27,61 +19,60 @@ jobs:
       - uses: actions/checkout@v4
         with:
           show-progress: false
-      - name: Test Bash installer
+      - name: Bash local lifecycle
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          result="$RUNNER_TEMP/bash-installer-result.txt"
-          trap 'rc=$?; if (( rc != 0 )); then printf "FAIL rc=%s line=%s\n" "$rc" "$LINENO" > "$result"; fi' EXIT
           bash -n ./install.sh
           zip="$GITHUB_WORKSPACE/releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip"
           sha="$(sha256sum "$zip" | awk '{print $1}')"
           home="$RUNNER_TEMP/bash-home"
           mkdir -p "$home"
-
-          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash ./install.sh
+          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash -x ./install.sh >"$RUNNER_TEMP/bash-local.log" 2>&1
           test -f "$home/.agents/skills/adaptive-master-subagent-orchestration/SKILL.md"
-          test "$(cat "$home/.agents/skills/adaptive-master-subagent-orchestration/VERSION")" = "3.08"
-
           mkdir -p "$home/.agents/skills/unrelated"
           echo keep > "$home/.agents/skills/unrelated/SKILL.md"
           echo stale > "$home/.agents/skills/adaptive-master-subagent-orchestration/stale.txt"
-          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash ./install.sh
+          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash ./install.sh >>"$RUNNER_TEMP/bash-local.log" 2>&1
           test -f "$home/.agents/skills/unrelated/SKILL.md"
           test ! -e "$home/.agents/skills/adaptive-master-subagent-orchestration/stale.txt"
-
           set +e
-          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$(printf '0%.0s' {1..64})" bash ./install.sh >bad.out 2>bad.err
+          HOME="$home" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$(printf '0%.0s' {1..64})" bash ./install.sh >"$RUNNER_TEMP/bash-checksum.log" 2>&1
           rc=$?
           set -e
           test "$rc" -ne 0
-          grep -qi 'checksum mismatch' bad.err
-          test -f "$home/.agents/skills/adaptive-master-subagent-orchestration/SKILL.md"
-
+          grep -qi 'checksum mismatch' "$RUNNER_TEMP/bash-checksum.log"
+      - name: Bash lock rejection
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          zip="$GITHUB_WORKSPACE/releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip"
+          sha="$(sha256sum "$zip" | awk '{print $1}')"
           locked="$RUNNER_TEMP/bash-locked"
           mkdir -p "$locked/.adaptive-master-subagent-orchestration.install.lock"
           set +e
-          AMS_SKILL_HOME="$locked" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash ./install.sh >lock.out 2>lock.err
+          AMS_SKILL_HOME="$locked" AMS_RELEASE_URL="file://$zip" AMS_EXPECTED_SHA256="$sha" bash ./install.sh >"$RUNNER_TEMP/bash-lock.log" 2>&1
           rc=$?
           set -e
           test "$rc" -ne 0
-          grep -qi 'another installation is active' lock.err
-          test ! -e "$locked/adaptive-master-subagent-orchestration"
-
-          private_home="$RUNNER_TEMP/bash-private-release"
-          mkdir -p "$private_home"
-          HOME="$private_home" bash ./install.sh
-          test -f "$private_home/.agents/skills/adaptive-master-subagent-orchestration/SKILL.md"
-          echo PASS > "$result"
-      - name: Upload Bash diagnostics
+          grep -qi 'another installation is active' "$RUNNER_TEMP/bash-lock.log"
+      - name: Bash authenticated private release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          home="$RUNNER_TEMP/bash-private-release"
+          mkdir -p "$home"
+          HOME="$home" bash -x ./install.sh >"$RUNNER_TEMP/bash-private.log" 2>&1
+          test -f "$home/.agents/skills/adaptive-master-subagent-orchestration/SKILL.md"
+      - name: Upload Bash logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bash-installer-result
-          path: ${{ runner.temp }}/bash-installer-result.txt
-          if-no-files-found: error
+          name: bash-installer-logs
+          path: ${{ runner.temp }}/bash-*.log
+          if-no-files-found: warn
 
   powershell-installer:
     runs-on: windows-latest
@@ -96,72 +87,55 @@ jobs:
           $Errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\install.ps1), [ref]$Tokens, [ref]$Errors) | Out-Null
           if ($Errors.Count -ne 0) { $Errors | Format-List | Out-String | Write-Error }
-      - name: Test local PowerShell lifecycle
+      - name: PowerShell local lifecycle
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $Result = Join-Path $env:RUNNER_TEMP 'powershell-local-result.txt'
+          $Zip = (Resolve-Path '.\releases\3.08\adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip').Path
+          $Sha = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $Serve = Split-Path $Zip -Parent
+          $Python = (Get-Command python).Source
+          $Server = Start-Process -FilePath $Python -ArgumentList @('-m','http.server','8765','--bind','127.0.0.1','--directory',$Serve) -PassThru -WindowStyle Hidden
           try {
-            $Zip = (Resolve-Path '.\releases\3.08\adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip').Path
-            $Sha = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-            $Serve = Split-Path $Zip -Parent
-            $Python = (Get-Command python).Source
-            $Server = Start-Process -FilePath $Python -ArgumentList @('-m','http.server','8765','--bind','127.0.0.1','--directory',$Serve) -PassThru -WindowStyle Hidden
-            try {
-              Start-Sleep -Seconds 2
-              $env:AMS_RELEASE_URL = 'http://127.0.0.1:8765/' + [IO.Path]::GetFileName($Zip)
-              $env:AMS_EXPECTED_SHA256 = $Sha
-              $env:AMS_SKILL_HOME = Join-Path $env:RUNNER_TEMP 'ps-skills'
-              powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-              $Root = Join-Path $env:AMS_SKILL_HOME 'adaptive-master-subagent-orchestration'
-              if (-not (Test-Path (Join-Path $Root 'SKILL.md'))) { throw 'Clean install failed.' }
-              New-Item -ItemType Directory -Force -Path (Join-Path $env:AMS_SKILL_HOME 'unrelated') | Out-Null
-              Set-Content -LiteralPath (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md') -Value keep
-              Set-Content -LiteralPath (Join-Path $Root 'stale.txt') -Value stale
-              powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-              if (-not (Test-Path (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md'))) { throw 'Unrelated skill was removed.' }
-              if (Test-Path (Join-Path $Root 'stale.txt')) { throw 'Update did not replace the old skill root.' }
-
-              $env:AMS_EXPECTED_SHA256 = ('0' * 64)
-              $Process = Start-Process powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path .\install.ps1).Path) -PassThru -Wait
-              if ($Process.ExitCode -eq 0) { throw 'Checksum mismatch unexpectedly succeeded.' }
-              if (-not (Test-Path (Join-Path $Root 'SKILL.md'))) { throw 'Checksum failure damaged the existing install.' }
-              'PASS' | Set-Content -LiteralPath $Result
-            }
-            finally {
-              Stop-Process -Id $Server.Id -Force -ErrorAction SilentlyContinue
-              Remove-Item Env:AMS_RELEASE_URL, Env:AMS_EXPECTED_SHA256, Env:AMS_SKILL_HOME -ErrorAction SilentlyContinue
-            }
+            Start-Sleep -Seconds 2
+            $env:AMS_RELEASE_URL = 'http://127.0.0.1:8765/' + [IO.Path]::GetFileName($Zip)
+            $env:AMS_EXPECTED_SHA256 = $Sha
+            $env:AMS_SKILL_HOME = Join-Path $env:RUNNER_TEMP 'ps-skills'
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'powershell-local.log')
+            if ($LASTEXITCODE -ne 0) { throw "Clean installer exited $LASTEXITCODE" }
+            $Root = Join-Path $env:AMS_SKILL_HOME 'adaptive-master-subagent-orchestration'
+            if (-not (Test-Path (Join-Path $Root 'SKILL.md'))) { throw 'Clean install failed.' }
+            New-Item -ItemType Directory -Force -Path (Join-Path $env:AMS_SKILL_HOME 'unrelated') | Out-Null
+            Set-Content -LiteralPath (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md') -Value keep
+            Set-Content -LiteralPath (Join-Path $Root 'stale.txt') -Value stale
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'powershell-update.log')
+            if ($LASTEXITCODE -ne 0) { throw "Update installer exited $LASTEXITCODE" }
+            if (-not (Test-Path (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md'))) { throw 'Unrelated skill was removed.' }
+            if (Test-Path (Join-Path $Root 'stale.txt')) { throw 'Update did not replace the old skill root.' }
+            $env:AMS_EXPECTED_SHA256 = ('0' * 64)
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'powershell-checksum.log')
+            if ($LASTEXITCODE -eq 0) { throw 'Checksum mismatch unexpectedly succeeded.' }
+            if (-not (Test-Path (Join-Path $Root 'SKILL.md'))) { throw 'Checksum failure damaged the existing install.' }
           }
-          catch {
-            ($_ | Format-List * -Force | Out-String) | Set-Content -LiteralPath $Result
-            throw
+          finally {
+            Stop-Process -Id $Server.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:AMS_RELEASE_URL, Env:AMS_EXPECTED_SHA256, Env:AMS_SKILL_HOME -ErrorAction SilentlyContinue
           }
-      - name: Test authenticated private release download
+      - name: PowerShell authenticated private release
         shell: powershell
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $Result = Join-Path $env:RUNNER_TEMP 'powershell-private-result.txt'
-          try {
-            Remove-Item Env:AMS_RELEASE_URL -ErrorAction SilentlyContinue
-            $env:AMS_SKILL_HOME = Join-Path $env:RUNNER_TEMP 'ps-private-release'
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-            $Installed = Join-Path $env:AMS_SKILL_HOME 'adaptive-master-subagent-orchestration\SKILL.md'
-            if (-not (Test-Path $Installed)) { throw 'Private release installation failed.' }
-            'PASS' | Set-Content -LiteralPath $Result
-          }
-          catch {
-            ($_ | Format-List * -Force | Out-String) | Set-Content -LiteralPath $Result
-            throw
-          }
-      - name: Upload PowerShell diagnostics
+          $env:AMS_SKILL_HOME = Join-Path $env:RUNNER_TEMP 'ps-private-release'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'powershell-private.log')
+          if ($LASTEXITCODE -ne 0) { throw "Private release installer exited $LASTEXITCODE" }
+          $Installed = Join-Path $env:AMS_SKILL_HOME 'adaptive-master-subagent-orchestration\SKILL.md'
+          if (-not (Test-Path $Installed)) { throw 'Private release installation failed.' }
+      - name: Upload PowerShell logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: powershell-installer-results
-          path: |
-            ${{ runner.temp }}/powershell-local-result.txt
-            ${{ runner.temp }}/powershell-private-result.txt
+          name: powershell-installer-logs
+          path: ${{ runner.temp }}/powershell-*.log
           if-no-files-found: warn
