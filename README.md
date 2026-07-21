@@ -52,7 +52,7 @@ Restart or reload Codex after installation.
 - [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh)
 - [AMS 3.08 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip)
 - [Detailed installation guide](INSTALLATION.md)
-- [Manual installation and directory structure](MANUAL-INSTALLATION.md)
+- [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
 
 Pinned package SHA-256:
 
