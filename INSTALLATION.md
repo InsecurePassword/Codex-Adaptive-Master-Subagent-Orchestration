@@ -1,82 +1,83 @@
 # Installation
 
-Release 3.08 is distributed as one instruction-only Codex skill package. Root-level PowerShell and Bash helpers download the pinned GitHub release asset and install it into the current user's Codex skill directory.
+Release 3.08 is distributed as one instruction-only Codex skill package. The PowerShell and Bash installers are attached to the `ReleaseZip` GitHub release.
 
 ## Automated installation
 
 ### Windows PowerShell
 
-Run with `powershell.exe`:
-
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
 ```
 
-The PowerShell helper requires Windows PowerShell 5.1 or newer and uses only built-in .NET and PowerShell functionality.
+Requirements:
 
-### Bash
+- Windows PowerShell 5.1 or newer
+- built-in .NET and PowerShell components only
+
+### Linux or macOS with Bash
 
 ```bash
-curl -fsSL 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
 ```
 
-The Bash helper requires `curl`, `unzip`, `zipinfo`, and either `sha256sum` or `shasum`.
+Requirements:
 
-### Private repository or release access
+- Bash
+- `curl`
+- `unzip`
+- `zipinfo`
+- `sha256sum` or `shasum`
 
-The installers pass `GITHUB_TOKEN` to the release download when it is set:
+Restart or reload Codex after installation.
 
-```powershell
-$env:GITHUB_TOKEN = "<token-with-repository-read-access>"
-```
-
-```bash
-export GITHUB_TOKEN="<token-with-repository-read-access>"
-```
-
-When the installer script itself is not anonymously readable, retrieve it from an authenticated checkout or the GitHub Contents API, then execute the local copy.
-
-## What the scripts do
+## What the installers do
 
 Both installers:
 
-1. Download this pinned release asset:
+1. download the pinned release package:
 
    ```text
    https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip
    ```
 
-2. Verify SHA-256:
+2. verify this SHA-256:
 
    ```text
    e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
    ```
 
-3. Reject unexpected top-level paths, traversal, duplicate paths, symbolic links, missing required files, excessive entries, and excessive expanded size.
-4. Extract the package into a staging directory under the destination skill directory.
-5. Replace only:
+3. require the exact expected package files and reject unexpected files;
+4. reject unreadable, encrypted, linked, redirected, or oversized archives;
+5. use an installation lock to prevent concurrent replacement;
+6. extract into a temporary staging directory;
+7. back up an existing AMS skill directory;
+8. install the verified replacement;
+9. restore the previous directory if replacement fails;
+10. preserve unrelated skills, project settings, recovery state, and generated agent profiles.
 
-   ```text
-   $HOME/.agents/skills/adaptive-master-subagent-orchestration/
-   ```
+Default install location:
 
-6. Restore the prior skill directory if replacement fails.
-7. Leave unrelated installed skills, project settings, durable project state, and generated agent profiles unchanged.
+```text
+$HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```
 
 ## Optional environment overrides
 
+Normal installation should use the pinned defaults. These variables are available for controlled testing, mirrors, alternate installations, or authenticated private deployments:
+
 | Variable | Purpose |
 |---|---|
-| `GITHUB_TOKEN` | Authenticate the release download when required |
-| `AMS_RELEASE_URL` | Override the pinned release URL for testing or mirrors |
-| `AMS_EXPECTED_SHA256` | Override the pinned checksum; must be 64 hexadecimal characters |
+| `GITHUB_TOKEN` | Authenticate GitHub API release lookup and asset download when required |
+| `AMS_RELEASE_URL` | Override the package URL |
+| `AMS_EXPECTED_SHA256` | Override the expected checksum; must be exactly 64 hexadecimal characters |
 | `AMS_SKILL_HOME` | Override the destination skill parent directory |
 
-Overrides are intended for controlled testing, mirrors, or private deployments. Normal installation should use the pinned defaults.
+Do not override the package URL or checksum for normal public installation.
 
-## Manual download and verification
+## Manual download and checksum verification
 
-Release URL:
+Download:
 
 ```text
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip
@@ -94,7 +95,7 @@ if ($Actual -ne $Expected) {
 }
 ```
 
-### macOS or Linux
+### Linux
 
 ```bash
 printf '%s  %s\n' \
@@ -102,7 +103,7 @@ printf '%s  %s\n' \
   'adaptive-master-subagent-orchestration-3.08.zip' | sha256sum -c -
 ```
 
-On macOS without `sha256sum`:
+### macOS without `sha256sum`
 
 ```bash
 actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.08.zip | awk '{print $1}')"
@@ -128,7 +129,7 @@ mkdir -p "$HOME/.agents/skills"
 unzip adaptive-master-subagent-orchestration-3.08.zip -d "$HOME/.agents/skills"
 ```
 
-The resulting root must be:
+The resulting directory must be:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
@@ -136,52 +137,101 @@ $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 
 Restart or reload Codex after installation.
 
-## Initialize or enable a project
+## Start using AMS
 
-In a trusted project with a stable root, implicit consideration creates a disabled project configuration when none exists. Creation does not enable AMS.
+Use AMS once without enabling it permanently:
 
-Enable it persistently:
+```text
+Use $adaptive-master-subagent-orchestration for this project.
+```
+
+Enable AMS for the current project:
 
 ```text
 AMS ENABLE
 ```
 
-Select a normal intensity and enable it:
+Choose a mode and enable AMS:
 
 ```text
 AMS MODE auto
 ```
 
-Use it for one objective without persistent enablement:
+A trusted project with no AMS configuration receives a disabled default configuration. Creating that file does not enable AMS.
 
-```text
-Use $adaptive-master-subagent-orchestration for this objective.
+## Agent profiles
+
+Individual `ams_*.toml` profile files are not included in the ZIP.
+
+The default setting is:
+
+```toml
+profile_management = "auto"
 ```
 
-## Profile setup
+AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile. A fresh Codex session may be required before new profiles are available.
 
-Individual `ams_*.toml` profile files are not shipped. With `profile_management = "auto"`, AMS checks only profiles selected for actual work and generates or repairs recognized managed profiles lazily. A fresh Codex session may be required before newly created profiles become discoverable.
+Use:
 
-Set `profile_management = "installer"` to disable automatic profile repair and report defects instead.
+```toml
+profile_management = "installer"
+```
+
+to disable automatic repair. Explicit profile installation or repair may still be requested.
 
 ## Update and repair
 
-Rerun either installer to replace the installed 3.08 skill root from the pinned release. The helper stages the candidate, verifies it, backs up the existing skill, and restores the backup if replacement fails.
+Rerun the release-hosted installer for the operating system.
 
-A package change alters runtime instructions. Finish or safely pause active AMS work and restart or reload Codex after replacement.
+The installer validates and stages the complete candidate, backs up the current AMS skill directory, replaces it, and restores the backup if replacement fails.
+
+Finish or safely pause active AMS work before changing package instructions. Restart or reload Codex after the update or repair.
 
 ## Uninstall
 
-The download helpers install and update only. To uninstall manually:
+The release installers install and update only. They do not provide an uninstall switch.
+
+Standard uninstall removes only the AMS skill directory and preserves project settings, project recovery state, generated profiles, and unrelated skills.
+
+Stop or safely pause active AMS work before removal.
+
+### Windows PowerShell
 
 ```powershell
-Remove-Item -LiteralPath (Join-Path $HOME ".agents\skills\adaptive-master-subagent-orchestration") -Recurse -Force
+$SkillRoot = Join-Path $HOME ".agents\skills\adaptive-master-subagent-orchestration"
+
+if (Test-Path -LiteralPath $SkillRoot) {
+    $Item = Get-Item -LiteralPath $SkillRoot -Force
+    if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "Refusing to remove a redirected skill path: $SkillRoot"
+    }
+    if (-not $Item.PSIsContainer) {
+        throw "The AMS skill path is not a directory: $SkillRoot"
+    }
+    Remove-Item -LiteralPath $SkillRoot -Recurse -Force
+}
 ```
+
+### Bash
 
 ```bash
-rm -rf "$HOME/.agents/skills/adaptive-master-subagent-orchestration"
+skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
+
+if [ -L "$skill_root" ]; then
+  printf 'Refusing to remove a redirected skill path: %s\n' "$skill_root" >&2
+  exit 1
+elif [ -e "$skill_root" ] && [ ! -d "$skill_root" ]; then
+  printf 'The AMS skill path is not a directory: %s\n' "$skill_root" >&2
+  exit 1
+elif [ -d "$skill_root" ]; then
+  rm -rf -- "$skill_root"
+fi
 ```
 
-Uninstalling the skill preserves project settings, durable project state, and generated profiles unless their removal is separately authorized.
+Restart or reload Codex after removal.
 
-See [Manual Installation and Directory Structure](MANUAL-INSTALLATION.md) for the full layout and migration notes.
+Project settings and generated profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
+
+## More information
+
+See [Product Documentation](PRODUCT%20DOCUMENTATION.md) for every AMS command, intensity modes, Zergling Rush, model routing, Spark controls, profile management, recovery, package maintenance, uninstall, and directory structure.
