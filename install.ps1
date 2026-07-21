@@ -43,10 +43,9 @@ if (Test-Path -LiteralPath $LockPath) {
 try {
     $LockStream = [IO.File]::Open($LockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $LockStream.SetLength(0)
-    $LockWriter = New-Object -TypeName IO.StreamWriter -ArgumentList $LockStream, [Text.Encoding]::UTF8, 1024, $true
-    $LockWriter.Write("pid=$PID")
-    $LockWriter.Flush()
-    $LockWriter.Dispose()
+    $LockBytes = [Text.Encoding]::UTF8.GetBytes("pid=$PID")
+    $LockStream.Write($LockBytes, 0, $LockBytes.Length)
+    $LockStream.Flush()
 }
 catch {
     throw "Another installation is active or the installer lock cannot be acquired: $LockPath`n$($_.Exception.Message)"
