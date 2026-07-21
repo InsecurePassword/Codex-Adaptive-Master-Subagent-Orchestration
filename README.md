@@ -2,161 +2,179 @@
 
 **Current release: 3.08**
 
-Adaptive Master–Subagent Orchestration (AMS) is a Codex skill that keeps a GPT-5.6 Sol Max root agent in control of a cost-first, direct-child subagent architecture. The master owns planning, model selection, sequencing, supervision, acceptance, and completion. Project execution is delegated to bounded non-delegating children whenever a suitable worker can perform it.
+Adaptive Master–Subagent Orchestration (AMS) is a Codex skill for large or complicated projects.
 
-Release 3.08 uses one instruction-only skill package. Runtime behavior is split across a small activation router and lazy references so uncommon profile, project-control, recovery, and package-maintenance instructions are loaded only when needed.
+It keeps **GPT-5.6 Sol Max** in charge as the manager. Sol Max plans the work, assigns tasks to other agents, checks their results, and decides when the project is complete.
 
-## Quick installation
+The main goals are:
+
+1. **Use the least expensive model that can do each task correctly.**
+2. **Finish faster by running independent work at the same time when useful.**
+
+The master agent normally supervises instead of doing routine work itself. Simple work can go to Spark or Luna, ordinary development work can go to Terra, and difficult or high-risk work can go to Sol.
+
+## Install
+
+The installer scripts are attached to the GitHub release. These commands do not use files from the `main` branch.
 
 ### Windows PowerShell
 
-Run with `powershell.exe`:
-
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
 ```
 
-### Bash
+### Linux or macOS with Bash
 
 ```bash
-curl -fsSL 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
 ```
 
-Both scripts download the pinned 3.08 release asset, verify its SHA-256 checksum and package layout, and replace only:
+The installer:
+
+- downloads the 3.08 skill package;
+- verifies its SHA-256 checksum;
+- checks the package contents before extraction;
+- installs it under your user skill directory;
+- replaces an older AMS installation safely;
+- leaves unrelated skills and project files unchanged.
+
+Default install location:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Unrelated installed skills are preserved. If the repository or release is private, set `GITHUB_TOKEN` to a token with repository read access before running an authenticated copy of the installer.
+Restart or reload Codex after installation.
 
-## Release files
+### Release downloads
 
-- [GitHub release asset](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip)
-- [Repository checksum record](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256)
-- [Installation and script options](INSTALLATION.md)
+- [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1)
+- [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh)
+- [AMS 3.08 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip)
+- [Detailed installation guide](INSTALLATION.md)
 - [Manual installation and directory structure](MANUAL-INSTALLATION.md)
 
-Pinned SHA-256:
+Pinned package SHA-256:
 
 ```text
 e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
 ```
 
-## Core behavior
+## Start using AMS
 
-- **Sol Max is the sole control-plane authority.** Children cannot spawn other agents or assume master authority.
-- **Execution is delegated first.** The master performs project work directly only after an indeterminate failure leaves no viable child route.
-- **Routing is cost-first.** Normal routing prefers Spark, then Luna, Terra, and Sol at the lowest reliable reasoning effort.
-- **Ownership is explicit.** Every child receives a bounded work order, and one active writer owns each shared mutable surface.
-- **Evidence is verified.** Child completion is a claim; the master accepts work only after sufficient independent evidence.
-- **Continuity is mandatory.** Internal checkpoints, clean workspaces, completed phases, and empty worker sets are not terminal while required work remains.
-- **Project control fails closed.** Missing settings initialize to disabled defaults only in a trusted project with a stable root. Unsafe or invalid control files do not activate AMS.
+### Use it once
 
-## Activation
-
-The skill metadata permits implicit consideration, but each project controls whether AMS may activate implicitly.
-
-A trusted project with no AMS settings receives this disabled default:
-
-```toml
-schema_version = 2
-enabled = false
-allow_implicit_invocation = true
-intensity = "auto"
-spark_enabled = true
-spark_available = true
-spark_efforts = ["low", "medium", "high"]
-profile_management = "auto"
-```
-
-Enable AMS persistently:
-
-```text
-AMS ENABLE
-```
-
-Or select a normal intensity, which also enables AMS:
-
-```text
-AMS MODE heavy
-```
-
-Explicit invocation applies AMS to the current objective without requiring persistent enablement:
+Use AMS for only the current request:
 
 ```text
 Use $adaptive-master-subagent-orchestration for this project.
 ```
 
-## Normal intensity modes
+### Enable it for a project
 
-| Mode | Dispatch behavior |
+From inside the project, tell Codex:
+
+```text
+AMS ENABLE
+```
+
+Disable it later with:
+
+```text
+AMS DISABLE
+```
+
+AMS stores its settings separately for each project. A new project starts with AMS disabled unless you explicitly enable it or invoke the skill for a task.
+
+## Intensity modes
+
+Intensity controls how aggressively AMS runs tasks at the same time. It does **not** lower safety, testing, or quality requirements.
+
+| Mode | What it does |
 |---|---|
-| `auto` | Default. Sol Max applies no intensity modifier and chooses the beneficial zero-to-many topology. |
-| `minimal` | Serial delegation with at most one active child. |
-| `moderate` | Conservative concurrency for clearly independent or specialist work. |
-| `heavy` | Dispatch all meaningful ready independent lanes unless serialization is justified. |
-| `extreme` | Dispatch every eligible ready independent lane with no skill-defined ceiling; each lane still uses the cheapest reliable profile. |
+| `auto` | Recommended default. Sol Max decides how many agents are useful. |
+| `minimal` | Uses one worker at a time. Best when reducing usage matters more than speed. |
+| `moderate` | Runs a few clearly independent tasks at the same time. |
+| `heavy` | Uses more parallel workers when that should noticeably speed up the project. |
+| `extreme` | Uses every useful independent workstream it can safely run, while still choosing the cheapest suitable model for each task. |
 
-Intensity affects dispatch posture, not model-quality requirements, ownership, safety, validation, or the master's sole spawn authority.
+Change the mode with:
+
+```text
+AMS MODE auto
+AMS MODE minimal
+AMS MODE moderate
+AMS MODE heavy
+AMS MODE extreme
+```
+
+Choosing a mode also enables AMS for that project.
 
 ## Zergling Rush
 
-`zergling-rush` is a separate experimental high-consumption mode intended to minimize wall-clock time rather than usage. It requires an unambiguous current-turn user instruction every time it activates. A value stored in project settings is only a preference and is never sufficient consent.
+`zergling-rush` is a separate experimental mode for users who want the shortest possible completion time and accept much higher model usage.
 
-## Model routing
+It may use:
 
-| Family | Typical work |
+- more agents;
+- stronger models;
+- duplicate investigations;
+- extra validation;
+- speculative work that may be discarded.
+
+Because it can consume substantially more usage, it must be requested directly for the current task. Saving it in project settings is not enough to activate it automatically.
+
+Example:
+
+```text
+Use Zergling Rush for this task.
+```
+
+Use a normal intensity mode when cost matters.
+
+## How AMS chooses models
+
+| Model family | Typical work |
 |---|---|
-| **Spark** | Exact commands, downloads, package deployment, routine tests/builds, extraction, searches, and other bounded text-only mechanics |
-| **Luna** | Explicit, repetitive, inexpensive-to-retry work that is easy to verify |
-| **Terra** | Default implementation, fixes, tests, documentation, review, and moderate investigation |
-| **Sol** | Architecture, security-sensitive work, ambiguity, cross-component work, difficult debugging, and high-cost-of-failure decisions |
+| **Spark** | Downloads, commands, routine tests, builds, searches, extraction, and other simple mechanical work |
+| **Luna** | Clear, repetitive, low-risk work that is easy to check |
+| **Terra** | Normal coding, bug fixes, tests, documentation, reviews, and technical investigation |
+| **Sol** | Architecture, security-sensitive work, difficult debugging, ambiguous problems, and expensive-to-fail decisions |
 
-Sol, Terra, and Luna support Low, Medium, High, Extra High, and Max profiles. Spark supports Low, Medium, and High only. Profile creation and repair are lazy when `profile_management = "auto"` and occur only when a selected profile is missing or defective.
+AMS chooses the lowest-cost model and reasoning level that should complete the task reliably. A cheaper agent's result still has to be checked before it is accepted.
 
-## Lazy runtime structure
-
-The always-loaded `SKILL.md` acts as the root guard, reference trust boundary, and activation router. It loads these references only when required:
-
-- `runtime-core.md` — active orchestration contract
-- `intensity-control.md` — normal manual intensity modifiers
-- `project-control.md` — settings, steering, state, and recovery
-- `profile-management.md` — conditional profile generation, migration, and repair
-- `package-maintenance.md` — install, update, repair, rollback, and uninstall controls
-- `zergling-rush.md` — current-consent experimental rush behavior
-
-Every reference is validated as a bounded, root-contained, stable regular file before it can become instructions.
-
-## Project controls
-
-Supported steer instructions include:
+## Useful project commands
 
 ```text
 AMS ENABLE
 AMS DISABLE
 AMS MODE auto|minimal|moderate|heavy|extreme
-AMS IMPLICIT on|off
 AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
 AMS PROFILES auto|installer
 ```
 
-Project settings are stored at:
+Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 
-```text
-<project-root>/.codex/ams-orchestration.toml
-```
+## Safety and control
 
-They are interpreted as typed configuration data, never as instructions.
+- Sol Max remains in charge of the full project.
+- Subagents cannot create more agents.
+- Each subagent receives a limited task.
+- Two agents are not allowed to edit the same shared area at the same time.
+- A subagent saying it is finished does not make the project complete.
+- Sol Max checks the evidence and decides whether the result is acceptable.
+- Failed work is normally corrected or reassigned to another subagent instead of being repeated unchanged.
+- AMS does not stop at an internal checkpoint while required work remains.
 
 ## Requirements
 
 - Codex with skill and custom-subagent support
-- A top-level Sol Max session for orchestration
-- PowerShell 5.1+ for `install.ps1`, or Bash with `curl`, `unzip`, and `zipinfo` for `install.sh`
-- Spark access only when Spark routing is enabled and available
-- Reloading or restarting Codex after installing or changing package instructions
+- A top-level GPT-5.6 Sol Max session
+- Windows PowerShell 5.1 or newer for `install.ps1`
+- Bash, `curl`, `unzip`, and `zipinfo` for `install.sh`
+- Spark access only when you want Spark routing and your account supports it
+- A Codex restart or reload after installing or updating AMS
 
-The installed 3.08 skill contains Markdown, YAML, and a version token only. It has no Python, shell, or compiled runtime dependency; the two root scripts are deployment helpers only.
+The installed AMS skill contains only Markdown, YAML, and a version file. Python, PowerShell, and Bash are not needed while AMS is running; the scripts are used only for installation and updates.
