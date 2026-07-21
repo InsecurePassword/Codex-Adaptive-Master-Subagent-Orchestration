@@ -1,3 +1,4 @@
+# Native Windows PowerShell 5.1 and Linux Bash validation.
 name: Installer audit
 
 on:
