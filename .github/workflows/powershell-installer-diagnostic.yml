@@ -14,47 +14,54 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          show-progress: false
       - name: Download release
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP 'release') | Out-Null
           gh release download ReleaseZip --repo $env:GITHUB_REPOSITORY --pattern 'adaptive-master-subagent-orchestration-3.08.zip' --dir (Join-Path $env:RUNNER_TEMP 'release')
-      - name: Run and capture PowerShell installer
+      - name: Run full PowerShell lifecycle with diagnostics
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $Zip = Join-Path $env:RUNNER_TEMP 'release\adaptive-master-subagent-orchestration-3.08.zip'
-          $Sha = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          $Serve = Split-Path $Zip -Parent
-          $Python = (Get-Command python).Source
-          $Server = Start-Process -FilePath $Python -ArgumentList @('-m','http.server','8766','--bind','127.0.0.1','--directory',$Serve) -PassThru -WindowStyle Hidden
-          $Out = Join-Path $env:RUNNER_TEMP 'installer.stdout.txt'
-          $Err = Join-Path $env:RUNNER_TEMP 'installer.stderr.txt'
-          $Tree = Join-Path $env:RUNNER_TEMP 'installer.tree.txt'
-          $Exit = Join-Path $env:RUNNER_TEMP 'installer.exit.txt'
-          try {
-            Start-Sleep -Seconds 2
-            $env:AMS_RELEASE_URL = 'http://127.0.0.1:8766/' + [IO.Path]::GetFileName($Zip)
-            $env:AMS_EXPECTED_SHA256 = $Sha
-            $env:AMS_SKILL_HOME = Join-Path $env:RUNNER_TEMP 'ps-diagnostic-skills'
-            $Process = Start-Process powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path .\install.ps1).Path) -RedirectStandardOutput $Out -RedirectStandardError $Err -PassThru -Wait
-            "ExitCode=$($Process.ExitCode)" | Set-Content -LiteralPath $Exit
-            if (Test-Path $env:AMS_SKILL_HOME) {
-              Get-ChildItem -LiteralPath $env:AMS_SKILL_HOME -Recurse -Force | Select-Object FullName,Attributes,Length | Format-Table -AutoSize | Out-String -Width 300 | Set-Content -LiteralPath $Tree
-            } else {
-              'Skill home missing' | Set-Content -LiteralPath $Tree
-            }
-            if ($Process.ExitCode -ne 0) { throw "Installer exited $($Process.ExitCode)" }
+          $ErrorActionPreference='Stop'
+          $zip=Join-Path $env:RUNNER_TEMP 'release\adaptive-master-subagent-orchestration-3.08.zip'
+          $sha=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $server=Start-Process (Get-Command python).Source -ArgumentList @('-m','http.server','8766','--bind','127.0.0.1','--directory',(Split-Path $zip)) -PassThru -WindowStyle Hidden
+          $script=(Resolve-Path .\install.ps1).Path
+          $env:AMS_RELEASE_URL='http://127.0.0.1:8766/'+[IO.Path]::GetFileName($zip)
+          $env:AMS_EXPECTED_SHA256=$sha
+          $env:AMS_SKILL_HOME=Join-Path $env:RUNNER_TEMP 'ps-diagnostic-skills'
+          function Run-Installer([string]$Name){
+            $out=Join-Path $env:RUNNER_TEMP "$Name.stdout.txt"
+            $err=Join-Path $env:RUNNER_TEMP "$Name.stderr.txt"
+            $p=Start-Process powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$script) -RedirectStandardOutput $out -RedirectStandardError $err -PassThru -Wait
+            "ExitCode=$($p.ExitCode)"|Set-Content (Join-Path $env:RUNNER_TEMP "$Name.exit.txt")
+            return $p.ExitCode
           }
-          finally {
-            Stop-Process -Id $Server.Id -Force -ErrorAction SilentlyContinue
+          try{
+            Start-Sleep 2
+            $rc=Run-Installer clean
+            if($rc){throw "Clean exit $rc"}
+            $root=Join-Path $env:AMS_SKILL_HOME 'adaptive-master-subagent-orchestration'
+            New-Item -ItemType Directory -Force (Join-Path $env:AMS_SKILL_HOME 'unrelated')|Out-Null
+            Set-Content (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md') keep
+            Set-Content (Join-Path $root 'stale.txt') stale
+            $rc=Run-Installer update
+            if($rc){throw "Update exit $rc"}
+            if(!(Test-Path (Join-Path $env:AMS_SKILL_HOME 'unrelated\SKILL.md'))){throw 'Unrelated removed'}
+            if(Test-Path (Join-Path $root 'stale.txt')){throw 'Stale retained'}
+            $env:AMS_EXPECTED_SHA256='0'*64
+            $rc=Run-Installer checksum
+            if($rc -eq 0){throw 'Checksum accepted'}
+            if(!(Test-Path (Join-Path $root 'SKILL.md'))){throw 'Install damaged'}
+            'PASS'|Set-Content (Join-Path $env:RUNNER_TEMP 'lifecycle.result.txt')
+          }finally{
+            if(Test-Path $env:AMS_SKILL_HOME){Get-ChildItem $env:AMS_SKILL_HOME -Recurse -Force|Select FullName,Attributes,Length|Format-Table -AutoSize|Out-String -Width 300|Set-Content (Join-Path $env:RUNNER_TEMP 'lifecycle.tree.txt')}
+            Stop-Process $server.Id -Force -ErrorAction SilentlyContinue
           }
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: powershell-installer-diagnostic
-          path: ${{ runner.temp }}/installer.*.txt
+          path: ${{ runner.temp }}/*.txt
           if-no-files-found: error
