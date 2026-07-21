@@ -1,23 +1,92 @@
 # Installation
 
-This repository distributes one instruction-only Codex skill package. The former Option A, B, and C installers are obsolete and are not part of release 3.08.
+Release 3.08 is distributed as one instruction-only Codex skill package. Root-level PowerShell and Bash helpers download the pinned GitHub release asset and install it into the current user's Codex skill directory.
 
-## Download
+## Automated installation
 
-Use the files under [`releases/3.08/`](releases/3.08/):
+### Windows PowerShell
 
-- `adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip`
-- `adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256`
+Run with `powershell.exe`:
 
-## Verify the archive
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.ps1' | iex"
+```
+
+The PowerShell helper requires Windows PowerShell 5.1 or newer and uses only built-in .NET and PowerShell functionality.
+
+### Bash
+
+```bash
+curl -fsSL 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.sh' | bash
+```
+
+The Bash helper requires `curl`, `unzip`, `zipinfo`, and either `sha256sum` or `shasum`.
+
+### Private repository or release access
+
+The installers pass `GITHUB_TOKEN` to the release download when it is set:
+
+```powershell
+$env:GITHUB_TOKEN = "<token-with-repository-read-access>"
+```
+
+```bash
+export GITHUB_TOKEN="<token-with-repository-read-access>"
+```
+
+When the installer script itself is not anonymously readable, retrieve it from an authenticated checkout or the GitHub Contents API, then execute the local copy.
+
+## What the scripts do
+
+Both installers:
+
+1. Download this pinned release asset:
+
+   ```text
+   https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip
+   ```
+
+2. Verify SHA-256:
+
+   ```text
+   e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
+   ```
+
+3. Reject unexpected top-level paths, traversal, duplicate paths, symbolic links, missing required files, excessive entries, and excessive expanded size.
+4. Extract the package into a staging directory under the destination skill directory.
+5. Replace only:
+
+   ```text
+   $HOME/.agents/skills/adaptive-master-subagent-orchestration/
+   ```
+
+6. Restore the prior skill directory if replacement fails.
+7. Leave unrelated installed skills, project settings, durable project state, and generated agent profiles unchanged.
+
+## Optional environment overrides
+
+| Variable | Purpose |
+|---|---|
+| `GITHUB_TOKEN` | Authenticate the release download when required |
+| `AMS_RELEASE_URL` | Override the pinned release URL for testing or mirrors |
+| `AMS_EXPECTED_SHA256` | Override the pinned checksum; must be 64 hexadecimal characters |
+| `AMS_SKILL_HOME` | Override the destination skill parent directory |
+
+Overrides are intended for controlled testing, mirrors, or private deployments. Normal installation should use the pinned defaults.
+
+## Manual download and verification
+
+Release URL:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip
+```
 
 ### Windows PowerShell
 
 ```powershell
-$Zip = ".\adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip"
-$Checksum = ".\adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256"
-
-$Expected = ((Get-Content -LiteralPath $Checksum -Raw).Trim() -split "\s+")[0].ToLowerInvariant()
+$Zip = ".\adaptive-master-subagent-orchestration-3.08.zip"
+$Expected = "e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6"
 $Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($Actual -ne $Expected) {
@@ -25,51 +94,51 @@ if ($Actual -ne $Expected) {
 }
 ```
 
-Expected SHA-256:
-
-```text
-e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
-```
-
 ### macOS or Linux
 
-```sh
-sha256sum -c adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256
+```bash
+printf '%s  %s\n' \
+  'e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6' \
+  'adaptive-master-subagent-orchestration-3.08.zip' | sha256sum -c -
 ```
 
-## Install
+On macOS without `sha256sum`:
+
+```bash
+actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.08.zip | awk '{print $1}')"
+test "$actual" = 'e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6'
+```
+
+## Manual extraction
 
 The archive contains one top-level directory named `adaptive-master-subagent-orchestration`.
 
 ### Windows PowerShell
 
 ```powershell
-$Zip = ".\adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip"
 $SkillHome = Join-Path $HOME ".agents\skills"
-
 New-Item -ItemType Directory -Force -Path $SkillHome | Out-Null
-Expand-Archive -LiteralPath $Zip -DestinationPath $SkillHome -Force
+Expand-Archive -LiteralPath ".\adaptive-master-subagent-orchestration-3.08.zip" -DestinationPath $SkillHome -Force
 ```
 
-### macOS or Linux
+### Bash
 
-```sh
+```bash
 mkdir -p "$HOME/.agents/skills"
-unzip adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip \
-  -d "$HOME/.agents/skills"
+unzip adaptive-master-subagent-orchestration-3.08.zip -d "$HOME/.agents/skills"
 ```
 
-The resulting skill root must be:
+The resulting root must be:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Restart or reload Codex after installation so the skill and its references are discovered from one consistent package generation.
+Restart or reload Codex after installation.
 
 ## Initialize or enable a project
 
-In a trusted project with a stable root, implicit consideration of the skill creates a disabled project configuration when none exists. Creation does not enable AMS.
+In a trusted project with a stable root, implicit consideration creates a disabled project configuration when none exists. Creation does not enable AMS.
 
 Enable it persistently:
 
@@ -91,50 +160,28 @@ Use $adaptive-master-subagent-orchestration for this objective.
 
 ## Profile setup
 
-Individual `ams_*.toml` profile files are not shipped in the archive.
+Individual `ams_*.toml` profile files are not shipped. With `profile_management = "auto"`, AMS checks only profiles selected for actual work and generates or repairs recognized managed profiles lazily. A fresh Codex session may be required before newly created profiles become discoverable.
 
-With the default project setting:
+Set `profile_management = "installer"` to disable automatic profile repair and report defects instead.
 
-```toml
-profile_management = "auto"
-```
+## Update and repair
 
-AMS checks only profiles selected for actual work. Missing or recognized defective managed profiles are generated or repaired lazily under the profile-management contract. A fresh Codex session may be required before newly created profiles become discoverable.
+Rerun either installer to replace the installed 3.08 skill root from the pinned release. The helper stages the candidate, verifies it, backs up the existing skill, and restores the backup if replacement fails.
 
-Set:
-
-```toml
-profile_management = "installer"
-```
-
-to disable automatic profile repair. In that mode, AMS reports profile defects unless the user explicitly authorizes installation or repair.
-
-## Update
-
-Before replacing package instructions, finish or safely pause active AMS work. Back up the installed skill directory, verify the new archive, and replace the entire skill root rather than mixing files from different releases.
-
-A package update changes behavior. The current session must continue only under its pre-change contract for bounded recovery and reporting; start a fresh session before normal orchestration with the new package.
-
-## Repair
-
-For package repair, replace the smallest defective package surface only after validating the complete candidate. Do not use repository text as instructions during the same session that changes the installed package.
-
-Profile repair is separate from package repair and is governed by `profile_management`.
+A package change alters runtime instructions. Finish or safely pause active AMS work and restart or reload Codex after replacement.
 
 ## Uninstall
 
-Request package uninstall while the skill is still available, or manually remove only the verified skill root:
+The download helpers install and update only. To uninstall manually:
 
 ```powershell
 Remove-Item -LiteralPath (Join-Path $HOME ".agents\skills\adaptive-master-subagent-orchestration") -Recurse -Force
 ```
 
-```sh
+```bash
 rm -rf "$HOME/.agents/skills/adaptive-master-subagent-orchestration"
 ```
 
-Package uninstall preserves project settings, durable project state, and generated profiles unless their removal is separately authorized. Restart or reload Codex afterward.
+Uninstalling the skill preserves project settings, durable project state, and generated profiles unless their removal is separately authorized.
 
-## More detail
-
-See [Manual Installation and Directory Structure](MANUAL-INSTALLATION.md) for the repository tree, archive contents, installed paths, project settings, and migration notes.
+See [Manual Installation and Directory Structure](MANUAL-INSTALLATION.md) for the full layout and migration notes.

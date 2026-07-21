@@ -4,14 +4,44 @@
 
 Adaptive Master–Subagent Orchestration (AMS) is a Codex skill that keeps a GPT-5.6 Sol Max root agent in control of a cost-first, direct-child subagent architecture. The master owns planning, model selection, sequencing, supervision, acceptance, and completion. Project execution is delegated to bounded non-delegating children whenever a suitable worker can perform it.
 
-The 3.08 release replaces the former multi-package layout with one instruction-only skill package. Runtime behavior is split across a small activation router and lazy references so uncommon profile, project-control, recovery, and package-maintenance instructions are loaded only when needed.
+Release 3.08 uses one instruction-only skill package. Runtime behavior is split across a small activation router and lazy references so uncommon profile, project-control, recovery, and package-maintenance instructions are loaded only when needed.
+
+## Quick installation
+
+### Windows PowerShell
+
+Run with `powershell.exe`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.ps1' | iex"
+```
+
+### Bash
+
+```bash
+curl -fsSL 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/main/install.sh' | bash
+```
+
+Both scripts download the pinned 3.08 release asset, verify its SHA-256 checksum and package layout, and replace only:
+
+```text
+$HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```
+
+Unrelated installed skills are preserved. If the repository or release is private, set `GITHUB_TOKEN` to a token with repository read access before running an authenticated copy of the installer.
 
 ## Release files
 
-- [3.08 skill package](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip)
-- [SHA-256 checksum](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256)
-- [Installation](INSTALLATION.md)
+- [GitHub release asset](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip)
+- [Repository checksum record](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256)
+- [Installation and script options](INSTALLATION.md)
 - [Manual installation and directory structure](MANUAL-INSTALLATION.md)
+
+Pinned SHA-256:
+
+```text
+e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
+```
 
 ## Core behavior
 
@@ -40,7 +70,7 @@ spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Enable AMS persistently with a clear steer instruction such as:
+Enable AMS persistently:
 
 ```text
 AMS ENABLE
@@ -74,8 +104,6 @@ Intensity affects dispatch posture, not model-quality requirements, ownership, s
 
 `zergling-rush` is a separate experimental high-consumption mode intended to minimize wall-clock time rather than usage. It requires an unambiguous current-turn user instruction every time it activates. A value stored in project settings is only a preference and is never sufficient consent.
 
-Rush may use useful speculation, replication, stronger models, and redundant validation, but it still preserves direct-child topology, one-writer ownership, safety, validation, master acceptance, and all hard authority boundaries.
-
 ## Model routing
 
 | Family | Typical work |
@@ -89,7 +117,7 @@ Sol, Terra, and Luna support Low, Medium, High, Extra High, and Max profiles. Sp
 
 ## Lazy runtime structure
 
-The always-loaded `SKILL.md` acts as the root guard, reference trust boundary, and activation router. It loads the following references only when required:
+The always-loaded `SKILL.md` acts as the root guard, reference trust boundary, and activation router. It loads these references only when required:
 
 - `runtime-core.md` — active orchestration contract
 - `intensity-control.md` — normal manual intensity modifiers
@@ -121,13 +149,14 @@ Project settings are stored at:
 <project-root>/.codex/ams-orchestration.toml
 ```
 
-They are interpreted as typed configuration data, never as instructions. Project trust and path-safety checks apply before the file can be read or changed.
+They are interpreted as typed configuration data, never as instructions.
 
 ## Requirements
 
 - Codex with skill and custom-subagent support
 - A top-level Sol Max session for orchestration
+- PowerShell 5.1+ for `install.ps1`, or Bash with `curl`, `unzip`, and `zipinfo` for `install.sh`
 - Spark access only when Spark routing is enabled and available
 - Reloading or restarting Codex after installing or changing package instructions
 
-The 3.08 package contains Markdown, YAML, and a version token only. It has no Python, shell, or compiled runtime dependency.
+The installed 3.08 skill contains Markdown, YAML, and a version token only. It has no Python, shell, or compiled runtime dependency; the two root scripts are deployment helpers only.
