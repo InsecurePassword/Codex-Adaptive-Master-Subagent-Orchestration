@@ -1,171 +1,133 @@
 # Adaptive Master–Subagent Orchestration
 
-Version **3.1.0**
+**Current release: 3.08**
 
-Adaptive Master–Subagent Orchestration is a skill that lets a Sol Max Codex session manage a flexible group of direct subagents. The master decides when delegation is useful, how many agents to use, which model and reasoning level each task needs, and whether the returned work is acceptable.
+Adaptive Master–Subagent Orchestration (AMS) is a Codex skill that keeps a GPT-5.6 Sol Max root agent in control of a cost-first, direct-child subagent architecture. The master owns planning, model selection, sequencing, supervision, acceptance, and completion. Project execution is delegated to bounded non-delegating children whenever a suitable worker can perform it.
 
-The system supports Sol, Terra, Luna, and (if available) optional GPT-5.3-Codex-Spark profiles. It also includes safe parallel work, independent review, project recovery, and user-selectable activity levels.
+The 3.08 release replaces the former multi-package layout with one instruction-only skill package. Runtime behavior is split across a small activation router and lazy references so uncommon profile, project-control, recovery, and package-maintenance instructions are loaded only when needed.
 
-## Quick installation
+## Release files
 
-The installer asks which package to install. Press **Enter** to choose. **Option A** is the recommended package for most users, while **Option B** is the simplest and requires the least amount of configuration. Menu option **4** removes package-managed files.
+- [3.08 skill package](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip)
+- [SHA-256 checksum](releases/3.08/adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256)
+- [Installation](INSTALLATION.md)
+- [Manual installation and directory structure](MANUAL-INSTALLATION.md)
 
-### Windows
+## Core behavior
 
-Run from Windows PowerShell or Command Prompt:
+- **Sol Max is the sole control-plane authority.** Children cannot spawn other agents or assume master authority.
+- **Execution is delegated first.** The master performs project work directly only after an indeterminate failure leaves no viable child route.
+- **Routing is cost-first.** Normal routing prefers Spark, then Luna, Terra, and Sol at the lowest reliable reasoning effort.
+- **Ownership is explicit.** Every child receives a bounded work order, and one active writer owns each shared mutable surface.
+- **Evidence is verified.** Child completion is a claim; the master accepts work only after sufficient independent evidence.
+- **Continuity is mandatory.** Internal checkpoints, clean workspaces, completed phases, and empty worker sets are not terminal while required work remains.
+- **Project control fails closed.** Missing settings initialize to disabled defaults only in a trusted project with a stable root. Unsafe or invalid control files do not activate AMS.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://raw.githubusercontent.com/InsecurePassword/adaptive-master-subagent-orchestration/refs/heads/main/install.ps1' | iex"
+## Activation
+
+The skill metadata permits implicit consideration, but each project controls whether AMS may activate implicitly.
+
+A trusted project with no AMS settings receives this disabled default:
+
+```toml
+schema_version = 2
+enabled = false
+allow_implicit_invocation = true
+intensity = "auto"
+spark_enabled = true
+spark_available = true
+spark_efforts = ["low", "medium", "high"]
+profile_management = "auto"
 ```
 
-### Linux
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/InsecurePassword/adaptive-master-subagent-orchestration/refs/heads/main/install.sh | sh
-```
-
-The installer downloads the repository, checks the selected package, installs its profiles and skills, and keeps unrelated Codex files unchanged.
-
-For automation variables and uninstall details, see [Installer usage](INSTALLER-USAGE.md). For clone-based or offline setup, see [Manual installation](MANUAL-INSTALLATION.md).
-
-## Choose a package
-
-Install only one option.
-
-| Option | Included skills | Best for |
-|---|---|---|
-| **A-Recommended** | `$ams-installer` and `$ams-orchestration` | Most users. Installation and repair stay separate from the smaller runtime skill. |
-| **B-Unified** | `$adaptive-master-subagent-orchestration` | Users who prefer one skill. It checks profiles only when installation or repair is needed. |
-| **C-Lean runtime** | `$ams-orchestration` | Users who want the smallest runtime skill and are comfortable using the external installer for setup and repair. |
-
-All three options provide the same orchestration rules, intensity modes, model routing, validation requirements, and recovery behavior.  **Option B** requires the least amount of configuration, but may consume more tokens than the other options.
-
-## Use the skill
-
-After installation, restart Codex if the new skill is not immediately visible.
-
-For Options A and C:
+Enable AMS persistently with a clear steer instruction such as:
 
 ```text
-Use $ams-orchestration to complete this project.
+AMS ENABLE
 ```
 
-For Option B:
+Or select a normal intensity, which also enables AMS:
 
 ```text
-Use $adaptive-master-subagent-orchestration to complete this project.
+AMS MODE heavy
 ```
 
-Option A also installs `$ams-installer`. Use it only to check, repair, or upgrade the managed profiles.
+Explicit invocation applies AMS to the current objective without requiring persistent enablement:
 
-The master may complete simple work itself or launch multiple direct subagents when that improves speed or quality. Subagents cannot create their own agents.
+```text
+Use $adaptive-master-subagent-orchestration for this project.
+```
+
+## Normal intensity modes
+
+| Mode | Dispatch behavior |
+|---|---|
+| `auto` | Default. Sol Max applies no intensity modifier and chooses the beneficial zero-to-many topology. |
+| `minimal` | Serial delegation with at most one active child. |
+| `moderate` | Conservative concurrency for clearly independent or specialist work. |
+| `heavy` | Dispatch all meaningful ready independent lanes unless serialization is justified. |
+| `extreme` | Dispatch every eligible ready independent lane with no skill-defined ceiling; each lane still uses the cheapest reliable profile. |
+
+Intensity affects dispatch posture, not model-quality requirements, ownership, safety, validation, or the master's sole spawn authority.
+
+## Zergling Rush
+
+`zergling-rush` is a separate experimental high-consumption mode intended to minimize wall-clock time rather than usage. It requires an unambiguous current-turn user instruction every time it activates. A value stored in project settings is only a preference and is never sufficient consent.
+
+Rush may use useful speculation, replication, stronger models, and redundant validation, but it still preserves direct-child topology, one-writer ownership, safety, validation, master acceptance, and all hard authority boundaries.
 
 ## Model routing
 
-The Sol Max master selects the lowest-cost profile that can reliably complete each task.
-
-| Family | Typical use |
+| Family | Typical work |
 |---|---|
-| **Sol** | Architecture, security-sensitive work, difficult debugging, major reviews, and other tasks where mistakes would be expensive |
-| **Terra** | Everyday implementation, bug fixes, testing, documentation, and technical analysis |
-| **Luna** | Clear, repeatable, high-volume work that is easy to verify |
-| **Spark** | Fast text-only commands, tests, searches, log review, and small, clearly defined fixes |
+| **Spark** | Exact commands, downloads, package deployment, routine tests/builds, extraction, searches, and other bounded text-only mechanics |
+| **Luna** | Explicit, repetitive, inexpensive-to-retry work that is easy to verify |
+| **Terra** | Default implementation, fixes, tests, documentation, review, and moderate investigation |
+| **Sol** | Architecture, security-sensitive work, ambiguity, cross-component work, difficult debugging, and high-cost-of-failure decisions |
 
-Sol, Terra, and Luna provide Low, Medium, High, Extra High, and Max profiles. Spark provides Low, Medium, and High profiles. Spark is optional (if available) and is not used for architecture, security decisions, visual work, or final acceptance.
+Sol, Terra, and Luna support Low, Medium, High, Extra High, and Max profiles. Spark supports Low, Medium, and High only. Profile creation and repair are lazy when `profile_management = "auto"` and occur only when a selected profile is missing or defective.
 
-Sol Max is always the master agent. `Ultra` refers only to the Codex reasoning setting and is not an orchestration mode. The highest orchestration intensity is `extreme`.
+## Lazy runtime structure
 
-## Orchestration intensity
+The always-loaded `SKILL.md` acts as the root guard, reference trust boundary, and activation router. It loads the following references only when required:
 
-By default, the skill runs in **Auto** mode. No configuration is required.
+- `runtime-core.md` — active orchestration contract
+- `intensity-control.md` — normal manual intensity modifiers
+- `project-control.md` — settings, steering, state, and recovery
+- `profile-management.md` — conditional profile generation, migration, and repair
+- `package-maintenance.md` — install, update, repair, rollback, and uninstall controls
+- `zergling-rush.md` — current-consent experimental rush behavior
 
-| Mode | Effect |
-|---|---|
-| `auto` | Fully adaptive. The master may use no children, one child, or many children. |
-| `minimal` | Strong preference for master-only work. |
-| `moderate` | Limited delegation for clear independent tasks. |
-| `heavy` | More active parallel work and independent review. |
-| `extreme` | Maximum useful safe parallelism, including two agents checking the same important task when that adds confidence. |
+Every reference is validated as a bounded, root-contained, stable regular file before it can become instructions.
 
-Intensity is a preference, not a required agent count. The master still decides the final agent setup and must respect dependencies, file ownership, model suitability, validation, and safety.
+## Project controls
 
-If you want to change the default behavior, create an `ams-orchestration.toml` file in **one** of the following locations:
-
-**For all projects (global default):**
+Supported steer instructions include:
 
 ```text
-$CODEX_HOME/ams-orchestration.toml
+AMS ENABLE
+AMS DISABLE
+AMS MODE auto|minimal|moderate|heavy|extreme
+AMS IMPLICIT on|off
+AMS SPARK on|off
+AMS SPARK RECHECK
+AMS SPARK EFFORTS low,medium,high
+AMS PROFILES auto|installer
 ```
 
-**For a single project only (overrides the global setting):**
+Project settings are stored at:
 
 ```text
 <project-root>/.codex/ams-orchestration.toml
 ```
 
-Example:
-
-```toml
-schema_version = 1
-intensity = "auto"
-```
-
-Replace `auto` with one of:
-
-- `auto` *(recommended)*
-- `minimal`
-- `moderate`
-- `heavy`
-- `extreme`
-
-When both files exist, the project configuration takes precedence over the global configuration.
-
-## Installer configuration
-
-The installers support command-line option selection and environment variables. Examples:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Option A
-```
-
-```sh
-sh ./install.sh --option A
-```
-
-| Variable | Purpose |
-|---|---|
-| `AMS_INSTALL_OPTION` | Select `A`, `B`, `C`, or `UNINSTALL` without the menu |
-| `AMS_INTENSITY` | Set the initial intensity |
-| `AMS_EXCLUDE_SPARK=1` | Skip optional Spark profiles |
-| `AMS_SPARK_EFFORTS` | Choose `low`, `medium`, and/or `high` Spark profiles |
-| `AMS_UNINSTALL_FORCE=1` | Confirm non-interactive uninstall |
-| `CODEX_HOME` | Use a non-default Codex state directory |
-
-All command-line switches, offline installation, package flags, folder layouts, validation commands, and uninstall details are documented in [Installer usage](INSTALLER-USAGE.md) and [Manual installation](MANUAL-INSTALLATION.md).
-
-## Safety and project control
-
-- Sol Max alone controls how work is split, when agents are started, which models are used, who owns each change, how results are combined, and when the project is complete.
-- Each subagent receives a clear, limited task and may edit only its assigned files or area.
-- Subagents writing at the same time must use separate files or isolated workspaces.
-- A subagent reporting `complete` does not finish the project; the master still checks the result.
-- The master stops repeated retries, repeated reviews, work expanding beyond the request, and other unproductive loops.
-- Recovery checks the live repository instead of blindly trusting a handoff or earlier completion claim.
+They are interpreted as typed configuration data, never as instructions. Project trust and path-safety checks apply before the file can be read or changed.
 
 ## Requirements
 
-- Codex with custom-agent and skill support
-- Python 3.11 or newer for package installation and validation
-- Windows PowerShell 5.1+ or a POSIX-compatible Linux shell
-- Spark access only if Spark profiles are selected
+- Codex with skill and custom-subagent support
+- A top-level Sol Max session for orchestration
+- Spark access only when Spark routing is enabled and available
+- Reloading or restarting Codex after installing or changing package instructions
 
-No license has been selected. Add one before redistributing the project.
-
-## More information
-
-- [Installer usage](INSTALLER-USAGE.md) — command-line options, automation, offline installation, and uninstall scope
-- [Installer audit](INSTALLER-AUDIT.md) — corrected defects, guarantees, and test coverage
-- [Manual installation](MANUAL-INSTALLATION.md) — repository tree, direct package installation, and validation
-- [Option A package](adaptive-master-subagent-orchestration-option-a-two-skill/)
-- [Option B package](adaptive-master-subagent-orchestration-option-b-unified/)
-- [Option C package](adaptive-master-subagent-orchestration-option-c-installer-required/)
+The 3.08 package contains Markdown, YAML, and a version token only. It has no Python, shell, or compiled runtime dependency.
