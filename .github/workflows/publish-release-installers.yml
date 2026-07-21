@@ -1,0 +1,37 @@
+name: Publish installer release assets
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/publish-release-installers.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify installer files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f install.ps1
+          test -f install.sh
+          sha256sum install.ps1 install.sh
+      - name: Upload installers to ReleaseZip
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh release upload ReleaseZip install.ps1 install.sh --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Verify published assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          assets="$(gh release view ReleaseZip --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          grep -Fxq install.ps1 <<< "$assets"
+          grep -Fxq install.sh <<< "$assets"
