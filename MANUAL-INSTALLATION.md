@@ -11,28 +11,34 @@ Codex-Adaptive-Master-Subagent-Orchestration/
 ├── MANUAL-INSTALLATION.md
 ├── install.ps1
 ├── install.sh
-└── releases/
-    └── 3.08/
-        ├── adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.zip
-        └── adaptive-master-subagent-orchestration-3.08-final-safeguard-fixed.sha256
+└── .github/
+    └── workflows/
+        └── installer-audit.yml
 ```
 
-The root scripts download the GitHub release asset named `adaptive-master-subagent-orchestration-3.08.zip`; the repository copy and checksum record retain the safeguard-audit artifact name. Both are expected to contain identical ZIP bytes with SHA-256:
+The installable ZIP is published only as the GitHub release asset:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip
+```
+
+Pinned SHA-256:
 
 ```text
 e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
 ```
 
-Historical Option A, B, and C directories, Python installers, menu selectors, and installer-audit documents are not part of the active release structure.
+Historical Option A, B, and C directories, Python installers, menu selectors, checked-in release duplicates, and installer-audit documents are not part of the active release structure.
 
 ## Deployment helper roles
 
 | Path | Role |
 |---|---|
-| `install.ps1` | PowerShell 5.1+ release downloader, verifier, safe extractor, and skill-root replacer |
-| `install.sh` | Bash release downloader, verifier, archive-safety checker, and skill-root replacer |
+| `install.ps1` | Windows PowerShell 5.1+ release downloader, checksum verifier, strict archive validator, locked transactional skill-root replacer, and rollback handler |
+| `install.sh` | Bash release downloader, checksum verifier, strict archive validator, locked transactional skill-root replacer, and rollback handler |
+| `.github/workflows/installer-audit.yml` | Native Windows and Linux lifecycle validation against the published private release asset |
 
-Both helpers preserve unrelated skills and use the same pinned release URL, checksum, required-file list, destination, staging behavior, and rollback intent.
+Both helpers preserve unrelated skills and use the same pinned release URL, checksum, exact required-file set, destination, lock, staging, and rollback policy.
 
 ## Release archive layout
 
@@ -89,7 +95,7 @@ $HOME/.agents/skills/
         └── zergling-rush.md
 ```
 
-The installers may temporarily create hidden staging and backup directories under `$HOME/.agents/skills/`. Successful completion removes them.
+The installers may temporarily create a lock file plus hidden staging and backup directories under `$HOME/.agents/skills/`. Successful completion removes them. A lock prevents concurrent installers from replacing the same skill root.
 
 Managed custom-agent profiles, when generated, normally live under:
 
@@ -158,6 +164,22 @@ curl -fsSL 'https://raw.githubusercontent.com/InsecurePassword/Codex-Adaptive-Ma
 
 See [INSTALLATION.md](INSTALLATION.md) for authentication and environment overrides.
 
+## Installer validation and safety
+
+Both installers:
+
+1. Download the pinned release asset directly or through the GitHub REST asset endpoint when `GITHUB_TOKEN` is supplied.
+2. Verify the pinned SHA-256 before archive processing.
+3. Require the archive to contain exactly the nine expected package files and no other entries.
+4. Reject unreadable, encrypted, linked, oversized, or unexpected archives.
+5. Acquire an exclusive installation lock.
+6. Extract into an isolated staging directory.
+7. Reject redirected or non-directory existing destinations.
+8. Move the previous skill root to a backup, install the candidate, and restore the backup if replacement fails.
+9. Preserve unrelated skills, project settings, durable state, and generated profiles.
+
+The permanent GitHub Actions audit executes clean install, update replacement, checksum-failure preservation, lock rejection, unrelated-skill preservation, and authenticated private-release installation on Ubuntu Bash and Windows PowerShell 5.1.
+
 ## Manual installation
 
 1. Download `adaptive-master-subagent-orchestration-3.08.zip` from the `ReleaseZip` GitHub release.
@@ -187,4 +209,4 @@ Do not merge files from different package generations. Do not delete unrelated u
 
 ## Package integrity
 
-The pinned checksum authenticates the ZIP bytes. After extraction, keep the package as one complete generation: `SKILL.md`, `VERSION`, `agents/openai.yaml`, and every listed reference are required together.
+The pinned checksum authenticates the release ZIP bytes. After extraction, keep the package as one complete generation: `SKILL.md`, `VERSION`, `agents/openai.yaml`, and every listed reference are required together.
