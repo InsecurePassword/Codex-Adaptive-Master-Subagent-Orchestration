@@ -3,11 +3,13 @@ set -Eeuo pipefail
 
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
+package_version="3.09"
 release_tag="ReleaseZip"
-asset_name="adaptive-master-subagent-orchestration-3.09.zip"
+asset_name="adaptive-master-subagent-orchestration-${package_version}.zip"
 default_release_url="https://github.com/${repo_owner}/${repo_name}/releases/download/${release_tag}/${asset_name}"
 release_url="${AMS_RELEASE_URL:-$default_release_url}"
-expected_sha256="${AMS_EXPECTED_SHA256:-e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6}"
+expected_sha256="${AMS_EXPECTED_SHA256:-3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373}"
+user_agent="AMS-${package_version}-Installer"
 skill_name="adaptive-master-subagent-orchestration"
 skill_home="${AMS_SKILL_HOME:-${HOME:?HOME is not set}/.agents/skills}"
 destination="${skill_home}/${skill_name}"
@@ -18,6 +20,7 @@ required_files=(
   "SKILL.md"
   "VERSION"
   "agents/openai.yaml"
+  "references/hierarchy-control.md"
   "references/intensity-control.md"
   "references/package-maintenance.md"
   "references/profile-management.md"
@@ -46,10 +49,10 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
 fi
 printf '%s\n' "pid=$$" "host=$(hostname 2>/dev/null || printf unknown)" > "${lock_dir}/owner"
 
-stage_root="$(mktemp -d "${skill_home}/.ams-install.XXXXXXXX")"
-archive_path="${stage_root}/package.zip"
-extract_root="${stage_root}/extract"
-backup_path="${skill_home}/.${skill_name}.backup-$(date +%Y%m%d%H%M%S)-$$"
+stage_root=""
+archive_path=""
+extract_root=""
+backup_path=""
 existing_moved=0
 candidate_installed=0
 committed=0
@@ -65,7 +68,9 @@ cleanup() {
       /bin/mv -- "$backup_path" "$destination" || printf 'Error: rollback could not restore %s\n' "$destination" >&2
     fi
   fi
-  rm -rf -- "$stage_root" 2>/dev/null || true
+  if [[ -n "$stage_root" ]]; then
+    rm -rf -- "$stage_root" 2>/dev/null || true
+  fi
   rm -rf -- "$lock_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -74,6 +79,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
+stage_root="$(mktemp -d "${skill_home}/.ams-install.XXXXXXXX")"
+archive_path="${stage_root}/package.zip"
+extract_root="${stage_root}/extract"
+backup_path="${skill_home}/.${skill_name}.backup-$(date +%Y%m%d%H%M%S)-$$"
 mkdir -p "$extract_root"
 
 common_curl_args=(
@@ -81,7 +90,7 @@ common_curl_args=(
   --retry 3 --retry-delay 1
   --connect-timeout 15 --max-time 300
   --max-filesize "$max_archive_bytes"
-  -H "User-Agent: AMS-3.08-Installer"
+  -H "User-Agent: ${user_agent}"
 )
 
 download_url="$release_url"
@@ -116,7 +125,7 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
   headers+=( -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" )
 fi
 
-printf 'Downloading Adaptive Master-Subagent Orchestration 3.08...\n'
+printf 'Downloading Adaptive Master-Subagent Orchestration %s...\n' "$package_version"
 if ! curl "${common_curl_args[@]}" "${headers[@]}" "$download_url" -o "$archive_path"; then
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     fail "Release download failed. Verify the release and GITHUB_TOKEN repository read access."
@@ -146,7 +155,7 @@ for required in "${required_files[@]}"; do
 done | LC_ALL=C sort > "$expected_list"
 LC_ALL=C sort "$archive_list" -o "$archive_list"
 if ! cmp -s "$expected_list" "$archive_list"; then
-  fail "The release archive file set does not exactly match the 3.08 package contract."
+  fail "The release archive file set does not exactly match the ${package_version} package contract."
 fi
 
 if zipinfo -l "$archive_path" | awk '$1 ~ /^l/ { found=1 } END { exit(found ? 0 : 1) }'; then
@@ -179,7 +188,10 @@ while IFS= read -r -d '' file; do
   printf '%s/%s\n' "$skill_name" "$relative" >> "$actual_extracted"
 done < <(find "$candidate" -type f -print0)
 LC_ALL=C sort "$actual_extracted" -o "$actual_extracted"
-cmp -s "$expected_list" "$actual_extracted" || fail "The extracted package file set does not match the 3.08 package contract."
+cmp -s "$expected_list" "$actual_extracted" || fail "The extracted package file set does not match the ${package_version} package contract."
+
+observed_version="$(tr -d '\r\n' < "${candidate}/VERSION")"
+[[ "$observed_version" == "$package_version" ]] || fail "Unexpected package version. Expected ${package_version}; received '${observed_version}'."
 
 if [[ -L "$destination" ]]; then
   fail "Refusing to replace a redirected existing skill path: ${destination}"
@@ -204,5 +216,5 @@ if (( existing_moved == 1 )); then
 fi
 committed=1
 
-printf 'Installed Adaptive Master-Subagent Orchestration 3.08 to:\n  %s\n' "$destination"
+printf 'Installed Adaptive Master-Subagent Orchestration %s to:\n  %s\n' "$package_version" "$destination"
 printf 'Restart or reload Codex before using the updated skill.\n'
