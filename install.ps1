@@ -125,17 +125,25 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $Archive = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
     try {
-        if ($Archive.Entries.Count -ne $RequiredFiles.Count) { throw "The release archive entry count does not match the $PackageVersion package contract." }
         $ExpectedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
         foreach ($Required in $RequiredFiles) { [void]$ExpectedNames.Add("$SkillName/$Required") }
+        $AllowedDirectories = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        foreach ($DirectoryName in @("$SkillName/", "$SkillName/agents/", "$SkillName/references/")) { [void]$AllowedDirectories.Add($DirectoryName) }
         $ObservedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        $ObservedDirectories = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
         [Int64]$ExpandedBytes = 0
         $Buffer = New-Object byte[] 81920
         foreach ($Entry in $Archive.Entries) {
             $Name = $Entry.FullName
-            if (-not $ExpectedNames.Contains($Name) -or -not $ObservedNames.Add($Name)) { throw "The release archive file set does not exactly match the $PackageVersion package contract: $Name" }
             $ExternalAttributes = [BitConverter]::ToUInt32([BitConverter]::GetBytes([Int32]$Entry.ExternalAttributes), 0)
             if ((($ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw "The release archive contains an unsupported symbolic link: $Name" }
+            if ($Name.EndsWith('/')) {
+                if ($Entry.Length -ne 0 -or -not $AllowedDirectories.Contains($Name) -or -not $ObservedDirectories.Add($Name)) {
+                    throw "The release archive contains an unexpected or duplicate directory entry: $Name"
+                }
+                continue
+            }
+            if (-not $ExpectedNames.Contains($Name) -or -not $ObservedNames.Add($Name)) { throw "The release archive file set does not exactly match the $PackageVersion package contract: $Name" }
             $ExpandedBytes += $Entry.Length
             if ($ExpandedBytes -gt $MaxExpandedBytes) { throw "The expanded release exceeds the 100 MiB safety limit." }
             $Stream = $null
