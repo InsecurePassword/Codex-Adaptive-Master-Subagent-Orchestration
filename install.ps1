@@ -6,11 +6,13 @@ $ProgressPreference = "SilentlyContinue"
 
 $RepositoryOwner = "InsecurePassword"
 $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
+$PackageVersion = "3.09"
 $ReleaseTag = "ReleaseZip"
-$AssetName = "adaptive-master-subagent-orchestration-3.09.zip"
+$AssetName = "adaptive-master-subagent-orchestration-$PackageVersion.zip"
 $DefaultReleaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/releases/download/$ReleaseTag/$AssetName"
 $ReleaseUrl = if ($env:AMS_RELEASE_URL) { $env:AMS_RELEASE_URL } else { $DefaultReleaseUrl }
-$ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6" }
+$ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373" }
+$UserAgent = "AMS-$PackageVersion-Installer"
 $SkillName = "adaptive-master-subagent-orchestration"
 $UserHome = if ($HOME) { $HOME } else { [Environment]::GetFolderPath("UserProfile") }
 if (-not $UserHome) { throw "Unable to determine the current user home directory." }
@@ -22,6 +24,7 @@ $RequiredFiles = @(
     "SKILL.md",
     "VERSION",
     "agents/openai.yaml",
+    "references/hierarchy-control.md",
     "references/intensity-control.md",
     "references/package-maintenance.md",
     "references/profile-management.md",
@@ -80,7 +83,7 @@ function Get-DownloadTarget {
     $MetadataHeaders = @{
         "Accept" = "application/vnd.github+json"
         "Authorization" = "Bearer $($env:GITHUB_TOKEN)"
-        "User-Agent" = "AMS-3.08-Installer"
+        "User-Agent" = $UserAgent
         "X-GitHub-Api-Version" = "2022-11-28"
     }
     $Response = Invoke-WithRetry -Description "Private release metadata lookup" -Operation {
@@ -95,13 +98,13 @@ function Get-DownloadTarget {
 try {
     New-Item -ItemType Directory -Force -Path $StageRoot, $ExtractRoot | Out-Null
     $Target = Get-DownloadTarget
-    $Headers = @{ "Accept" = "application/octet-stream"; "User-Agent" = "AMS-3.08-Installer" }
+    $Headers = @{ "Accept" = "application/octet-stream"; "User-Agent" = $UserAgent }
     if ($env:GITHUB_TOKEN) {
         $Headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
         $Headers["X-GitHub-Api-Version"] = "2022-11-28"
     }
 
-    Write-Host "Downloading Adaptive Master-Subagent Orchestration 3.08..."
+    Write-Host "Downloading Adaptive Master-Subagent Orchestration $PackageVersion..."
     try {
         $null = Invoke-WithRetry -Description "Release download" -Operation {
             Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $Target.Uri -Headers $Headers -OutFile $ArchivePath
@@ -122,7 +125,7 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $Archive = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
     try {
-        if ($Archive.Entries.Count -ne $RequiredFiles.Count) { throw "The release archive entry count does not match the 3.08 package contract." }
+        if ($Archive.Entries.Count -ne $RequiredFiles.Count) { throw "The release archive entry count does not match the $PackageVersion package contract." }
         $ExpectedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
         foreach ($Required in $RequiredFiles) { [void]$ExpectedNames.Add("$SkillName/$Required") }
         $ObservedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -130,7 +133,7 @@ try {
         $Buffer = New-Object byte[] 81920
         foreach ($Entry in $Archive.Entries) {
             $Name = $Entry.FullName
-            if (-not $ExpectedNames.Contains($Name) -or -not $ObservedNames.Add($Name)) { throw "The release archive file set does not exactly match the 3.08 package contract: $Name" }
+            if (-not $ExpectedNames.Contains($Name) -or -not $ObservedNames.Add($Name)) { throw "The release archive file set does not exactly match the $PackageVersion package contract: $Name" }
             $ExternalAttributes = [BitConverter]::ToUInt32([BitConverter]::GetBytes([Int32]$Entry.ExternalAttributes), 0)
             if ((($ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw "The release archive contains an unsupported symbolic link: $Name" }
             $ExpandedBytes += $Entry.Length
@@ -160,10 +163,13 @@ try {
         $Relative = $File.FullName.Substring($Candidate.Length).TrimStart([char[]]@('\','/')).Replace('\','/')
         [void]$ObservedExtracted.Add("$SkillName/$Relative")
     }
-    if ($ObservedExtracted.Count -ne $RequiredFiles.Count) { throw "The extracted package file count does not match the 3.08 package contract." }
+    if ($ObservedExtracted.Count -ne $RequiredFiles.Count) { throw "The extracted package file count does not match the $PackageVersion package contract." }
     foreach ($Required in $RequiredFiles) {
         if (-not $ObservedExtracted.Contains("$SkillName/$Required")) { throw "The extracted package is missing required file: $Required" }
     }
+
+    $ObservedVersion = (Get-Content -LiteralPath (Join-Path $Candidate "VERSION") -Raw).Trim()
+    if ($ObservedVersion -cne $PackageVersion) { throw "Unexpected package version. Expected $PackageVersion; received '$ObservedVersion'." }
 
     $Existing = Get-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
     if ($Existing) {
@@ -182,7 +188,7 @@ try {
     }
     $Committed = $true
 
-    Write-Host "Installed Adaptive Master-Subagent Orchestration 3.08 to:"
+    Write-Host "Installed Adaptive Master-Subagent Orchestration $PackageVersion to:"
     Write-Host "  $Destination"
     Write-Host "Restart or reload Codex before using the updated skill."
 }
