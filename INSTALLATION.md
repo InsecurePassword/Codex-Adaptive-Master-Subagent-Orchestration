@@ -1,31 +1,76 @@
 # Installation
 
-Release 3.09 is distributed as one instruction-only Codex skill package.
+Release 3.09 is distributed as one instruction-only Codex skill package through two synchronized GitHub release channels.
 
-## Release identity
+## Recommended one-line installation
 
-Package:
+### Windows PowerShell
 
-```text
-adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
 ```
 
-Download:
+Requirements:
+
+- Windows PowerShell 5.1 or newer
+- built-in .NET and PowerShell components
+
+### Linux or macOS with Bash
+
+```bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+```
+
+Requirements:
+
+- Bash
+- `curl`
+- `unzip`
+- `zipinfo`
+- `awk`
+- `sort`
+- `cmp`
+- either `sha256sum` or `shasum`
+
+Restart or reload Codex after installation or update.
+
+## Release channels
+
+### Stable installer channel
+
+The one-line commands download these assets from the `ReleaseZip` release:
+
+```text
+ReleaseZip/
+├── install.ps1
+├── install.sh
+└── adaptive-master-subagent-orchestration-3.09.zip
+```
+
+Package URL:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip
+```
+
+### Numbered audited release
+
+The numbered `3.09` release retains the descriptive audit filename:
 
 ```text
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
 ```
 
-SHA-256:
+The two ZIP filenames identify the same audited 3.09 package content. Both installation paths use this SHA-256:
 
 ```text
 3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
 ```
 
-The archive contains one top-level directory named:
+The archive contains one top-level directory:
 
 ```text
-adaptive-master-subagent-orchestration
+adaptive-master-subagent-orchestration/
 ```
 
 Default install location:
@@ -34,218 +79,143 @@ Default install location:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Restart or reload Codex after installation or update.
+## What the installers verify
 
-## Windows PowerShell installation
+Both installers:
 
-Requirements:
+1. download `ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip`;
+2. verify the pinned SHA-256 checksum;
+3. enforce a 10 MiB compressed-size limit and 100 MiB expanded-size limit;
+4. reject unreadable, encrypted, redirected, linked, malformed, or unexpected archive entries;
+5. allow only the expected package directories and exact required file set;
+6. require package `VERSION` to equal `3.09`;
+7. use an installation lock to prevent concurrent replacement;
+8. extract into a temporary staging directory;
+9. back up an existing AMS skill directory;
+10. restore the previous installation if replacement fails;
+11. preserve unrelated skills, project settings, recovery state, and generated agent profiles.
 
-- Windows PowerShell 5.1 or newer
-- built-in .NET and PowerShell components
+Required package files:
 
-Run:
+```text
+adaptive-master-subagent-orchestration/
+├── SKILL.md
+├── VERSION
+├── agents/
+│   └── openai.yaml
+└── references/
+    ├── hierarchy-control.md
+    ├── intensity-control.md
+    ├── package-maintenance.md
+    ├── profile-management.md
+    ├── project-control.md
+    ├── runtime-core.md
+    └── zergling-rush.md
+```
+
+An archive missing `references/hierarchy-control.md`, reporting another version, or containing any unexpected file or directory is rejected before replacement.
+
+## Optional environment overrides
+
+Normal public installation should use the pinned defaults. The installers also support controlled testing, mirrors, alternate destinations, or authenticated private access:
+
+| Variable | Purpose |
+|---|---|
+| `GITHUB_TOKEN` | Authenticate GitHub release metadata and asset download when required |
+| `AMS_RELEASE_URL` | Override the package URL |
+| `AMS_EXPECTED_SHA256` | Override the expected checksum; must be exactly 64 hexadecimal characters |
+| `AMS_SKILL_HOME` | Override the destination skill parent directory |
+
+When overriding `AMS_RELEASE_URL`, also provide the checksum for that exact archive through `AMS_EXPECTED_SHA256`. Do not bypass checksum validation.
+
+## Manual download and verification
+
+Download either synchronized 3.09 ZIP listed above.
+
+### Windows PowerShell checksum
 
 ```powershell
-$ErrorActionPreference = "Stop"
+$Zip = ".\adaptive-master-subagent-orchestration-3.09.zip"
+$Expected = "3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373"
+$Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
-$ReleaseUrl = "https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip"
-$ExpectedSha256 = "3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373"
-$Zip = Join-Path $env:TEMP "adaptive-master-subagent-orchestration-3.09.zip"
-$SkillHome = Join-Path $HOME ".agents\skills"
-$SkillRoot = Join-Path $SkillHome "adaptive-master-subagent-orchestration"
-$Backup = "$SkillRoot.backup-3.09"
-$Stage = Join-Path $env:TEMP "adaptive-master-subagent-orchestration-3.09-stage"
-
-Invoke-WebRequest -UseBasicParsing -Uri $ReleaseUrl -OutFile $Zip
-
-$ActualSha256 = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($ActualSha256 -ne $ExpectedSha256) {
-    throw "Checksum mismatch. Expected $ExpectedSha256; received $ActualSha256."
-}
-
-Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $Stage | Out-Null
-Expand-Archive -LiteralPath $Zip -DestinationPath $Stage -Force
-
-$Candidate = Join-Path $Stage "adaptive-master-subagent-orchestration"
-$Required = @(
-    "SKILL.md",
-    "VERSION",
-    "agents\openai.yaml",
-    "references\hierarchy-control.md",
-    "references\intensity-control.md",
-    "references\package-maintenance.md",
-    "references\profile-management.md",
-    "references\project-control.md",
-    "references\runtime-core.md",
-    "references\zergling-rush.md"
-)
-
-foreach ($RelativePath in $Required) {
-    if (-not (Test-Path -LiteralPath (Join-Path $Candidate $RelativePath) -PathType Leaf)) {
-        throw "The release package is missing required file: $RelativePath"
-    }
-}
-
-$Version = (Get-Content -LiteralPath (Join-Path $Candidate "VERSION") -Raw).Trim()
-if ($Version -ne "3.09") {
-    throw "Unexpected package version: $Version"
-}
-
-New-Item -ItemType Directory -Force -Path $SkillHome | Out-Null
-Remove-Item -LiteralPath $Backup -Recurse -Force -ErrorAction SilentlyContinue
-
-if (Test-Path -LiteralPath $SkillRoot) {
-    Move-Item -LiteralPath $SkillRoot -Destination $Backup
-}
-
-try {
-    Move-Item -LiteralPath $Candidate -Destination $SkillRoot
-    Remove-Item -LiteralPath $Backup -Recurse -Force -ErrorAction SilentlyContinue
-}
-catch {
-    Remove-Item -LiteralPath $SkillRoot -Recurse -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $Backup) {
-        Move-Item -LiteralPath $Backup -Destination $SkillRoot
-    }
-    throw
-}
-finally {
-    Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+if ($Actual -ne $Expected) {
+    throw "Checksum mismatch. Expected $Expected; received $Actual."
 }
 ```
 
-## Linux or macOS installation
-
-Requirements:
-
-- Bash
-- `curl`
-- `unzip`
-- `sha256sum` or `shasum`
-
-Run:
+### Linux checksum
 
 ```bash
-set -euo pipefail
-
-release_url='https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip'
-expected_sha256='3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373'
-tmp_root="${TMPDIR:-/tmp}"
-zip_path="$(mktemp "$tmp_root/ams-3.09.XXXXXX")"
-stage="$(mktemp -d "$tmp_root/ams-3.09.XXXXXX")"
-skill_home="$HOME/.agents/skills"
-skill_root="$skill_home/adaptive-master-subagent-orchestration"
-backup="$skill_root.backup-3.09"
-
-cleanup() {
-  rm -f -- "$zip_path"
-  rm -rf -- "$stage"
-}
-trap cleanup EXIT
-
-curl -fL --retry 3 --output "$zip_path" "$release_url"
-
-if command -v sha256sum >/dev/null 2>&1; then
-  actual_sha256="$(sha256sum "$zip_path" | awk '{print $1}')"
-elif command -v shasum >/dev/null 2>&1; then
-  actual_sha256="$(shasum -a 256 "$zip_path" | awk '{print $1}')"
-else
-  printf 'Either sha256sum or shasum is required.\n' >&2
-  exit 1
-fi
-
-if [ "$actual_sha256" != "$expected_sha256" ]; then
-  printf 'Checksum mismatch. Expected %s; received %s.\n' "$expected_sha256" "$actual_sha256" >&2
-  exit 1
-fi
-
-unzip -q "$zip_path" -d "$stage"
-candidate="$stage/adaptive-master-subagent-orchestration"
-
-required_files='SKILL.md
-VERSION
-agents/openai.yaml
-references/hierarchy-control.md
-references/intensity-control.md
-references/package-maintenance.md
-references/profile-management.md
-references/project-control.md
-references/runtime-core.md
-references/zergling-rush.md'
-
-while IFS= read -r relative_path; do
-  [ -f "$candidate/$relative_path" ] || {
-    printf 'The release package is missing required file: %s\n' "$relative_path" >&2
-    exit 1
-  }
-done <<EOF
-$required_files
-EOF
-
-version="$(tr -d '\r\n' < "$candidate/VERSION")"
-[ "$version" = '3.09' ] || {
-  printf 'Unexpected package version: %s\n' "$version" >&2
-  exit 1
-}
-
-mkdir -p "$skill_home"
-rm -rf -- "$backup"
-
-if [ -e "$skill_root" ]; then
-  mv -- "$skill_root" "$backup"
-fi
-
-if mv -- "$candidate" "$skill_root"; then
-  rm -rf -- "$backup"
-else
-  rm -rf -- "$skill_root"
-  if [ -e "$backup" ]; then
-    mv -- "$backup" "$skill_root"
-  fi
-  exit 1
-fi
+printf '%s  %s\n' \
+  '3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373' \
+  'adaptive-master-subagent-orchestration-3.09.zip' | sha256sum -c -
 ```
 
-## Verify the installed package
+### macOS without `sha256sum`
 
-Confirm the version:
+```bash
+actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.09.zip | awk '{print $1}')"
+test "$actual" = '3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373'
+```
+
+## Manual extraction
+
+Back up any existing AMS skill directory first.
 
 ### Windows PowerShell
 
 ```powershell
-Get-Content -LiteralPath "$HOME\.agents\skills\adaptive-master-subagent-orchestration\VERSION"
+$SkillHome = Join-Path $HOME ".agents\skills"
+New-Item -ItemType Directory -Force -Path $SkillHome | Out-Null
+Expand-Archive -LiteralPath ".\adaptive-master-subagent-orchestration-3.09.zip" -DestinationPath $SkillHome -Force
 ```
 
 ### Bash
 
 ```bash
-cat "$HOME/.agents/skills/adaptive-master-subagent-orchestration/VERSION"
+mkdir -p "$HOME/.agents/skills"
+unzip adaptive-master-subagent-orchestration-3.09.zip -d "$HOME/.agents/skills"
 ```
 
-Expected output:
+The resulting directory must be:
+
+```text
+$HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```
+
+Confirm that `VERSION` contains `3.09` and that `references/hierarchy-control.md` exists. Restart or reload Codex afterward.
+
+## Verify the installed package
+
+### Windows PowerShell
+
+```powershell
+$SkillRoot = Join-Path $HOME ".agents\skills\adaptive-master-subagent-orchestration"
+Get-Content -LiteralPath (Join-Path $SkillRoot "VERSION")
+Test-Path -LiteralPath (Join-Path $SkillRoot "references\hierarchy-control.md") -PathType Leaf
+```
+
+Expected output includes:
+
+```text
+3.09
+True
+```
+
+### Bash
+
+```bash
+skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
+cat "$skill_root/VERSION"
+test -f "$skill_root/references/hierarchy-control.md"
+```
+
+Expected version:
 
 ```text
 3.09
 ```
-
-Confirm that the new hierarchy reference exists:
-
-```text
-$HOME/.agents/skills/adaptive-master-subagent-orchestration/references/hierarchy-control.md
-```
-
-## Release-hosted installer channel
-
-The repository also documents PowerShell and Bash installer scripts hosted under the separate `ReleaseZip` release:
-
-```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh
-```
-
-Those scripts are pinned artifacts. Use them for release 3.09 only when their embedded package filename and SHA-256 match the 3.09 release identity at the top of this document. Do not assume that the moving installer channel and the numbered package release are synchronized.
 
 ## Start using AMS
 
@@ -271,7 +241,7 @@ A trusted project with no AMS configuration receives a disabled default configur
 
 ## Agent profiles
 
-Individual `ams_*.toml` profile files are not included in the ZIP.
+Individual `ams_*.toml` profiles are generated or repaired separately and are not included in the release ZIP.
 
 The default setting is:
 
@@ -279,7 +249,7 @@ The default setting is:
 profile_management = "auto"
 ```
 
-AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile. Release 3.09 does not add a permanent manager profile. Sol, Terra, and Luna profiles receive worker or delegated-manager authority through bounded work orders. Spark is worker-only.
+Release 3.09 does not add a permanent manager profile. Sol, Terra, and Luna profiles receive temporary worker or delegated-manager authority through bounded work orders. Spark is worker-only.
 
 Use:
 
@@ -287,25 +257,27 @@ Use:
 profile_management = "installer"
 ```
 
-to disable automatic repair. Explicit profile installation or repair may still be requested.
-
-A fresh Codex session may be required before newly generated or repaired profiles become available.
+to disable automatic profile repair. Explicit profile installation or repair may still be requested. A fresh Codex session may be required before newly generated or repaired profiles become available.
 
 ## Update and repair
 
-To update or repair AMS:
+Rerun the one-line installer for the operating system.
+
+The installer validates and stages the complete candidate before replacing the existing skill directory. It restores the previous installation if replacement fails.
+
+Before updating or repairing:
 
 1. finish or safely pause active AMS work;
-2. install the complete verified 3.09 package using the instructions above;
-3. preserve the previous directory until the replacement succeeds;
+2. preserve exact resumption state when needed;
+3. run the installer;
 4. restart or reload Codex;
-5. confirm that `VERSION` reports `3.09`.
+5. verify `VERSION = 3.09` and `references/hierarchy-control.md` exists.
 
-Do not combine files from different releases. Release 3.09 adds `references/hierarchy-control.md`; an installation missing that file is incomplete.
+Do not combine files from different releases.
 
 ## Uninstall
 
-Standard uninstall removes only the AMS skill directory and preserves project settings, project recovery state, generated profiles, and unrelated skills.
+Standard uninstall removes only the AMS skill directory. It preserves project settings, recovery state, generated profiles, and unrelated skills.
 
 Stop or safely pause active AMS work before removal.
 
