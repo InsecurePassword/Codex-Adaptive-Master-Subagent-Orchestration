@@ -132,8 +132,9 @@ set -euo pipefail
 
 release_url='https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip'
 expected_sha256='3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373'
-zip_path="$(mktemp -t ams-3.09.XXXXXX.zip)"
-stage="$(mktemp -d -t ams-3.09.XXXXXX)"
+tmp_root="${TMPDIR:-/tmp}"
+zip_path="$(mktemp "$tmp_root/ams-3.09.XXXXXX")"
+stage="$(mktemp -d "$tmp_root/ams-3.09.XXXXXX")"
 skill_home="$HOME/.agents/skills"
 skill_root="$skill_home/adaptive-master-subagent-orchestration"
 backup="$skill_root.backup-3.09"
@@ -148,8 +149,11 @@ curl -fL --retry 3 --output "$zip_path" "$release_url"
 
 if command -v sha256sum >/dev/null 2>&1; then
   actual_sha256="$(sha256sum "$zip_path" | awk '{print $1}')"
-else
+elif command -v shasum >/dev/null 2>&1; then
   actual_sha256="$(shasum -a 256 "$zip_path" | awk '{print $1}')"
+else
+  printf 'Either sha256sum or shasum is required.\n' >&2
+  exit 1
 fi
 
 if [ "$actual_sha256" != "$expected_sha256" ]; then
