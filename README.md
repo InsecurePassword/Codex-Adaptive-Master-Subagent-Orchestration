@@ -1,42 +1,62 @@
 # Adaptive Master–Subagent Orchestration
 
-**Current release: 3.08**
+**Current release: 3.09**
 
 Adaptive Master–Subagent Orchestration (AMS) is a Codex skill for large or complicated projects.
 
-It keeps **GPT-5.6 Sol Max** in charge as the manager. Sol Max plans the work, assigns tasks to other agents, checks their results, and decides when the project is complete.
+It keeps **GPT-5.6 Sol Max** in charge as the root manager. Sol Max owns the objective, task graph, routing, physical agent dispatch, integration decisions, validation requirements, acceptance, stoppages, and final response. It does not perform routine project execution.
 
 The main goals are:
 
 1. **Use the least expensive model that can do each task correctly.**
 2. **Finish faster by running independent work at the same time when useful.**
+3. **Scale from a single worker to a logical development-team hierarchy without depending on nested Codex threads.**
 
-The master agent normally supervises instead of doing routine work itself. Simple work can go to Spark or Luna, ordinary development work can go to Terra, and difficult or high-risk work can go to Sol.
+Simple work can go to Spark or Luna, ordinary development work can go to Terra, and difficult or high-risk work can go to Sol.
 
-## Install
+## What changed in 3.09
 
-The installer scripts are attached to the GitHub release. These commands do not use files from the `main` branch.
+Release 3.09 replaces the old direct-child-only orchestration rule with **virtual hierarchy**:
 
-### Windows PowerShell
+```text
+Logical topology
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
+Root Sol Max
+├── Delegated manager
+│   ├── Worker
+│   └── Worker
+└── Direct worker
 ```
 
-### Linux or macOS with Bash
+Codex sessions may still remain physically flat:
 
-```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+```text
+Physical topology
+
+Root Sol Max
+├── Manager
+├── Worker
+├── Worker
+└── Direct worker
 ```
 
-The installer:
+The root remains the sole physical spawn authority. A delegated manager may decompose and supervise only its assigned subgraph and may request root-mediated descendants. A worker is always a leaf and never delegates.
 
-- downloads the 3.08 skill package;
-- verifies its SHA-256 checksum;
-- checks the package contents before extraction;
-- installs it under your user skill directory;
-- replaces an older AMS installation safely;
-- leaves unrelated skills and project files unchanged.
+This design does not require a permanent manager profile. Existing Sol, Terra, and Luna profiles may serve as workers or delegated managers according to their bounded work orders. Spark is worker-only.
+
+## Install release 3.09
+
+The audited 3.09 package is attached to the `3.09` GitHub release:
+
+- [AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip)
+- [Detailed installation guide](INSTALLATION.md)
+- [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
+
+Package SHA-256:
+
+```text
+3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+```
 
 Default install location:
 
@@ -44,21 +64,11 @@ Default install location:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Restart or reload Codex after installation.
+Restart or reload Codex after installation or update.
 
-### Release downloads
+### Release-hosted installer channel
 
-- [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1)
-- [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh)
-- [AMS 3.08 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.08.zip)
-- [Detailed installation guide](INSTALLATION.md)
-- [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
-
-Pinned package SHA-256:
-
-```text
-e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6
-```
+The PowerShell and Bash installers under the separate `ReleaseZip` release are pinned installer artifacts. Use them for 3.09 only when their embedded package filename and checksum match the 3.09 values above. The direct 3.09 package and checksum are the source of truth for this release.
 
 ## Start using AMS
 
@@ -88,27 +98,29 @@ AMS stores its settings separately for each project. A new project starts with A
 
 ## Intensity modes
 
-Intensity controls how aggressively AMS runs tasks at the same time. It does **not** lower safety, testing, or quality requirements.
+Intensity controls the size and aggressiveness of the logical team. It does **not** lower safety, ownership, testing, or quality requirements.
 
 | Mode | What it does |
 |---|---|
-| `auto` | Recommended default. Sol Max decides how many agents are useful. |
-| `minimal` | Uses one worker at a time. Best when reducing usage matters more than speed. |
-| `moderate` | Runs a few clearly independent tasks at the same time. |
-| `heavy` | Uses more parallel workers when that should noticeably speed up the project. |
-| `extreme` | Uses every useful independent workstream it can safely run, while still choosing the cheapest suitable model for each task. |
+| `minimal` | Strictly permits the root plus one active non-root session. Work remains serial. |
+| `balanced` | Uses either up to two direct workers, or one delegated manager with up to two or three non-manager descendants. It does not mix these shapes or add another manager layer. |
+| `auto` | Recommended default. Chooses the smallest useful adaptive topology. AMS imposes no fixed logical-depth, manager-count, worker-ratio, or team-shape ceiling. |
+| `heavy` | Proactively forms useful managers and parallel lanes. AMS imposes no fixed logical-depth or team-shape ceiling. |
+| `extreme` | Runs every useful ready safe lane while remaining cost-first. AMS imposes no fixed logical-depth or team-shape ceiling. |
+
+`moderate` remains accepted as a backward-compatible alias for `balanced`. Schema-2 project settings continue to store the legacy value `moderate` so existing projects remain compatible.
 
 Change the mode with:
 
 ```text
-AMS MODE auto
 AMS MODE minimal
-AMS MODE moderate
+AMS MODE balanced
+AMS MODE auto
 AMS MODE heavy
 AMS MODE extreme
 ```
 
-Choosing a mode also enables AMS for that project.
+Choosing a normal mode also enables AMS for that project.
 
 ## Zergling Rush
 
@@ -116,39 +128,50 @@ Choosing a mode also enables AMS for that project.
 
 It may use:
 
-- more agents;
+- more agents and logical managers;
 - stronger models;
 - duplicate investigations;
 - extra validation;
 - speculative work that may be discarded.
 
-Because it can consume substantially more usage, it must be requested directly for the current task. Saving it in project settings is not enough to activate it automatically.
+AMS imposes no Rush logical-depth or team-shape limit. Actual Codex capacity, finite root-recorded allocations, dependencies, one-writer ownership, safety, and useful supervision still govern.
 
-Example:
+Because Rush can consume substantially more usage, it must be requested directly for the current task. A stored preference is not current consent.
 
 ```text
 Use Zergling Rush for this task.
 ```
 
-Use a normal intensity mode when cost matters.
-
 ## How AMS chooses models
 
 | Model family | Typical work |
 |---|---|
-| **Spark** | Downloads, commands, routine tests, builds, searches, extraction, and other simple mechanical work |
-| **Luna** | Clear, repetitive, low-risk work that is easy to check |
-| **Terra** | Normal coding, bug fixes, tests, documentation, reviews, and technical investigation |
-| **Sol** | Architecture, security-sensitive work, difficult debugging, ambiguous problems, and expensive-to-fail decisions |
+| **Spark** | Commands, routine tests, builds, searches, extraction, and other bounded text-only mechanical work. Spark is always a leaf worker. |
+| **Luna** | Clear, repetitive, low-risk work that is easy to check. |
+| **Terra** | Normal coding, bug fixes, tests, documentation, reviews, and technical investigation. |
+| **Sol** | Architecture, security-sensitive work, difficult debugging, ambiguous problems, and expensive-to-fail decisions. |
 
 AMS chooses the lowest-cost model and reasoning level that should complete the task reliably. A cheaper agent's result still has to be checked before it is accepted.
+
+## Hierarchy and control
+
+- The root is the only physical spawn authority and the only agent that communicates with the user.
+- Every non-root session has one immutable logical parent recorded in its work order.
+- A delegated manager may request descendants only within its assigned scope, ownership, allowed shape, and remaining allocation.
+- Managers do not independently spawn agents. The root validates each dispatch request and performs the physical spawn.
+- Workers are leaves and cannot delegate.
+- Authority, permissions, scope, ownership, and allocation may narrow down the chain but never expand.
+- One active writer is allowed for each shared mutable surface across the entire logical tree.
+- Worker completion is a leaf claim; manager completion is a validated-subgraph claim; only the root can declare project completion.
+- The root changes routing, sequencing, ownership, assignments, and recovery flow instead of taking over routine execution.
 
 ## Useful project commands
 
 ```text
 AMS ENABLE
 AMS DISABLE
-AMS MODE auto|minimal|moderate|heavy|extreme
+AMS MODE auto|minimal|balanced|moderate|heavy|extreme
+AMS IMPLICIT on|off
 AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
@@ -157,24 +180,11 @@ AMS PROFILES auto|installer
 
 Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 
-## Safety and control
-
-- Sol Max remains in charge of the full project.
-- Subagents cannot create more agents.
-- Each subagent receives a limited task.
-- Two agents are not allowed to edit the same shared area at the same time.
-- A subagent saying it is finished does not make the project complete.
-- Sol Max checks the evidence and decides whether the result is acceptable.
-- Failed work is normally corrected or reassigned to another subagent instead of being repeated unchanged.
-- AMS does not stop at an internal checkpoint while required work remains.
-
 ## Requirements
 
 - Codex with skill and custom-subagent support
-- A top-level GPT-5.6 Sol Max session
-- Windows PowerShell 5.1 or newer for `install.ps1`
-- Bash, `curl`, `unzip`, and `zipinfo` for `install.sh`
-- Spark access only when you want Spark routing and your account supports it
+- A top-level GPT-5.6 Sol Max session, or a verified equivalent Sol alias at Max reasoning
+- Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing or updating AMS
 
-The installed AMS skill contains only Markdown, YAML, and a version file. Python, PowerShell, and Bash are not needed while AMS is running; the scripts are used only for installation and updates.
+The installed AMS skill contains only Markdown, YAML, and a version file. Python, PowerShell, and Bash are not needed while AMS is running; shell tools are used only for installation and maintenance.
