@@ -62,13 +62,21 @@ curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-O
 
 Restart or reload Codex after installation or update.
 
-### Release 3.09 downloads
+### Release assets
 
-- [AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip)
+The stable installer channel uses these assets:
+
+- [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1)
+- [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh)
+- [Installer-channel AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip)
+
+The numbered release retains the descriptive audited filename:
+
+- [Audited AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip)
 - [Detailed installation guide](INSTALLATION.md)
 - [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
 
-Package SHA-256:
+The two package filenames identify the same audited 3.09 package content. Both installer scripts pin this SHA-256:
 
 ```text
 3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
@@ -195,7 +203,7 @@ Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 - Codex with skill and custom-subagent support
 - A top-level GPT-5.6 Sol Max session, or a verified equivalent Sol alias at Max reasoning
 - Windows PowerShell 5.1 or newer for the PowerShell installer
-- Bash, `curl`, `unzip`, and either `sha256sum` or `shasum` for the Bash installer
+- Bash, `curl`, `unzip`, `zipinfo`, `awk`, `sort`, `cmp`, and either `sha256sum` or `shasum` for the Bash installer
 - Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing or updating AMS
 
