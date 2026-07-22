@@ -44,9 +44,25 @@ The root remains the sole physical spawn authority. A delegated manager may deco
 
 This design does not require a permanent manager profile. Existing Sol, Terra, and Luna profiles may serve as workers or delegated managers according to their bounded work orders. Spark is worker-only.
 
-## Install release 3.09
+## Install
 
-The audited 3.09 package is attached to the `3.09` GitHub release:
+The release-hosted installers download the current AMS package, verify its SHA-256 checksum, validate the archive, and safely replace an older AMS installation.
+
+### Windows PowerShell
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
+```
+
+### Linux or macOS with Bash
+
+```bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+```
+
+Restart or reload Codex after installation or update.
+
+### Release 3.09 downloads
 
 - [AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip)
 - [Detailed installation guide](INSTALLATION.md)
@@ -63,12 +79,6 @@ Default install location:
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
-
-Restart or reload Codex after installation or update.
-
-### Release-hosted installer channel
-
-The PowerShell and Bash installers under the separate `ReleaseZip` release are pinned installer artifacts. Use them for 3.09 only when their embedded package filename and checksum match the 3.09 values above. The direct 3.09 package and checksum are the source of truth for this release.
 
 ## Start using AMS
 
@@ -184,6 +194,8 @@ Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 
 - Codex with skill and custom-subagent support
 - A top-level GPT-5.6 Sol Max session, or a verified equivalent Sol alias at Max reasoning
+- Windows PowerShell 5.1 or newer for the PowerShell installer
+- Bash, `curl`, `unzip`, and either `sha256sum` or `shasum` for the Bash installer
 - Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing or updating AMS
 
