@@ -4,7 +4,7 @@ set -Eeuo pipefail
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
 release_tag="ReleaseZip"
-asset_name="adaptive-master-subagent-orchestration-3.08.zip"
+asset_name="adaptive-master-subagent-orchestration-3.09.zip"
 default_release_url="https://github.com/${repo_owner}/${repo_name}/releases/download/${release_tag}/${asset_name}"
 release_url="${AMS_RELEASE_URL:-$default_release_url}"
 expected_sha256="${AMS_EXPECTED_SHA256:-e45eed1762ed24d1a0f671d9fb7424558694f0bef557aaca97f0cc0828d07be6}"
