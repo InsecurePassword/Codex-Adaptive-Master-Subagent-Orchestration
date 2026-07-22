@@ -3,7 +3,7 @@
 **Product:** Adaptive Master–Subagent Orchestration (AMS)  
 **Current release:** 3.09
 
-This document explains what AMS does, how to install it, how to use every supported control, how virtual hierarchy works, how AMS chooses agents, how it protects project work, and how to update, repair, recover, or uninstall it.
+This document describes every supported AMS control, the 3.09 virtual-hierarchy model, model and profile routing, installation and maintenance, recovery, completion rules, and uninstall behavior.
 
 ## Contents
 
@@ -17,11 +17,11 @@ This document explains what AMS does, how to install it, how to use every suppor
 8. [Intensity modes](#intensity-modes)
 9. [Virtual hierarchy](#virtual-hierarchy)
 10. [Zergling Rush](#zergling-rush)
-11. [How AMS chooses models](#how-ams-chooses-models)
+11. [Model and effort routing](#model-and-effort-routing)
 12. [How AMS manages work](#how-ams-manages-work)
 13. [Spark controls](#spark-controls)
 14. [Agent profile management](#agent-profile-management)
-15. [Validation, review, and completion](#validation-review-and-completion)
+15. [Validation and completion](#validation-and-completion)
 16. [Failure handling](#failure-handling)
 17. [Pausing and recovery](#pausing-and-recovery)
 18. [Package updates and repair](#package-updates-and-repair)
@@ -35,18 +35,18 @@ AMS is a Codex skill for projects that benefit from coordinated specialist agent
 
 It keeps **GPT-5.6 Sol Max**, or a verified equivalent Sol alias at Max reasoning, in charge as the root manager. The root:
 
-- understands the complete user objective;
+- owns the complete user objective;
 - maintains the global task graph;
 - chooses the logical team structure;
 - remains the sole physical spawn authority;
 - chooses the model and reasoning level for each assignment;
 - controls sequencing, concurrency, ownership, retries, cancellation, and reassignment;
 - makes integration decisions;
-- evaluates evidence and validation;
+- evaluates returned evidence and validation;
 - decides whether the project is complete, blocked, or requires a user decision;
 - communicates with the user.
 
-The root does **not** perform routine project execution. Implementation, inspection, testing, builds, integration work, review, and recovery inspection remain delegated to bounded non-root sessions.
+The root does **not** perform routine project execution. Implementation, repository inspection, testing, builds, integration work, review, and recovery inspection remain delegated to bounded non-root sessions.
 
 The main goals are:
 
@@ -95,39 +95,65 @@ Release 3.09 also:
 - keeps workers as non-delegating leaves;
 - keeps Spark worker-only;
 - uses existing Sol, Terra, and Luna profiles for either worker or delegated-manager roles through bounded work orders;
-- adds hierarchy lineage, custody, allocation, replay, replacement, and recovery rules.
+- adds hierarchy lineage, custody, allocation, replay, replacement, and recovery rules;
+- upgrades managed profile schema to role-gated schema 3.
 
 ## Requirements
 
 - Codex with skill and custom-subagent support
 - A top-level GPT-5.6 Sol Max session, or a verified equivalent Sol alias at Max reasoning
+- Windows PowerShell 5.1 or newer for the PowerShell installer
+- Bash, `curl`, `unzip`, `zipinfo`, `awk`, `sort`, `cmp`, and either `sha256sum` or `shasum` for the Bash installer
 - Spark access only when Spark routing is enabled and the account supports it
-- Windows PowerShell 5.1 or newer for the documented Windows installation
-- Bash, `curl`, `unzip`, and either `sha256sum` or `shasum` for the documented Unix installation
 - A Codex restart or reload after installing, updating, repairing, or uninstalling AMS
 
-The installed skill contains Markdown, YAML, and a version file only. Shell tools are used for installation and maintenance, not while AMS is orchestrating work.
+The installed skill contains Markdown, YAML, and a version file only. Shell tools are used for installation and maintenance, not while AMS is orchestrating project work.
 
 ## Installation
 
-### Release identity
+### Recommended one-line installation
 
-Package:
+Windows PowerShell:
 
-```text
-adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
 ```
 
-Download:
+Linux or macOS:
+
+```bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+```
+
+Restart or reload Codex afterward.
+
+### Release channels
+
+The stable installer channel contains:
+
+```text
+ReleaseZip/
+├── install.ps1
+├── install.sh
+└── adaptive-master-subagent-orchestration-3.09.zip
+```
+
+Installer-channel package:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip
+```
+
+The numbered release retains the descriptive audit filename:
 
 ```text
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
 ```
 
-SHA-256:
+The two ZIP filenames identify the same audited 3.09 package content. Both use:
 
 ```text
-3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+SHA-256: 3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
 ```
 
 Default installation location:
@@ -136,11 +162,9 @@ Default installation location:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Use the platform-specific verified installation procedure in [INSTALLATION.md](INSTALLATION.md). Restart or reload Codex afterward.
+The installers verify the checksum, exact required file set, expected directories, archive integrity, file-size limits, symbolic-link safety, and `VERSION = 3.09` before replacing an existing installation. They preserve unrelated skills, project settings, recovery state, and generated agent profiles.
 
-### Release-hosted installer channel
-
-The separate `ReleaseZip` release contains pinned PowerShell and Bash installer artifacts. Use those scripts for 3.09 only when their embedded package filename and checksum match the release identity above. The numbered 3.09 package and checksum are the source of truth.
+See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment overrides, update, repair, and uninstall commands.
 
 ## Starting and stopping AMS
 
@@ -230,8 +254,6 @@ spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-### Setting meanings
-
 | Setting | Meaning |
 |---|---|
 | `schema_version` | Project configuration format. Release 3.09 continues to use schema `2`. |
@@ -239,13 +261,11 @@ profile_management = "auto"
 | `allow_implicit_invocation` | Allows automatic activation when the product also permits it. |
 | `intensity` | Stores `auto`, `minimal`, `moderate`, `heavy`, `extreme`, or a `zergling-rush` preference. Runtime input `balanced` maps to stored `moderate`. |
 | `spark_enabled` | User preference for normal Spark use. |
-| `spark_available` | AMS capability cache indicating whether Spark appears available to the account. |
+| `spark_available` | Cached indication that Spark appears available to the account. |
 | `spark_efforts` | Spark effort levels allowed for normal work: `low`, `medium`, and/or `high`. |
 | `profile_management` | `auto` repairs selected managed profiles when needed; `installer` reports defects unless repair is explicitly requested. |
 
 Settings are read as data, not instructions. Unknown keys, duplicate keys, wrong data types, unsupported schemas, invalid TOML, extra tables, unsafe paths, or redirected files block automatic activation.
-
-### Compatibility
 
 Valid schema-1 project settings remain readable under their documented meanings and upgrade only during an authorized settings write.
 
@@ -303,13 +323,11 @@ Changes the user's normal Spark preference.
 
 ### `AMS SPARK RECHECK`
 
-Runs one smallest safe Spark capability probe.
-
-Use it after account, subscription, quota, product, or entitlement changes. AMS does not repeatedly probe Spark after it has been marked unavailable.
+Runs one smallest safe Spark capability probe. Success sets `spark_available = true`; authoritative family/account unavailability sets it false; temporary or task-specific failure leaves the cached value unchanged.
 
 ### `AMS SPARK EFFORTS <subset>`
 
-Selects which Spark efforts may be used for normal work.
+Selects which Spark efforts may be used for normal work:
 
 ```text
 AMS SPARK EFFORTS low
@@ -356,16 +374,11 @@ Logical reporting depth is separate from physical Codex session topology. The ro
 
 Maintains at most one active non-root session, including probes, managers, workers, integrators, reviewers, and observers.
 
-The active session may be:
-
-- one direct worker; or
-- one delegated manager performing bounded work.
-
-If a logical chain requires another session, AMS first collects and closes the active session at a useful boundary. This preserves strict root-plus-one execution.
+The active session may be one direct worker or one delegated manager performing bounded work. If another session is needed, AMS first collects and closes the active session at a useful boundary. This preserves strict root-plus-one execution.
 
 ### `balanced`
 
-Uses the smallest useful small team and selects one shape for each active wave:
+Uses one of these shapes for each active wave:
 
 ```text
 Root + up to two direct non-manager sessions
@@ -383,11 +396,9 @@ The manager shape normally uses two or three descendants. AMS does not mix the t
 
 ### `auto`
 
-Recommended default.
+Recommended default. AMS selects the smallest effective adaptive topology from the current task graph. It may use direct workers, managers, or manager-worker chains when useful.
 
-AMS selects the smallest effective adaptive topology from the current task graph. It may use direct workers, managers, or manager-worker chains when useful.
-
-AMS defines no fixed logical depth, manager count, worker ratio, or team-shape ceiling in `auto`. Actual runtime capacity, dependencies, ownership, finite allocations, safety, cost, and coordination value govern.
+AMS defines no fixed logical depth, manager count, worker ratio, or team-shape ceiling in `auto`. Runtime capacity, dependencies, ownership, finite allocations, safety, cost, and coordination value govern.
 
 ### `heavy`
 
@@ -432,7 +443,7 @@ The root owns:
 - acceptance and completion;
 - user communication.
 
-A non-root session has exactly one immutable logical parent.
+Every non-root session has exactly one immutable logical parent.
 
 ### Roles and authority
 
@@ -475,9 +486,9 @@ Spark is always `worker / none`.
 
 A manager returns a structured dispatch request containing:
 
-- root objective and request ID;
+- root objective and unique request ID;
 - parent work-order ID;
-- requested role and profile;
+- requested role and capability profile;
 - objective and scope;
 - requested ownership;
 - dependencies and success criteria;
@@ -519,7 +530,7 @@ Worker results normally flow through their logical parent. The root relays physi
 
 A manager must collect, reconcile, and disclose descendant evidence before claiming its subgraph complete. Uncollected, conflicting, inaccessible, or orphaned work cannot support completion.
 
-If a manager becomes unavailable, the root preserves the evidence and either resumes the manager or issues a new superseding manager order with explicit custody transfer. A live descendant that needs a new supervisor is closed or superseded and reissued under a new identity and logical parent.
+If a manager becomes unavailable, the root preserves evidence and either resumes the manager or issues a new superseding manager order with explicit custody transfer. A live descendant that needs a new supervisor is closed or superseded and reissued under a new identity and logical parent.
 
 ### Completion levels
 
@@ -555,34 +566,11 @@ AMS defines no Rush logical-depth, manager-count, worker-ratio, or team-shape li
 
 Actual runtime capacity, root-recorded finite allocations, dependencies, one-writer ownership, safety, and coherent supervision still govern. A deeper management layer must add real supervisory or context value; Rush does not authorize recursive make-work.
 
-### Consent requirement
+Rush must be requested clearly in the current user turn every time it activates. A repository setting, old saved preference, vague request to go faster, or normal intensity selection is not consent.
 
-Rush must be requested clearly in the current user turn every time it activates.
+Rush does not permit independent spawning by a manager or worker, worker delegation, authority amplification, overlapping writers, unauthorized destructive actions, skipped safety or validation, unsupported completion claims, non-root AMS control changes, or routine project execution by the root.
 
-These do not count as consent:
-
-- a repository setting;
-- an old saved preference;
-- asking AMS to be faster;
-- selecting a normal intensity.
-
-AMS announces that Rush may consume substantially more usage before starting Rush work.
-
-### What Rush does not change
-
-Rush does not permit:
-
-- independent spawning by a manager or worker;
-- worker delegation;
-- authority or allocation amplification;
-- two writers on the same mutable surface;
-- unauthorized destructive actions;
-- skipped safety or validation;
-- unsupported completion claims;
-- non-root changes to AMS settings, profiles, package files, or recovery state;
-- routine project execution by the root.
-
-## How AMS chooses models
+## Model and effort routing
 
 Normal modes use the lowest-cost reliable model family and reasoning level.
 
@@ -609,9 +597,7 @@ Sol, Terra, and Luna may use Low through Max. Spark uses Low, Medium, or High on
 
 File count alone does not justify a more expensive route. AMS considers risk, ambiguity, dependencies, novelty, verification difficulty, repetition, coupling, and investigation depth.
 
-### Manager routing
-
-There is no permanent manager model family. A delegated manager uses the same Sol/Terra/Luna profile matrix as other sessions. The root chooses a family and effort according to the manager's actual bounded work, ambiguity, risk, and supervisory burden.
+There is no permanent manager model family. A delegated manager uses the same Sol/Terra/Luna profile matrix as other sessions. The root chooses a family and effort according to the manager's bounded work, ambiguity, risk, and supervisory burden.
 
 If no compatible manager-capable profile is available, AMS flattens or reassigns the subgraph. It never uses Spark or a worker-only profile as a manager.
 
@@ -688,8 +674,6 @@ Normal Spark work requires both to be true and the selected effort to appear in 
 
 Spark is always a leaf worker. A Spark order claiming delegated-manager authority is invalid and must be rejected or rerouted.
 
-### When AMS marks Spark unavailable
-
 AMS sets `spark_available = false` only after strong evidence that the account, entitlement, subscription, quota, product, or Spark family is unavailable beyond one task attempt.
 
 These do not prove family-wide unavailability:
@@ -704,11 +688,7 @@ These do not prove family-wide unavailability:
 
 Those failures are handled for the current route without disabling Spark for the project.
 
-### Rechecking Spark
-
-`AMS SPARK RECHECK` authorizes one smallest safe capability probe. Success sets availability true; authoritative family/account unavailability sets it false; temporary or task-specific failure leaves the cached value unchanged.
-
-Under `minimal`, the probe consumes the single non-root session slot.
+`AMS SPARK RECHECK` authorizes one smallest safe capability probe. Under `minimal`, the probe consumes the single non-root session slot.
 
 ## Agent profile management
 
@@ -733,17 +713,13 @@ Spark supports:
 low, medium, high
 ```
 
-### Where profiles are stored
-
-Preferred location:
+Preferred profile location:
 
 ```text
 $CODEX_HOME/agents/
 ```
 
 Project-local profiles may be used only when global profiles are unavailable, deliberate project isolation is needed, or authoritative project instructions provide an override.
-
-### Current profile schema
 
 Release 3.09 managed profiles use:
 
@@ -752,59 +728,19 @@ Release 3.09 managed profiles use:
 # profile-schema: 3
 ```
 
-The profile enforces the bounded non-root boundary. The work order supplies the temporary `worker` or `delegated-manager` role.
+The profile enforces the bounded non-root boundary. The work order supplies the temporary `worker` or `delegated-manager` role. Release 3.09 intentionally does not add a permanent manager profile.
 
-Release 3.09 intentionally does not add a permanent manager profile. This keeps the profile matrix compact and makes management authority revocable for each work order.
+With `profile_management = "auto"`, AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile. It does not rewrite unrelated or ambiguous user-created profiles.
 
-### Automatic profile management
+With `profile_management = "installer"`, AMS reports defects and uses a truthful compatible loaded alternative when possible. Explicit installation or full repair remains allowed.
 
-With:
+Release 3.09 can migrate only profiles whose complete content proves recognized AMS provenance, including current schema-3 profiles, exact 3.08 schema-2 direct-child/no-spawn signatures, official earlier v3 managed signatures, exact 3.07 Spark schema-1 signatures, and original narrow marker-only AMS signatures.
 
-```toml
-profile_management = "auto"
-```
-
-AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile.
-
-It does not rewrite unrelated or ambiguous user-created profiles. When a name conflicts, AMS preserves the existing file and uses a compatible loaded profile or a nonconflicting managed name.
-
-### Installer mode
-
-With:
-
-```toml
-profile_management = "installer"
-```
-
-AMS does not automatically repair profiles. It reports the problem and uses a truthful compatible loaded alternative when possible.
-
-### Explicit install or full repair
-
-A clear request such as:
-
-```text
-Install or repair all AMS agent profiles.
-```
-
-authorizes AMS to reconcile the verified supported profile matrix. Unsupported model or effort combinations are not invented.
-
-### Profile migration
-
-Release 3.09 can migrate only profiles whose complete content proves recognized AMS provenance, including:
-
-- current schema-3 role-gated profiles;
-- exact 3.08 schema-2 direct-child/no-spawn Sol, Terra, Luna, and Spark signatures;
-- official earlier v3 managed signatures;
-- exact 3.07 Spark schema-1 signatures;
-- original narrow marker-only AMS profile or runner signatures.
-
-The 3.08 direct-child profile reference in this migration list is historical provenance, not current behavior.
-
-Managed legacy files are backed up before upgrade. Ambiguous, partially matching, malformed, or user-authored files are preserved.
+The 3.08 direct-child profile reference is historical provenance, not current behavior. Managed legacy files are backed up before upgrade. Ambiguous, partially matching, malformed, or user-authored files are preserved.
 
 A fresh Codex session may be required before newly created profiles become discoverable.
 
-## Validation, review, and completion
+## Validation and completion
 
 The root accepts work by judging evidence, reconciling conflicting findings, and requesting additional delegated checks when needed.
 
@@ -819,21 +755,9 @@ Non-root sessions perform executable validation such as:
 - behavioral reproduction;
 - integration work.
 
-The root evaluates the returned evidence rather than running routine project validation itself.
+The root evaluates returned evidence rather than running routine project validation itself.
 
-### Independent review
-
-AMS normally uses a separate read-only reviewer for high-risk:
-
-- implementation;
-- architecture;
-- security work;
-- broad refactoring;
-- difficult defects.
-
-Review is proportional and does not repeat recursively without new evidence.
-
-### Complete versus blocked
+AMS normally uses a separate read-only reviewer for high-risk implementation, architecture, security work, broad refactoring, and difficult defects. Review is proportional and does not repeat recursively without new evidence.
 
 AMS reports **complete** only when:
 
@@ -895,8 +819,6 @@ Before pausing, AMS preserves:
 - the safest next action;
 - the condition needed to resume.
 
-### Durable recovery state
-
 AMS prefers an existing authoritative project-native task, issue, journal, checkpoint, or handoff system. It does not create a competing ledger.
 
 When no existing system can preserve required resumption state, AMS may use:
@@ -918,8 +840,6 @@ descendant allocation = none
 
 AMS never infers manager authority from a legacy record.
 
-### Recovery process
-
 When resuming, the root:
 
 1. reads the handoff, objective, criteria, settings, active package identity, and root-owned recovery state;
@@ -932,17 +852,9 @@ When resuming, the root:
 8. creates the useful current topology instead of recreating an old roster;
 9. issues new IDs for replacements or reparented work.
 
-Use an explicit request such as:
-
-```text
-Use $adaptive-master-subagent-orchestration to resume this project from the handoff and live repository state.
-```
-
 ## Package updates and repair
 
-### Update
-
-Install the complete verified 3.09 package using [INSTALLATION.md](INSTALLATION.md).
+Rerun the one-line installer for the operating system.
 
 Before changing package instructions:
 
@@ -956,9 +868,7 @@ Before changing package instructions:
 
 Do not combine files from different releases.
 
-### Package repair
-
-A package repair validates and replaces the complete skill directory. Release 3.09 requires:
+Release 3.09 requires:
 
 ```text
 SKILL.md
@@ -976,8 +886,6 @@ references/zergling-rush.md
 An installation missing `hierarchy-control.md` is incomplete and must not improvise manager behavior.
 
 AMS may repair its installed package only with explicit user authority. The current session remains on the old loaded instructions for recovery and reporting, and a fresh session is required before normal work continues.
-
-### Package integrity checks
 
 AMS treats installed skill files as protected. It rejects package files that are redirected, unstable, unexpectedly linked, malformed, mixed across releases, or inconsistent with the package identity.
 
@@ -1027,31 +935,21 @@ fi
 
 Restart or reload Codex after removal.
 
-### Ask AMS to uninstall itself
-
 While the skill is still loaded, an explicit request may use the package-maintenance rules:
 
 ```text
 Uninstall the Adaptive Master–Subagent Orchestration skill. Preserve project settings, recovery state, and generated profiles.
 ```
 
-AMS stops active work safely, removes only the verified installed package root, reports remaining components, and requires a reload. Manual removal remains the simplest option.
-
 ### Optional full cleanup
 
-Project settings and profiles are intentionally preserved by standard uninstall. Remove them only when you explicitly want to erase them.
-
-#### Project settings
-
-Remove only the specific file:
+Remove project settings only from the specific project:
 
 ```text
 <project-root>/.codex/ams-orchestration.toml
 ```
 
 Do not delete the whole `.codex` directory.
-
-#### Generated profiles
 
 Generated profiles are normally under:
 
@@ -1065,11 +963,9 @@ Delete only files proven AMS-managed by the exact marker:
 # managed-by: adaptive-master-subagent-orchestration
 ```
 
-Do not remove every `ams_*.toml` file blindly. AMS preserves ambiguous or user-authored profiles even when their filenames look similar.
+Do not remove every `ams_*.toml` file blindly.
 
-#### Recovery state
-
-AMS uses project-native state when possible. If it created a separate recovery ledger, remove only the exact path recorded in the handoff or AMS report. Do not guess or delete unrelated project state.
+If AMS created a separate recovery ledger, remove only the exact path recorded in the handoff or AMS report. Do not guess or delete unrelated project state.
 
 ## Directory structure
 
@@ -1084,9 +980,16 @@ Codex-Adaptive-Master-Subagent-Orchestration/
 └── install.sh
 ```
 
-The numbered installable package is attached to the `3.09` GitHub release. The stable installer scripts are maintained separately under the `ReleaseZip` release.
+### Stable installer release
 
-### Release 3.09 asset
+```text
+ReleaseZip/
+├── adaptive-master-subagent-orchestration-3.09.zip
+├── install.ps1
+└── install.sh
+```
+
+### Numbered release
 
 ```text
 3.09/
@@ -1156,23 +1059,14 @@ $CODEX_HOME/agents/
 
 The exact generated set depends on models and efforts supported by the current Codex runtime. No separate manager profile family is generated.
 
-### Project settings
+### Project settings and optional recovery
 
 ```text
 <project-root>/
 └── .codex/
-    └── ams-orchestration.toml
+    ├── ams-orchestration.toml
+    └── ams-recovery.json  # only when no project-native state system is sufficient
 ```
-
-### Optional recovery ledger
-
-```text
-<project-root>/
-└── .codex/
-    └── ams-recovery.json
-```
-
-The ledger is used only when no authoritative project-native state system can preserve required recovery information.
 
 ## Troubleshooting
 
@@ -1189,13 +1083,7 @@ Also confirm that the project is trusted and Codex permits implicit skill use. E
 
 ### A new project has AMS disabled
 
-This is expected. Missing settings are initialized with `enabled = false`. Use:
-
-```text
-AMS ENABLE
-```
-
-or select a mode.
+This is expected. Missing settings are initialized with `enabled = false`. Use `AMS ENABLE` or select a mode.
 
 ### `balanced` is stored as `moderate`
 
@@ -1223,13 +1111,7 @@ spark_available = true
 spark_efforts = ["low", "medium", "high"]
 ```
 
-Then run:
-
-```text
-AMS SPARK RECHECK
-```
-
-when account capability may have changed.
+Run `AMS SPARK RECHECK` when account capability may have changed.
 
 ### A profile is missing or invalid
 
@@ -1243,7 +1125,7 @@ Restart Codex if newly created profiles are not immediately visible.
 
 ### The package reports 3.08 or lacks `hierarchy-control.md`
 
-The installation is not the complete 3.09 package. Reinstall the verified 3.09 archive and confirm:
+The installation is not the complete 3.09 package. Reinstall the verified archive and confirm:
 
 ```text
 VERSION = 3.09
@@ -1260,7 +1142,19 @@ Do not bypass the check. The expected SHA-256 is:
 3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
 ```
 
-Confirm that the downloaded filename and release tag match the release identity in this document.
+Confirm that the downloaded filename belongs to either the synchronized `ReleaseZip` channel or numbered `3.09` release described above.
+
+### The installer reports an unexpected directory entry
+
+The 3.09 archive may contain only these directory entries:
+
+```text
+adaptive-master-subagent-orchestration/
+adaptive-master-subagent-orchestration/agents/
+adaptive-master-subagent-orchestration/references/
+```
+
+Any other directory entry is rejected.
 
 ### The skill changed but Codex still shows old behavior
 
