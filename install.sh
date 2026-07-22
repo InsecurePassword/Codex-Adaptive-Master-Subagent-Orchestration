@@ -146,16 +146,28 @@ fi
 [[ "$actual_sha256" == "$expected_sha256" ]] || fail "Release checksum mismatch. Expected ${expected_sha256}; received ${actual_sha256}."
 
 archive_list="${stage_root}/entries.txt"
+archive_files="${stage_root}/archive-files.txt"
+archive_dirs="${stage_root}/archive-directories.txt"
 expected_list="${stage_root}/expected.txt"
 if ! zipinfo -1 "$archive_path" > "$archive_list"; then
   fail "The release archive is not a readable ZIP file."
 fi
+awk -v files="$archive_files" -v dirs="$archive_dirs" '
+  /\/$/ { print > dirs; next }
+  { print > files }
+' "$archive_list"
 for required in "${required_files[@]}"; do
   printf '%s/%s\n' "$skill_name" "$required"
 done | LC_ALL=C sort > "$expected_list"
-LC_ALL=C sort "$archive_list" -o "$archive_list"
-if ! cmp -s "$expected_list" "$archive_list"; then
+LC_ALL=C sort "$archive_files" -o "$archive_files"
+if ! cmp -s "$expected_list" "$archive_files"; then
   fail "The release archive file set does not exactly match the ${package_version} package contract."
+fi
+if ! awk -v root="${skill_name}/" -v agents="${skill_name}/agents/" -v refs="${skill_name}/references/" '
+  $0 != root && $0 != agents && $0 != refs { exit 1 }
+  seen[$0]++ { exit 1 }
+' "$archive_dirs"; then
+  fail "The release archive contains an unexpected or duplicate directory entry."
 fi
 
 if zipinfo -l "$archive_path" | awk '$1 ~ /^l/ { found=1 } END { exit(found ? 0 : 1) }'; then
@@ -167,7 +179,7 @@ fi
 
 read -r entry_count expanded_bytes < <(
   unzip -l "$archive_path" | awk '
-    $1 ~ /^[0-9]+$/ && $2 ~ /-/ && $3 ~ /:/ { count += 1; total += $1 }
+    $1 ~ /^[0-9]+$/ && $2 ~ /-/ && $3 ~ /:/ && $4 !~ /\/$/ { count += 1; total += $1 }
     END { print count + 0, total + 0 }
   '
 )
