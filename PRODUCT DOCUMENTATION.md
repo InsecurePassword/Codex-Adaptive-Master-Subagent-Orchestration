@@ -96,7 +96,7 @@ Release 3.09 also:
 - keeps Spark worker-only;
 - uses existing Sol, Terra, and Luna profiles for either worker or delegated-manager roles through bounded work orders;
 - adds hierarchy lineage, custody, allocation, replay, replacement, and recovery rules;
-- upgrades managed profile schema to role-gated schema 3.
+- upgrades managed profiles to role-neutral bounded-session schema 3 with Codex V2 dispatch safeguards.
 
 ## Requirements
 
@@ -153,7 +153,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 The two ZIP filenames identify the same audited 3.09 package content. Both use:
 
 ```text
-SHA-256: 3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+SHA-256: 74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
 ```
 
 Default installation location:
@@ -730,11 +730,13 @@ Release 3.09 managed profiles use:
 
 The profile enforces the bounded non-root boundary. The work order supplies the temporary `worker` or `delegated-manager` role. Release 3.09 intentionally does not add a permanent manager profile.
 
+Each auto-discovered profile includes its exact role name and Codex V2 guidance overrides that preserve root-only physical spawning. An explicit AMS custom-role spawn uses `fork_turns = "none"`; the root supplies the compact authoritative work order directly instead of inheriting the root transcript.
+
 With `profile_management = "auto"`, AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile. It does not rewrite unrelated or ambiguous user-created profiles.
 
 With `profile_management = "installer"`, AMS reports defects and uses a truthful compatible loaded alternative when possible. Explicit installation or full repair remains allowed.
 
-Release 3.09 can migrate only profiles whose complete content proves recognized AMS provenance, including current schema-3 profiles, exact 3.08 schema-2 direct-child/no-spawn signatures, official earlier v3 managed signatures, exact 3.07 Spark schema-1 signatures, and original narrow marker-only AMS signatures.
+Release 3.09 can migrate only profiles whose complete content proves recognized AMS provenance, including current schema-3 profiles, the exact pre-correction 3.09 signature, exact 3.08 schema-2 direct-child/no-spawn signatures, official earlier v3 managed signatures, exact 3.07 Spark schema-1 signatures, and original narrow marker-only AMS signatures.
 
 The 3.08 direct-child profile reference is historical provenance, not current behavior. Managed legacy files are backed up before upgrade. Ambiguous, partially matching, malformed, or user-authored files are preserved.
 
@@ -1139,7 +1141,7 @@ Do not merge files from 3.08 and 3.09.
 Do not bypass the check. The expected SHA-256 is:
 
 ```text
-3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
 ```
 
 Confirm that the downloaded filename belongs to either the synchronized `ReleaseZip` channel or numbered `3.09` release described above.
