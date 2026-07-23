@@ -4,10 +4,10 @@ set -Eeuo pipefail
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
 package_version="3.09"
-release_tag="3.09"
+repo_branch="main"
 asset_name="adaptive-master-subagent-orchestration-${package_version}.zip"
-default_release_url="https://github.com/${repo_owner}/${repo_name}/releases/download/${release_tag}/${asset_name}"
-release_url="${AMS_RELEASE_URL:-$default_release_url}"
+default_package_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/${repo_branch}/${asset_name}"
+package_url="${AMS_PACKAGE_URL:-${AMS_RELEASE_URL:-$default_package_url}}"
 expected_sha256="${AMS_EXPECTED_SHA256:-f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b}"
 user_agent="AMS-${package_version}-Installer"
 skill_name="adaptive-master-subagent-orchestration"
@@ -157,47 +157,13 @@ common_curl_args=(
   -H "User-Agent: ${user_agent}"
 )
 
-download_url="$release_url"
-if [[ -n "${GITHUB_TOKEN:-}" && -z "${AMS_RELEASE_URL:-}" ]]; then
-  metadata_url="https://api.github.com/repos/${repo_owner}/${repo_name}/releases/tags/${release_tag}"
-  metadata="$({ curl "${common_curl_args[@]}" \
-    -H "Accept: application/vnd.github+json" \
-    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    "$metadata_url"; } 2>/dev/null)" || fail "Unable to resolve release metadata. Verify GITHUB_TOKEN repository read access."
-  download_url="$(printf '%s' "$metadata" | awk -v target="$asset_name" '
-    BEGIN { RS="\\{"; FS="," }
-    index($0, "\"name\":\"" target "\"") {
-      for (i=1; i<=NF; i++) {
-        field=$i
-        gsub(/[[:space:]]/, "", field)
-        if (field ~ /^"url":"https:\/\/api\.github\.com\/repos\/[^\"]+\/releases\/assets\/[0-9]+"$/) {
-          sub(/^"url":"/, "", field)
-          sub(/"$/, "", field)
-          print field
-          exit
-        }
-      }
-    }
-  ')"
-  [[ -n "$download_url" ]] || fail "Release asset '${asset_name}' was not found in tag '${release_tag}'."
-fi
-
-headers=( -H "Accept: application/octet-stream" )
-if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-  headers+=( -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "X-GitHub-Api-Version: 2022-11-28" )
-fi
-
 printf 'Downloading Adaptive Master-Subagent Orchestration %s...\n' "$package_version"
-if ! curl "${common_curl_args[@]}" "${headers[@]}" "$download_url" -o "$archive_path"; then
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    fail "Release download failed. Verify the release and GITHUB_TOKEN repository read access."
-  fi
-  fail "Release download failed. If access is private, set GITHUB_TOKEN to a token with repository read access."
+if ! curl "${common_curl_args[@]}" -H "Accept: application/octet-stream" "$package_url" -o "$archive_path"; then
+  fail "Package download failed. Verify the repository raw-file URL or set AMS_PACKAGE_URL to the exact package location."
 fi
-[[ -s "$archive_path" ]] || fail "The release download was empty."
+[[ -s "$archive_path" ]] || fail "The package download was empty."
 archive_bytes="$(wc -c < "$archive_path" | tr -d '[:space:]')"
-(( archive_bytes <= max_archive_bytes )) || fail "The compressed release exceeds the 10 MiB safety limit."
+(( archive_bytes <= max_archive_bytes )) || fail "The compressed package exceeds the 10 MiB safety limit."
 
 if command -v sha256sum >/dev/null 2>&1; then
   actual_sha256="$(sha256sum "$archive_path" | awk '{print tolower($1)}')"

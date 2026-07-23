@@ -46,40 +46,36 @@ This design does not require a permanent manager profile. Existing Sol, Terra, a
 
 ## Install
 
-The release-hosted installers download the current AMS package, verify its SHA-256 checksum, validate the archive, and safely replace an older AMS installation.
+The repository-hosted installers download the current AMS package from `main`, verify its SHA-256 checksum, validate the archive, deploy the bundled model profiles, and safely replace an older AMS installation.
 
 ### Windows PowerShell
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
 ```
 
 ### Linux or macOS with Bash
 
 ```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
 ```
 
 Restart or reload Codex after installation or update.
 
-### Release assets
+### Repository files
 
-The stable installer channel uses these assets:
+The repository-root distribution uses these files from `main`:
 
-- [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1)
-- [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh)
-- [Installer-channel AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09.zip)
-
-The numbered release retains the descriptive audited filename:
-
-- [Audited AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip)
+- [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1)
+- [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh)
+- [AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip)
 - [Detailed installation guide](INSTALLATION.md)
 - [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
 
-The two package filenames identify the same audited 3.09 package content. Both installer scripts pin this SHA-256:
+The repository-root package is verified by both installer scripts with this SHA-256:
 
 ```text
-74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
 ```
 
 Default install location:
@@ -207,4 +203,4 @@ Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 - Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing or updating AMS
 
-The installed AMS skill contains only Markdown, YAML, and a version file. PowerShell and Bash are not needed while AMS is running; shell tools are used only for installation and maintenance.
+The installed AMS package contains Markdown, YAML, TOML, and a version file. PowerShell and Bash are not needed while AMS is running; shell tools are used only for installation and maintenance.
