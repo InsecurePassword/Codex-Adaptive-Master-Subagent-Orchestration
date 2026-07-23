@@ -323,13 +323,14 @@ for profile_file in "${profile_files[@]}"; do
   ((profiles_changed+=1))
 done
 
+committed=1
+
 if (( existing_moved == 1 )); then
-  rm -rf -- "$backup_path"
+  rm -rf -- "$backup_path" 2>/dev/null || true
   existing_moved=0
 fi
-rm -rf -- "$profile_backup_root"
+rm -rf -- "$profile_backup_root" 2>/dev/null || true
 profile_backup_root=""
-committed=1
 
 printf 'Installed Adaptive Master-Subagent Orchestration %s to:\n  %s\n' "$package_version" "$destination"
 printf 'Installed or updated %d AMS profiles; %d were already current.\n' "$profiles_changed" "$profiles_unchanged"
