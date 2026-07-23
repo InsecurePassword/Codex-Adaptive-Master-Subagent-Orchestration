@@ -1,13 +1,13 @@
 # Installation
 
-Release 3.09 is distributed as one instruction-only Codex skill package through two synchronized GitHub release channels.
+AMS 3.09 is distributed directly from the repository root on the `main` branch. The installer scripts and package ZIP are versioned together in the repository, so installation does not depend on GitHub Releases.
 
 ## Recommended one-line installation
 
 ### Windows PowerShell
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
 ```
 
 Requirements:
@@ -18,7 +18,7 @@ Requirements:
 ### Linux or macOS with Bash
 
 ```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
 ```
 
 Requirements:
@@ -30,41 +30,32 @@ Requirements:
 - `awk`
 - `sort`
 - `cmp`
+- `mktemp`
 - either `sha256sum` or `shasum`
 
 Restart or reload Codex after installation or update.
 
-## Release channels
+## Repository distribution
 
-### Stable installer channel
-
-The one-line commands download these assets from the `3.09` release:
+The files used by the installer are stored at the repository root:
 
 ```text
-3.09/
+Codex-Adaptive-Master-Subagent-Orchestration/
+├── adaptive-master-subagent-orchestration-3.09.zip
 ├── install.ps1
-├── install.sh
-└── adaptive-master-subagent-orchestration-3.09.zip
+└── install.sh
 ```
 
 Package URL:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09.zip
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
 ```
 
-### Numbered audited release
-
-The numbered `3.09` release retains the descriptive audit filename:
+Package SHA-256:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
-```
-
-The two ZIP filenames identify the same audited 3.09 package content. Both installation paths use this SHA-256:
-
-```text
-74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
 ```
 
 The archive contains one top-level directory:
@@ -73,29 +64,46 @@ The archive contains one top-level directory:
 adaptive-master-subagent-orchestration/
 ```
 
-Default install location:
+Default skill location:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```
+
+Default agent-profile location:
+
+```text
+$CODEX_HOME/agents/
+```
+
+When `CODEX_HOME` is not set, both installers use:
+
+```text
+$HOME/.codex/agents/
 ```
 
 ## What the installers verify
 
 Both installers:
 
-1. download `3.09/adaptive-master-subagent-orchestration-3.09.zip`;
-2. verify the pinned SHA-256 checksum;
+1. download the repository-root `adaptive-master-subagent-orchestration-3.09.zip` from `main`;
+2. verify its pinned SHA-256 checksum;
 3. enforce a 10 MiB compressed-size limit and 100 MiB expanded-size limit;
 4. reject unreadable, encrypted, redirected, linked, malformed, or unexpected archive entries;
 5. allow only the expected package directories and exact required file set;
 6. require package `VERSION` to equal `3.09`;
-7. use an installation lock to prevent concurrent replacement;
-8. extract into a temporary staging directory;
-9. back up an existing AMS skill directory;
-10. restore the previous installation if replacement fails;
-11. preserve unrelated skills, project settings, recovery state, and generated agent profiles.
+7. verify that all bundled profile files carry the AMS managed marker;
+8. use an installation lock to prevent concurrent replacement;
+9. extract into a temporary staging directory;
+10. back up an existing AMS skill directory and recognized AMS-managed profiles;
+11. install or update the complete 18-profile matrix;
+12. refuse to overwrite unrecognized or user-authored profile collisions;
+13. restore the previous skill and profile state if installation fails;
+14. preserve unrelated skills, project settings, recovery state, and unrelated profiles.
 
-Required package files:
+## Package contents
+
+The ZIP contains exactly these runtime files and profile assets:
 
 ```text
 adaptive-master-subagent-orchestration/
@@ -103,6 +111,26 @@ adaptive-master-subagent-orchestration/
 ├── VERSION
 ├── agents/
 │   └── openai.yaml
+├── assets/
+│   └── agent-profiles/
+│       ├── ams_sol_low.toml
+│       ├── ams_sol_medium.toml
+│       ├── ams_sol_high.toml
+│       ├── ams_sol_xhigh.toml
+│       ├── ams_sol_max.toml
+│       ├── ams_terra_low.toml
+│       ├── ams_terra_medium.toml
+│       ├── ams_terra_high.toml
+│       ├── ams_terra_xhigh.toml
+│       ├── ams_terra_max.toml
+│       ├── ams_luna_low.toml
+│       ├── ams_luna_medium.toml
+│       ├── ams_luna_high.toml
+│       ├── ams_luna_xhigh.toml
+│       ├── ams_luna_max.toml
+│       ├── ams_spark_low.toml
+│       ├── ams_spark_medium.toml
+│       └── ams_spark_high.toml
 └── references/
     ├── hierarchy-control.md
     ├── intensity-control.md
@@ -113,30 +141,34 @@ adaptive-master-subagent-orchestration/
     └── zergling-rush.md
 ```
 
-An archive missing `references/hierarchy-control.md`, reporting another version, or containing any unexpected file or directory is rejected before replacement.
+An archive reporting another version, omitting a required profile or reference, or containing an unexpected file or directory is rejected before replacement.
 
 ## Optional environment overrides
 
-Normal public installation should use the pinned defaults. The installers also support controlled testing, mirrors, alternate destinations, or authenticated private access:
+Normal public installation should use the pinned repository defaults. The installers also support controlled testing, mirrors, and alternate destinations:
 
 | Variable | Purpose |
 |---|---|
-| `GITHUB_TOKEN` | Authenticate GitHub release metadata and asset download when required |
-| `AMS_RELEASE_URL` | Override the package URL |
+| `AMS_PACKAGE_URL` | Override the package URL |
 | `AMS_EXPECTED_SHA256` | Override the expected checksum; must be exactly 64 hexadecimal characters |
 | `AMS_SKILL_HOME` | Override the destination skill parent directory |
+| `CODEX_HOME` | Override the Codex configuration and agent-profile root |
 
-When overriding `AMS_RELEASE_URL`, also provide the checksum for that exact archive through `AMS_EXPECTED_SHA256`. Do not bypass checksum validation.
+When overriding `AMS_PACKAGE_URL`, also provide the checksum for that exact archive through `AMS_EXPECTED_SHA256`. Do not bypass checksum validation.
 
 ## Manual download and verification
 
-Download either synchronized 3.09 ZIP listed above.
+Download the repository-root package:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
+```
 
 ### Windows PowerShell checksum
 
 ```powershell
 $Zip = ".\adaptive-master-subagent-orchestration-3.09.zip"
-$Expected = "74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514"
+$Expected = "f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b"
 $Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($Actual -ne $Expected) {
@@ -148,7 +180,7 @@ if ($Actual -ne $Expected) {
 
 ```bash
 printf '%s  %s\n' \
-  '74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514' \
+  'f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b' \
   'adaptive-master-subagent-orchestration-3.09.zip' | sha256sum -c -
 ```
 
@@ -156,10 +188,12 @@ printf '%s  %s\n' \
 
 ```bash
 actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.09.zip | awk '{print $1}')"
-test "$actual" = '74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514'
+test "$actual" = 'f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b'
 ```
 
 ## Manual extraction
+
+Manual extraction installs the skill files but does not deploy the bundled profiles into `$CODEX_HOME/agents/`. Use the installer unless you intend to place and verify those profiles yourself.
 
 Back up any existing AMS skill directory first.
 
@@ -184,7 +218,7 @@ The resulting directory must be:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Confirm that `VERSION` contains `3.09` and that `references/hierarchy-control.md` exists. Restart or reload Codex afterward.
+Confirm that `VERSION` contains `3.09`, `references/hierarchy-control.md` exists, and all 18 files exist under `assets/agent-profiles/`. Restart or reload Codex afterward.
 
 ## Verify the installed package
 
@@ -192,8 +226,15 @@ Confirm that `VERSION` contains `3.09` and that `references/hierarchy-control.md
 
 ```powershell
 $SkillRoot = Join-Path $HOME ".agents\skills\adaptive-master-subagent-orchestration"
+$AgentRoot = if ($env:CODEX_HOME) {
+    Join-Path $env:CODEX_HOME "agents"
+} else {
+    Join-Path $HOME ".codex\agents"
+}
+
 Get-Content -LiteralPath (Join-Path $SkillRoot "VERSION")
 Test-Path -LiteralPath (Join-Path $SkillRoot "references\hierarchy-control.md") -PathType Leaf
+(Get-ChildItem -LiteralPath $AgentRoot -Filter "ams_*.toml" -File).Count
 ```
 
 Expected output includes:
@@ -201,20 +242,25 @@ Expected output includes:
 ```text
 3.09
 True
+18
 ```
 
 ### Bash
 
 ```bash
 skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
+agent_root="${CODEX_HOME:-$HOME/.codex}/agents"
+
 cat "$skill_root/VERSION"
 test -f "$skill_root/references/hierarchy-control.md"
+find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
 ```
 
-Expected version:
+Expected version and profile count:
 
 ```text
 3.09
+18
 ```
 
 ## Start using AMS
@@ -241,29 +287,29 @@ A trusted project with no AMS configuration receives a disabled default configur
 
 ## Agent profiles
 
-Individual `ams_*.toml` profiles are generated or repaired separately and are not included in the release ZIP.
+The installer deploys the complete default profile matrix from the package into the effective Codex agent registry.
 
-The default setting is:
+- Sol, Terra, and Luna include `low`, `medium`, `high`, `xhigh`, and `max`.
+- Spark includes `low`, `medium`, and `high`.
+- Sol, Terra, and Luna profiles can receive temporary worker or delegated-manager authority through bounded work orders.
+- Spark remains worker-only.
+- No permanent manager profile family is created.
 
-```toml
-profile_management = "auto"
+A byte-identical installed profile is left unchanged. A differing profile is replaced only when its first line proves it is AMS-managed:
+
+```text
+# managed-by: adaptive-master-subagent-orchestration
 ```
 
-Release 3.09 does not add a permanent manager profile. Sol, Terra, and Luna profiles receive temporary worker or delegated-manager authority through bounded work orders. Spark is worker-only.
+An unrecognized or user-authored collision causes installation to fail closed and roll back.
 
-Use:
-
-```toml
-profile_management = "installer"
-```
-
-to disable automatic profile repair. Explicit profile installation or repair may still be requested. A fresh Codex session may be required before newly generated or repaired profiles become available.
+A fresh Codex session may be required before newly installed or updated profiles become discoverable.
 
 ## Update and repair
 
 Rerun the one-line installer for the operating system.
 
-The installer validates and stages the complete candidate before replacing the existing skill directory. It restores the previous installation if replacement fails.
+The installer validates and stages the complete candidate before replacing the existing skill and profile matrix. It restores the previous installation if replacement fails.
 
 Before updating or repairing:
 
@@ -271,13 +317,13 @@ Before updating or repairing:
 2. preserve exact resumption state when needed;
 3. run the installer;
 4. restart or reload Codex;
-5. verify `VERSION = 3.09` and `references/hierarchy-control.md` exists.
+5. verify `VERSION = 3.09`, `references/hierarchy-control.md` exists, and 18 AMS profiles are present.
 
-Do not combine files from different releases.
+Do not combine files from different package generations.
 
 ## Uninstall
 
-Standard uninstall removes only the AMS skill directory. It preserves project settings, recovery state, generated profiles, and unrelated skills.
+Standard uninstall removes only the AMS skill directory. It preserves project settings, recovery state, generated or installed AMS profiles, and unrelated skills.
 
 Stop or safely pause active AMS work before removal.
 
@@ -316,4 +362,4 @@ fi
 
 Restart or reload Codex after removal.
 
-Project settings and generated profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
+Project settings and installed profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
