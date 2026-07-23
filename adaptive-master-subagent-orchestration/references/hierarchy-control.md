@@ -57,12 +57,6 @@ Physical results normally flow through the logical parent unless immediate safet
 
 ## Completion, blocks, and ownership
 
-Completion is hierarchical: worker completion is a leaf claim; manager completion is a validated-subgraph claim; only root completion is project completion. A local block affects one session; a chain block affects one manager subgraph after authorized reroutes are exhausted; a project block requires no compliant route for mandatory objective progress. Independent lanes continue through delegation when safe.
+Completion is hierarchical: worker completion is a leaf claim; manager completion is a validated-subgraph claim; only root completion is project completion. A local block affects one session; a chain block affects one manager subgraph after authorized reroutes are exhausted; a project block requires no compliant route for mandatory objective progress or a genuine operator decision. Normal correction/evidence flows through the logical parent, while the root may globally stop, quarantine, replace, or reassign any session.
 
-A manager may accept/reject descendant evidence for its assigned subgraph, but root acceptance remains mandatory. Root integration/acceptance cannot be delegated. Ownership is explicit and exclusive for every mutable surface. Managers coordinate ownership only within their subgraph and cannot transfer it outside granted scope. On closure, cancellation, replacement, or transfer, ownership is released only after the root proves no live writer remains.
-
-## Deviation and recovery
-
-Deviation includes unauthorized delegation, lineage mutation, circular/orphaned ancestry, duplicated/allocation amplification, conflicting request-ID reuse, accepting uncollected evidence, acting outside scope/ownership, parent substitution without supersession, or claiming project completion.
-
-On deviation, stop dependent dispatch, let safe atomic work reach a boundary, preserve evidence, classify the defect, and choose the smallest safe response: reject/narrow request, close/cancel/replace, flatten/deepen/resequence, reconcile result, transfer custody by superseding order, or pause for unresolved authority/safety. Never repair hierarchy by editing old lineage in place.
+Allow one writer per surface across the logical tree. A manager may subdivide only its assigned surface and must not overlap active writers. Circular/orphaned or rewritten lineage, authority/allocation amplification, unmanaged recursion, exhausted/duplicated allocation, bypassed logical-parent review, or a management layer without real value is deviation. Preserve these facts in `project-control.md` recovery state when durable continuity is required.
