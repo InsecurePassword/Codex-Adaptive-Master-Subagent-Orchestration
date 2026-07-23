@@ -38,19 +38,29 @@ Use exact safe TOML supported by the installed Codex runtime. The managed file b
 # profile-schema: 3
 ```
 
-Sol/Terra/Luna profiles contain only the marker comments plus the verified equivalents of:
+Sol/Terra/Luna profiles contain the marker comments, the verified fields below, and the required V2 hint overrides defined afterward—nothing else:
 
 ```toml
+name = "ams_<family>_<effort>"
 description = "AMS bounded <family>/<effort> execution or delegated-management session"
 model = "<verified current model identifier>"
 model_reasoning_effort = "<effort>"
 developer_instructions = """<current bounded-session contract>"""
 ```
 
-Spark uses `description = "AMS bounded spark/<effort> execution session"`, the bounded contract with the Spark-leaf clause below, and the approved runtime-supported workspace-write override:
+Spark uses the marker comments, `name = "ams_spark_<effort>"`, `description = "AMS bounded spark/<effort> execution session"`, the bounded contract with the Spark-leaf clause below, the approved runtime-supported workspace-write override, and the same required V2 hint overrides:
 
 ```toml
 sandbox_mode = "workspace-write"
+```
+
+Every managed profile must also replace Codex V2's generic child delegation guidance with the AMS non-root contract so later platform guidance cannot authorize physical spawning or proactive delegation by a worker or delegated manager:
+
+```toml
+[features.multi_agent_v2]
+usage_hint_text = """AMS authorization override: despite the generic capability text above, this non-root session must not call spawn_agent. A worker never delegates. A delegated-manager returns a DISPATCH REQUEST to the root instead of spawning."""
+subagent_usage_hint_text = """You are a bounded non-root AMS session. The root is the sole physical spawn authority. Do not call spawn_agent. A worker never delegates. A delegated-manager requests descendants only by returning the required DISPATCH REQUEST within its work order. Your final response is delivered to the root, which routes it to your logical parent."""
+multi_agent_mode_hint_text = """AMS governs delegation for this non-root session. Do not physically spawn sub-agents. Follow only the current work order: worker/none never delegates; delegated-manager/request may return root-mediated DISPATCH REQUESTs only."""
 ```
 
 Do not add unrelated behavior-changing fields. If the runtime uses different canonical field names, use only verified documented equivalents and record the substitution; do not silently guess.
@@ -65,9 +75,9 @@ This role-neutral profile design avoids an additional always-loaded profile fami
 
 ## Selection and V2 dispatch
 
-Verify only profiles actually selected for work. Validate file safety, schema, exact family/effort/model, description, developer instruction invariants, and all behavior-changing fields. Immediately before dispatch, revalidate the selected profile and record requested identity. Because the platform may reread the role at spawn, treat observed execution identity as evidence and reject/reroute on mismatch; profile validation cannot cryptographically pin a later platform read.
+Verify only profiles actually selected for work. Validate file safety, schema, exact `name` matching the intended registry key, family/effort/model, description, developer instruction invariants, the exact V2 hint overrides, and all behavior-changing fields. Immediately before dispatch, revalidate the selected profile and record requested identity. Because the platform may reread the role at spawn, treat observed execution identity as evidence and reject/reroute on mismatch; profile validation cannot cryptographically pin a later platform read.
 
-When Codex V2 requires a non-full-history fork for an explicit custom role, set the supported equivalent of `fork_turns = "none"` or a bounded positive history count. Do not combine an explicit AMS profile with an incompatible full-history fork. Supply the authoritative compact work order and relevant context directly instead of forwarding the noisy transcript.
+For every Codex V2 spawn using an explicit AMS custom role, set the supported equivalent of `fork_turns = "none"`. Do not omit it, use `all`, or use a positive history fork. Supply the authoritative compact work order and relevant context directly instead of inheriting the root transcript or root-only AMS instructions.
 
 ## Safe reads and writes
 
@@ -79,13 +89,14 @@ Every profile operation requires safe containment beneath the chosen registry, r
 
 Treat a file as AMS-managed only when its exact content matches one of:
 
-1. the current schema-3 role-gated bounded-session contract;
-2. the exact 3.08 schema-2 direct-child/no-spawn Sol/Terra/Luna five-field signatures;
-3. the exact 3.08 schema-2 Spark six-field signature with `sandbox_mode = "workspace-write"`;
-4. an official v3 Sol/Terra/Luna five-field managed signature;
-5. an official v3 Spark six-field signature;
-6. the exact 3.07 schema-1 Spark five-field signature;
-7. the original narrow marker-only AMS profile/runner signatures.
+1. the current schema-3 role-neutral bounded-session contract, including exact `name` and V2 hint overrides;
+2. the exact pre-correction 3.09 schema-3 role-neutral signature with the prior allowed-field set and no V2 hint overrides, whether its official generated form included or omitted `name`;
+3. the exact 3.08 schema-2 direct-child/no-spawn Sol/Terra/Luna five-field signatures;
+4. the exact 3.08 schema-2 Spark six-field signature with `sandbox_mode = "workspace-write"`;
+5. an official v3 Sol/Terra/Luna five-field managed signature;
+6. an official v3 Spark six-field signature;
+7. the exact 3.07 schema-1 Spark five-field signature;
+8. the original narrow marker-only AMS profile/runner signatures.
 
 Recognize legacy files by complete exact marker, name, description, model/family, effort, instruction, and allowed-field signature—not by filename or marker alone. Back up proven legacy files before upgrade. Preserve unrelated, partially matching, malformed, or user-authored files and choose a compatible loaded profile or a nonconflicting managed alias. Never delete or rewrite an ambiguous profile merely because its name begins with `ams_`.
 
