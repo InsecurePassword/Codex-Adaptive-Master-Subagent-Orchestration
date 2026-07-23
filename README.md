@@ -152,9 +152,9 @@ It may use:
 - extra validation;
 - speculative work that may be discarded.
 
-AMS imposes no Rush logical-depth or team-shape limit. Actual Codex capacity, finite root-recorded allocations, dependencies, one-writer ownership, safety, and useful supervision still govern.
+AMS imposes no Zergling Rush logical-depth or team-shape limit. Actual Codex capacity, finite root-recorded allocations, dependencies, one-writer ownership, safety, and useful supervision still govern.
 
-Because Rush can consume substantially more usage, it must be requested directly for the current task. A stored preference is not current consent.
+Because Zergling Rush can consume substantially more usage, it must be requested directly for the current task. A stored preference is not current consent.
 
 ```text
 Use Zergling Rush for this task.
