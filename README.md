@@ -207,4 +207,4 @@ Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.
 - Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing or updating AMS
 
-The installed AMS skill contains only Markdown, YAML, and a version file. Python, PowerShell, and Bash are not needed while AMS is running; shell tools are used only for installation and maintenance.
+The installed AMS skill contains only Markdown, YAML, and a version file. PowerShell and Bash are not needed while AMS is running; shell tools are used only for installation and maintenance.
