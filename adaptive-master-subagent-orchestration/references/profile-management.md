@@ -1,6 +1,6 @@
 # AMS profile management
 
-Read completely only for a selected missing, malformed, undiscoverable, mismatched, legacy, or explicitly requested AMS profile. Profiles select model/effort and enforce the non-root boundary; work orders assign temporary execution or management roles. **Do not add a permanent manager profile:** a delegated manager uses the same truthful family/effort matrix as any other session and receives bounded management authority only in its work order.
+Read completely only for profile selection, verification, deployment, repair, migration, or an explicitly requested profile operation. The package ships the complete canonical profile matrix under `assets/agent-profiles/`; installers deploy those files to the effective Codex agent registry. Profiles select model/effort and enforce the non-root boundary; work orders assign temporary execution or management roles. **Do not add a permanent manager profile:** a delegated manager uses the same truthful family/effort matrix as any other session and receives bounded management authority only in its work order.
 
 ## Registry and invariants
 
@@ -13,7 +13,13 @@ ams_<sol|terra|luna>_<low|medium|high|xhigh|max>
 ams_spark_<low|medium|high>
 ```
 
-Resolve actual model identifiers from the current supported runtime/catalog. Never invent an identifier, effort, provider, tool, permission, network, sandbox, or observed identity. Map Light to `low` and Extra High to `xhigh`. Spark has no `xhigh` or `max` profile.
+The packaged defaults are `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, and `gpt-5.3-codex-spark`. Treat those as package defaults to verify against the current runtime/catalog, not as proof of account availability. Never invent an identifier, effort, provider, tool, permission, network, sandbox, or observed identity. Map Light to `low` and Extra High to `xhigh`. Spark has no `xhigh` or `max` profile.
+
+## Bundled canonical profiles
+
+The 18 files under `assets/agent-profiles/` are the canonical schema-3 definitions for this package generation. Their exact bytes define the managed names, descriptions, model defaults, reasoning efforts, Spark sandbox override, bounded developer instruction, and Codex V2 guidance overrides. Do not regenerate equivalent prose when the matching bundled asset is safe and readable.
+
+A normal package installation deploys the full matrix to `$CODEX_HOME/agents/` or the effective fallback registry. Missing profiles after installation are repaired from the exact bundled asset. An unavailable model or effort is a routing fact, not permission to rewrite the canonical asset silently; select a truthful available route and record the substitution.
 
 Every managed profile must preserve these invariants:
 
@@ -38,17 +44,17 @@ Use exact safe TOML supported by the installed Codex runtime. The managed file b
 # profile-schema: 3
 ```
 
-Sol/Terra/Luna profiles contain the marker comments, the verified fields below, and the required V2 hint overrides defined afterward—nothing else:
+Sol/Terra/Luna bundled profiles contain the marker comments, exact role name and purpose description, packaged model default, effort, bounded developer instruction, and required V2 hint overrides—nothing else:
 
 ```toml
 name = "ams_<family>_<effort>"
-description = "AMS bounded <family>/<effort> execution or delegated-management session"
-model = "<verified current model identifier>"
+description = "<exact bundled purpose description>"
+model = "<packaged family model default>"
 model_reasoning_effort = "<effort>"
 developer_instructions = """<current bounded-session contract>"""
 ```
 
-Spark uses the marker comments, `name = "ams_spark_<effort>"`, `description = "AMS bounded spark/<effort> execution session"`, the bounded contract with the Spark-leaf clause below, the approved runtime-supported workspace-write override, and the same required V2 hint overrides:
+Spark bundled profiles use the marker comments, exact role name and purpose description, `gpt-5.3-codex-spark`, the selected effort, the bounded contract with the Spark-leaf clause below, the approved runtime-supported workspace-write override, and the same required V2 hint overrides:
 
 ```toml
 sandbox_mode = "workspace-write"
@@ -75,7 +81,7 @@ This role-neutral profile design avoids an additional always-loaded profile fami
 
 ## Selection and V2 dispatch
 
-Verify only profiles actually selected for work. Validate file safety, schema, exact `name` matching the intended registry key, family/effort/model, description, developer instruction invariants, the exact V2 hint overrides, and all behavior-changing fields. Immediately before dispatch, revalidate the selected profile and record requested identity. Because the platform may reread the role at spawn, treat observed execution identity as evidence and reject/reroute on mismatch; profile validation cannot cryptographically pin a later platform read.
+Verify only profiles actually selected for work. Compare the effective registry file with its exact bundled asset and validate file safety, schema, exact `name` matching the intended registry key, family/effort/model, description, developer instruction invariants, the exact V2 hint overrides, and all behavior-changing fields. Immediately before dispatch, revalidate the selected profile and record requested identity. Because the platform may reread the role at spawn, treat observed execution identity as evidence and reject/reroute on mismatch; profile validation cannot cryptographically pin a later platform read.
 
 For every Codex V2 spawn using an explicit AMS custom role, set the supported equivalent of `fork_turns = "none"`. Do not omit it, use `all`, or use a positive history fork. Supply the authoritative compact work order and relevant context directly instead of inheriting the root transcript or root-only AMS instructions.
 
@@ -83,13 +89,13 @@ For every Codex V2 spawn using an explicit AMS custom role, set the supported eq
 
 Every profile operation requires safe containment beneath the chosen registry, regular non-redirected files, bounded identity-stable reads, UTF-8 without BOM/NUL/CR and final LF, rejection of symlinks/junctions/reparse points/observable unexpected multi-links, and collision checks under target-filesystem case and normalization semantics. Serialize AMS profile writers with an exclusive lock or equivalent compare-and-swap discipline. Stage outside the target, compare expected bytes immediately before commit, back up recognized managed legacy files, atomically replace, and verify the effective installed bytes. Never overwrite ambiguous or user-authored content.
 
-`profile_management = "auto"` permits lazy creation or repair only for a selected route and only when provenance is proven. `installer` reports the defect and uses a truthful compatible loaded alternative when possible; it blocks automatic repair, not a current explicit install/repair request.
+`profile_management = "auto"` permits restoration of a selected missing profile from the exact bundled asset after proving the target is absent and unclaimed. It permits replacement of an existing file only when that file proves recognized AMS provenance. `installer` reports the defect and uses a truthful compatible loaded alternative when possible; it blocks automatic repair, not a current explicit install/repair request.
 
 ## Provenance and migration
 
 Treat a file as AMS-managed only when its exact content matches one of:
 
-1. the current schema-3 role-neutral bounded-session contract, including exact `name` and V2 hint overrides;
+1. an exact current bundled schema-3 profile asset, including exact name, description, model, effort, developer instruction, Spark override when applicable, and V2 hint overrides;
 2. the exact pre-correction 3.09 schema-3 role-neutral signature with the prior allowed-field set and no V2 hint overrides, whether its official generated form included or omitted `name`;
 3. the exact 3.08 schema-2 direct-child/no-spawn Sol/Terra/Luna five-field signatures;
 4. the exact 3.08 schema-2 Spark six-field signature with `sandbox_mode = "workspace-write"`;
@@ -100,7 +106,7 @@ Treat a file as AMS-managed only when its exact content matches one of:
 
 Recognize legacy files by complete exact marker, name, description, model/family, effort, instruction, and allowed-field signature—not by filename or marker alone. Back up proven legacy files before upgrade. Preserve unrelated, partially matching, malformed, or user-authored files and choose a compatible loaded profile or a nonconflicting managed alias. Never delete or rewrite an ambiguous profile merely because its name begins with `ams_`.
 
-On explicit full repair, reconcile only the verified supported family/effort matrix. Unsupported combinations remain absent. Newly written profiles may require a fresh Codex session before discovery; do not claim they are loaded until observable.
+On explicit full repair, reconcile the complete 18-file bundled matrix. Preserve unrelated files, back up recognized managed legacy files before replacement, and do not create unsupported names outside the bundle. Newly written profiles may require a fresh Codex session before discovery; do not claim they are loaded until observable.
 
 ## Failure handling
 
