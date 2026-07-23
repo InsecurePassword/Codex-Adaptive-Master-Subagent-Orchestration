@@ -116,13 +116,13 @@ The installed skill contains Markdown, YAML, and a version file only. Shell tool
 Windows PowerShell:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1' | iex"
 ```
 
 Linux or macOS:
 
 ```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh' | bash
 ```
 
 Restart or reload Codex afterward.
@@ -132,7 +132,7 @@ Restart or reload Codex afterward.
 The stable installer channel contains:
 
 ```text
-ReleaseZip/
+3.09/
 ├── install.ps1
 ├── install.sh
 └── adaptive-master-subagent-orchestration-3.09.zip
@@ -141,7 +141,7 @@ ReleaseZip/
 Installer-channel package:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09.zip
 ```
 
 The numbered release retains the descriptive audit filename:
@@ -985,7 +985,7 @@ Codex-Adaptive-Master-Subagent-Orchestration/
 ### Stable installer release
 
 ```text
-ReleaseZip/
+3.09/
 ├── adaptive-master-subagent-orchestration-3.09.zip
 ├── install.ps1
 └── install.sh
@@ -1144,7 +1144,7 @@ Do not bypass the check. The expected SHA-256 is:
 74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
 ```
 
-Confirm that the downloaded filename belongs to either the synchronized `ReleaseZip` channel or numbered `3.09` release described above.
+Confirm that the downloaded filename belongs to either the synchronized `3.09` channel or numbered `3.09` release described above.
 
 ### The installer reports an unexpected directory entry
 

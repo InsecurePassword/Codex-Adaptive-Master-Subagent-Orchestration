@@ -7,7 +7,7 @@ Release 3.09 is distributed as one instruction-only Codex skill package through 
 ### Windows PowerShell
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1' | iex"
 ```
 
 Requirements:
@@ -18,7 +18,7 @@ Requirements:
 ### Linux or macOS with Bash
 
 ```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh' | bash
 ```
 
 Requirements:
@@ -38,10 +38,10 @@ Restart or reload Codex after installation or update.
 
 ### Stable installer channel
 
-The one-line commands download these assets from the `ReleaseZip` release:
+The one-line commands download these assets from the `3.09` release:
 
 ```text
-ReleaseZip/
+3.09/
 ├── install.ps1
 ├── install.sh
 └── adaptive-master-subagent-orchestration-3.09.zip
@@ -50,7 +50,7 @@ ReleaseZip/
 Package URL:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09.zip
 ```
 
 ### Numbered audited release
@@ -83,7 +83,7 @@ $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 
 Both installers:
 
-1. download `ReleaseZip/adaptive-master-subagent-orchestration-3.09.zip`;
+1. download `3.09/adaptive-master-subagent-orchestration-3.09.zip`;
 2. verify the pinned SHA-256 checksum;
 3. enforce a 10 MiB compressed-size limit and 100 MiB expanded-size limit;
 4. reject unreadable, encrypted, redirected, linked, malformed, or unexpected archive entries;
