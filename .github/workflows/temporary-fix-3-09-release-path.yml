@@ -1,0 +1,59 @@
+name: Temporary AMS 3.09 release path correction
+
+on:
+  push:
+    branches:
+      - "agent/fix-3-09-release-path"
+
+permissions:
+  contents: write
+
+jobs:
+  correct-release-path:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace stale ReleaseZip tag
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path("README.md"),
+              Path("INSTALLATION.md"),
+              Path("PRODUCT DOCUMENTATION.md"),
+              Path("install.ps1"),
+              Path("install.sh"),
+          ]
+
+          replacements = 0
+          for path in paths:
+              text = path.read_text(encoding="utf-8")
+              count = text.count("ReleaseZip")
+              if count == 0:
+                  raise SystemExit(f"Expected at least one ReleaseZip reference in {path}")
+              path.write_text(text.replace("ReleaseZip", "3.09"), encoding="utf-8", newline="\n")
+              replacements += count
+
+          if replacements < len(paths):
+              raise SystemExit(f"Expected at least {len(paths)} replacements; made {replacements}")
+          PY
+
+          if git grep -n 'ReleaseZip' -- README.md INSTALLATION.md 'PRODUCT DOCUMENTATION.md' install.ps1 install.sh; then
+            echo "A stale ReleaseZip reference remains." >&2
+            exit 1
+          fi
+
+      - name: Commit corrected paths
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md INSTALLATION.md 'PRODUCT DOCUMENTATION.md' install.ps1 install.sh
+          git commit -m "Use the 3.09 release path"
+          git push origin HEAD:"${GITHUB_REF_NAME}"
