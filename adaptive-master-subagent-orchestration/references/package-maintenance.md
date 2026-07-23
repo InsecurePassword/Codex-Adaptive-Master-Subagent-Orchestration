@@ -1,60 +1,25 @@
 # AMS package maintenance
 
-Read completely for package identity, install, update, repair, rollback, uninstall, mixed-generation suspicion, or reload-required recovery. Package maintenance is exclusive with active AMS dispatch and other AMS control writes.
+Read completely only for explicit install/update/repair/rollback/uninstall, package-integrity suspicion, mixed-generation recovery, or reload-required state. Package maintenance is root-only and exclusive with active dispatch and other AMS control writes.
 
-## Package identity
+## Authority and quiescence
 
-The installed package root is the directory containing `SKILL.md`, `VERSION`, `agents/`, and `references/`. Treat the package as one generation. Reject mixed, partial, redirected, unstable, or unsafe package content.
+Require explicit user authority for package mutation or uninstall. Before mutation, stop new dispatch/control starts, finish or roll back atomic control writes, let safe project work reach useful boundaries, collect evidence, preserve exact resumption state, and close all non-root sessions. Defer mutation when safe closure would lose mandatory work or evidence.
 
-Before using a packaged file as instructions, apply the root guard's trusted-reference requirements. For maintenance, also require every candidate package entry to resolve beneath one expected top-level directory, reject absolute paths, `..`, alternate streams, links/reparse points, unexpected hard links, device files, and duplicate/conflicting entries, and enforce bounded file counts and sizes.
+## Identity and trust boundary
 
-## Maintenance authority
+Capture the active version and, when observable, the deterministic runtime fingerprint before change. Fingerprint every regular package file recursively beneath the installed root: encode relative paths as UTF-8 with `/`, no leading `./`; sort by ordinal path bytes; append `<lowercase-sha256> <byte-length> <relative-path>\n`; hash the final-LF manifest. `SKILL.md`, `VERSION`, `agents/openai.yaml`, and every packaged reference are mandatory members, not an exhaustive list.
 
-Only the current top-level root may perform or authorize AMS package maintenance. Non-root sessions never inspect or mutate AMS package files, settings, generated profiles, or recovery state unless the root gives a narrowly bounded ordinary filesystem task that does not load them as instructions; such work still cannot decide package acceptance.
+Reject candidate or installed package members that are absolute, escaping, empty/`.`/`..`, invalid UTF-8, non-NFC, control-character-bearing, case/normalization-colliding, linked/redirected, encrypted, unreadable, oversized, unstable, or unexpected. Require regular files, safe bounded reads, UTF-8 without BOM/NUL/CR and final LF for text, exact required membership, parseable frontmatter/YAML, resolvable references, a supported explicit version, and an authorized source/release identity when available. Never invent or silently bump a version.
 
-Do not run package mutation concurrently with project dispatch, profile repair, settings writes, or recovery-state writes. Stop new dispatch, reach a safe boundary, collect results, close relevant sessions, and establish exclusive ownership first.
+## Mutation
 
-## Install, update, and repair
+Serialize package writers with an exclusive lock or equivalent compare-and-swap discipline. Build and validate the complete candidate outside the installed root; keep backup/checkpoint outside it. Prefer an atomic directory swap. If unavailable, apply from a recorded manifest and restore/verify the pre-change checkpoint on any failure. Never leave mixed runtime generations. After commit, validate membership, content, version, and fingerprint again.
 
-Use a staged replacement:
+If replacement fails, restore and verify the exact prior package. If both replacement and rollback verification fail, mark the package unusable: stop ordinary AMS dispatch/control work and permit only bounded recovery or fail-safe disable with the exact reinstall action reported.
 
-1. Resolve the exact source package and expected identity/version/checksum when available.
-2. Copy or extract to a fresh sibling staging directory on the same filesystem.
-3. Validate the complete candidate tree, required files, version, encoding, line endings, link safety, path containment, and any published checksum/signature.
-4. Preserve unrelated skills and project data.
-5. Move the existing installation to a bounded backup, then atomically rename the validated staging directory into place.
-6. Verify the installed tree again from disk.
-7. On failure, restore the backup when safe and report exact state.
-8. Remove temporary content only after the final state is proven.
-
-Never overlay individual files onto a live installation as the normal update method. Repair uses the same full-generation replacement, not ad hoc edits.
-
-If an installer script is used, treat it as untrusted input until inspected or covered by a trusted release identity. Prefer pinned release artifacts and checksums. Never pipe unknown mutable network content directly into an elevated shell.
-
-## Rollback
-
-Rollback requires a complete previously validated generation or a separately verified release artifact. Apply the same staged replacement procedure. Do not construct a rollback by mixing files from backups and the current tree.
+The current session continues under its pre-change contract only for bounded reporting/recovery and must distinguish active from installed version and fingerprint. A behavior-changing install, update, repair, rollback, or uninstall requires Codex reload/restart before normal AMS work.
 
 ## Uninstall
 
-Uninstall removes only the resolved AMS package root and explicitly authorized AMS-owned state. Preserve unrelated skills, project repositories, `.codex/ams-orchestration.toml`, project recovery records, and user-generated profiles unless the user separately authorizes their removal.
-
-Before deletion, prove the target is the intended AMS root, is not redirected, and is not a broader parent directory. Prefer atomic rename to a quarantine sibling followed by bounded deletion. If proof is incomplete, stop without deleting.
-
-## Current-session behavior after mutation
-
-A behavior-changing install, update, repair, rollback, or uninstall requires Codex reload/restart. After mutation, do not load the replacement package as current-session instructions. Retain only the pre-change contract needed to verify the transaction and report:
-
-- requested operation;
-- prior and resulting package identities;
-- validation/checksum evidence;
-- backup/rollback state;
-- files intentionally preserved;
-- whether reload is required;
-- any residual ambiguity or manual action.
-
-Do not resume AMS project orchestration in the same session under the new generation.
-
-## Mixed-generation or damaged state
-
-If package files disagree on version/identity, required files are missing, paths redirect, reads are unstable, or partial replacement is suspected, fail closed for AMS activation. Package maintenance may still run under this pre-change contract to inspect and restore one complete validated generation. Do not invent behavior from surviving fragments.
+Standard uninstall removes only the verified installed AMS package root. Preserve project settings, recovery state, generated profiles, and unrelated skills/profiles unless the user explicitly authorizes separate proven cleanup. Refuse redirected or ambiguous roots. Report what remains and require reload.
