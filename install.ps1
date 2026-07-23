@@ -7,10 +7,10 @@ $ProgressPreference = "SilentlyContinue"
 $RepositoryOwner = "InsecurePassword"
 $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
 $PackageVersion = "3.09"
-$ReleaseTag = "3.09"
+$RepositoryBranch = "main"
 $AssetName = "adaptive-master-subagent-orchestration-$PackageVersion.zip"
-$DefaultReleaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/releases/download/$ReleaseTag/$AssetName"
-$ReleaseUrl = if ($env:AMS_RELEASE_URL) { $env:AMS_RELEASE_URL } else { $DefaultReleaseUrl }
+$DefaultPackageUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/$RepositoryBranch/$AssetName"
+$PackageUrl = if ($env:AMS_PACKAGE_URL) { $env:AMS_PACKAGE_URL } elseif ($env:AMS_RELEASE_URL) { $env:AMS_RELEASE_URL } else { $DefaultPackageUrl }
 $ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b" }
 $UserAgent = "AMS-$PackageVersion-Installer"
 $SkillName = "adaptive-master-subagent-orchestration"
@@ -124,52 +124,26 @@ function Invoke-WithRetry {
     throw "$Description failed after 3 attempts.`n$($LastError.Exception.Message)"
 }
 
-function Get-DownloadTarget {
-    if ($env:AMS_RELEASE_URL -or -not $env:GITHUB_TOKEN) {
-        return [PSCustomObject]@{ Uri = $ReleaseUrl; Api = $false }
-    }
-    $MetadataUri = "https://api.github.com/repos/$RepositoryOwner/$RepositoryName/releases/tags/$ReleaseTag"
-    $MetadataHeaders = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $($env:GITHUB_TOKEN)"
-        "User-Agent" = $UserAgent
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
-    $Response = Invoke-WithRetry -Description "Release metadata lookup" -Operation {
-        Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri $MetadataUri -Headers $MetadataHeaders
-    }
-    $Release = $Response.Content | ConvertFrom-Json
-    $Asset = @($Release.assets) | Where-Object { $_.name -ceq $AssetName } | Select-Object -First 1
-    if (-not $Asset -or -not $Asset.url) { throw "Release asset '$AssetName' was not found in tag '$ReleaseTag'." }
-    return [PSCustomObject]@{ Uri = [string]$Asset.url; Api = $true }
-}
-
 try {
     New-Item -ItemType Directory -Force -Path $StageRoot, $ExtractRoot, $ProfileBackupRoot | Out-Null
-    $Target = Get-DownloadTarget
     $Headers = @{ "Accept" = "application/octet-stream"; "User-Agent" = $UserAgent }
-    if ($env:GITHUB_TOKEN) {
-        $Headers["Authorization"] = "Bearer $($env:GITHUB_TOKEN)"
-        $Headers["X-GitHub-Api-Version"] = "2022-11-28"
-    }
 
     Write-Host "Downloading Adaptive Master-Subagent Orchestration $PackageVersion..."
     try {
-        $null = Invoke-WithRetry -Description "Release download" -Operation {
-            Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $Target.Uri -Headers $Headers -OutFile $ArchivePath
+        $null = Invoke-WithRetry -Description "Package download" -Operation {
+            Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $PackageUrl -Headers $Headers -OutFile $ArchivePath
         }
     }
     catch {
-        $Hint = if ($env:GITHUB_TOKEN) { "Verify the release and GITHUB_TOKEN repository read access." } else { "If access is private, set GITHUB_TOKEN to a token with repository read access." }
-        throw "Release download failed. $Hint`n$($_.Exception.Message)"
+        throw "Package download failed. Verify the repository raw-file URL or set AMS_PACKAGE_URL to the exact package location.`n$($_.Exception.Message)"
     }
 
-    if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) { throw "The release download is missing." }
+    if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) { throw "The package download is missing." }
     $ArchiveItem = Get-Item -LiteralPath $ArchivePath
-    if ($ArchiveItem.Length -eq 0) { throw "The release download was empty." }
-    if ($ArchiveItem.Length -gt $MaxArchiveBytes) { throw "The compressed release exceeds the 10 MiB safety limit." }
+    if ($ArchiveItem.Length -eq 0) { throw "The package download was empty." }
+    if ($ArchiveItem.Length -gt $MaxArchiveBytes) { throw "The compressed package exceeds the 10 MiB safety limit." }
     $ActualSha256 = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($ActualSha256 -ne $ExpectedSha256) { throw "Release checksum mismatch. Expected $ExpectedSha256; received $ActualSha256." }
+    if ($ActualSha256 -ne $ExpectedSha256) { throw "Package checksum mismatch. Expected $ExpectedSha256; received $ActualSha256." }
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $Archive = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
