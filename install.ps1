@@ -291,13 +291,14 @@ try {
         $ProfilesChanged++
     }
 
+    $Committed = $true
+
     if ($ExistingMoved) {
-        Remove-Item -LiteralPath $BackupPath -Recurse -Force
+        Remove-Item -LiteralPath $BackupPath -Recurse -Force -ErrorAction SilentlyContinue
         $ExistingMoved = $false
     }
-    Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force
+    Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
     $ProfileBackupRoot = $null
-    $Committed = $true
 
     Write-Host "Installed Adaptive Master-Subagent Orchestration $PackageVersion to:"
     Write-Host "  $Destination"
