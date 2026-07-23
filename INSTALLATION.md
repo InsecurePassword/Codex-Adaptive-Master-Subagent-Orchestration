@@ -64,7 +64,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 The two ZIP filenames identify the same audited 3.09 package content. Both installation paths use this SHA-256:
 
 ```text
-3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
 ```
 
 The archive contains one top-level directory:
@@ -136,7 +136,7 @@ Download either synchronized 3.09 ZIP listed above.
 
 ```powershell
 $Zip = ".\adaptive-master-subagent-orchestration-3.09.zip"
-$Expected = "3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373"
+$Expected = "74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514"
 $Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($Actual -ne $Expected) {
@@ -148,7 +148,7 @@ if ($Actual -ne $Expected) {
 
 ```bash
 printf '%s  %s\n' \
-  '3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373' \
+  '74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514' \
   'adaptive-master-subagent-orchestration-3.09.zip' | sha256sum -c -
 ```
 
@@ -156,7 +156,7 @@ printf '%s  %s\n' \
 
 ```bash
 actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.09.zip | awk '{print $1}')"
-test "$actual" = '3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373'
+test "$actual" = '74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514'
 ```
 
 ## Manual extraction
