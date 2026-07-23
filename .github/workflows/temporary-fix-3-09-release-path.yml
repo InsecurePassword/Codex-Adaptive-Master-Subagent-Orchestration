@@ -57,3 +57,5 @@ jobs:
           git add README.md INSTALLATION.md 'PRODUCT DOCUMENTATION.md' install.ps1 install.sh
           git commit -m "Use the 3.09 release path"
           git push origin HEAD:"${GITHUB_REF_NAME}"
+
+# Trigger after workflow creation so the branch push is processed with this workflow present.
