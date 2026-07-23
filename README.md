@@ -79,7 +79,7 @@ The numbered release retains the descriptive audited filename:
 The two package filenames identify the same audited 3.09 package content. Both installer scripts pin this SHA-256:
 
 ```text
-3e3e8dc3142d5bc2411a4703982150941816c3669d5f0bb01bab2099f7a88373
+74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
 ```
 
 Default install location:
