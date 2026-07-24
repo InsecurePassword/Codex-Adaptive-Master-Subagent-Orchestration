@@ -964,66 +964,86 @@ If AMS created a separate recovery ledger, remove only the exact path recorded i
 
 ```text
 Codex-Adaptive-Master-Subagent-Orchestration/
-├── README.md
-├── INSTALLATION.md
-├── PRODUCT DOCUMENTATION.md
-├── adaptive-master-subagent-orchestration-3.09.zip
-├── install.ps1
-├── install.sh
-└── adaptive-master-subagent-orchestration/
-    ├── SKILL.md
-    ├── VERSION
-    ├── agents/
-    │   └── openai.yaml
-    ├── assets/
-    │   └── agent-profiles/
-    │       └── 18 canonical ams_*.toml profiles
-    └── references/
-        ├── hierarchy-control.md
-        ├── intensity-control.md
-        ├── package-maintenance.md
-        ├── profile-management.md
-        ├── project-control.md
-        ├── runtime-core.md
-        └── zergling-rush.md
+|-- README.md
+|-- INSTALLATION.md
+|-- PRODUCT DOCUMENTATION.md
+|-- adaptive-master-subagent-orchestration-3.09.zip
+|-- install.ps1
+|-- install.sh
+`-- adaptive-master-subagent-orchestration/
+    |-- SKILL.md
+    |-- VERSION
+    |-- agents/
+    |   `-- openai.yaml
+    |-- assets/
+    |   `-- agent-profiles/
+    |       `-- 18 canonical ams_*.toml profiles
+    `-- references/
+        |-- hierarchy-control.md
+        |-- intensity-control.md
+        |-- package-maintenance.md
+        |-- profile-management.md
+        |-- project-control.md
+        |-- runtime-core.md
+        `-- zergling-rush.md
 ```
 
 ### Installed skill
 
 ```text
 $HOME/.agents/skills/
-└── adaptive-master-subagent-orchestration/
-    ├── SKILL.md
-    ├── VERSION
-    ├── agents/
-    │   └── openai.yaml
-    ├── assets/
-    │   └── agent-profiles/
-    │       └── 18 canonical ams_*.toml profiles
-    └── references/
-        ├── hierarchy-control.md
-        ├── intensity-control.md
-        ├── package-maintenance.md
-        ├── profile-management.md
-        ├── project-control.md
-        ├── runtime-core.md
-        └── zergling-rush.md
+`-- adaptive-master-subagent-orchestration/
+    |-- SKILL.md
+    |-- VERSION
+    |-- agents/
+    |   `-- openai.yaml
+    |-- assets/
+    |   `-- agent-profiles/
+    |       `-- 18 canonical ams_*.toml profiles
+    `-- references/
+        |-- hierarchy-control.md
+        |-- intensity-control.md
+        |-- package-maintenance.md
+        |-- profile-management.md
+        |-- project-control.md
+        |-- runtime-core.md
+        `-- zergling-rush.md
 ```
 
 ### Installed agent profiles
 
 ```text
 $CODEX_HOME/agents/
-├── ams_sol_low.toml
-├── ams_sol_medium.toml
-├── ams_sol_high.toml
-├── ams_sol_xhigh.toml
-├── ams_sol_max.toml
-├── ams_terra_low.toml
-├── ams_terra_medium.toml
-├── ams_terra_high.toml
-├── ams_terra_xhigh.toml
-├──����}ѕ�Ʌ}���ѽ��+�Rs�R�R ����}�չ�}��ܹѽ��+�Rs�R�R ����}�չ�}����մ�ѽ��+�Rs�R�R�5��V����v��F����)I�)H)H�5��V�����v��F����)I�)H)H�5��V�����F����)I�)H)H�5�7&����r�F����)I�)H)H�5�7&���VF�V��F����)IN)H)H�5�7&����v��F���� ��222&��V7B6WGF��w2�B�F����&V6�fW'���FW�@��&��V7B�&��C��)IN)H)H�6�FW��)I�)H)H�2��&6�W7G&F����F����)IN)H)H[\�\�X�ݙ\�K���ۈ�ۛH�[����ڙX�[�]]�H�]H�\�[H\��Y��X�Y[��
+|-- ams_sol_low.toml
+|-- ams_sol_medium.toml
+|-- ams_sol_high.toml
+|-- ams_sol_xhigh.toml
+|-- ams_sol_max.toml
+|-- ams_terra_low.toml
+|-- ams_terra_medium.toml
+|-- ams_terra_high.toml
+|-- ams_terra_xhigh.toml
+|-- ams_terra_max.toml
+|-- ams_luna_low.toml
+|-- ams_luna_medium.toml
+|-- ams_luna_high.toml
+|-- ams_luna_xhigh.toml
+|-- ams_luna_max.toml
+|-- ams_spark_low.toml
+|-- ams_spark_medium.toml
+`-- ams_spark_high.toml
+```
+
+When `CODEX_HOME` is unset, the installer uses `$HOME/.codex/agents/`.
+
+### Project settings and optional recovery
+
+```text
+<project-root>/
+`-- .codex/
+    |-- ams-orchestration.toml
+    `-- ams-recovery.json  # only when no project-native state system is sufficient
+```
 
 ## Troubleshooting
 
