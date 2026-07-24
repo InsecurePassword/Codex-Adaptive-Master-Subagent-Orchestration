@@ -1,0 +1,296 @@
+name: One-time public cleanup PR trigger
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean public repository state
+        uses: actions/github-script@v7
+        env:
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repoFullName = `${owner}/${repo}`;
+            const currentRunId = Number(process.env.CURRENT_RUN_ID);
+            const currentPullNumber = context.issue.number;
+
+            const decode = value => Buffer.from(value, 'base64').toString('utf8');
+            const installation = decode('IyMgSW5zdGFsbGF0aW9uCgojIyMgUmVjb21tZW5kZWQgb25lLWxpbmUgaW5zdGFsbGF0aW9uCgpXaW5kb3dzIFBvd2VyU2hlbGw6CgpgYGBwb3dlcnNoZWxsCnBvd2Vyc2hlbGwuZXhlIC1Ob1Byb2ZpbGUgLUV4ZWN1dGlvblBvbGljeSBCeXBhc3MgLUNvbW1hbmQgImlybSAnaHR0cHM6Ly9naXRodWIuY29tL0luc2VjdXJlUGFzc3dvcmQvQ29kZXgtQWRhcHRpdmUtTWFzdGVyLVN1YmFnZW50LU9yY2hlc3RyYXRpb24vcmF3L3JlZnMvaGVhZHMvbWFpbi9pbnN0YWxsLnBzMScgfCBpZXgiCmBgYAoKTGludXggb3IgbWFjT1M6CgpgYGBiYXNoCmN1cmwgLWZzU0wgJ2h0dHBzOi8vZ2l0aHViLmNvbS9JbnNlY3VyZVBhc3N3b3JkL0NvZGV4LUFkYXB0aXZlLU1hc3Rlci1TdWJhZ2VudC1PcmNoZXN0cmF0aW9uL3Jhdy9yZWZzL2hlYWRzL21haW4vaW5zdGFsbC5zaCcgfCBiYXNoCmBgYAoKUmVzdGFydCBvciByZWxvYWQgQ29kZXggYWZ0ZXJ3YXJkLgoKIyMjIFJlcG9zaXRvcnkgZGlzdHJpYnV0aW9uCgpBTVMgMy4wOSBpcyBkaXN0cmlidXRlZCBkaXJlY3RseSBmcm9tIHRoZSByZXBvc2l0b3J5IHJvb3Qgb24gdGhlIGBtYWluYCBicmFuY2guIEluc3RhbGxhdGlvbiBkb2VzIG5vdCBkZXBlbmQgb24gR2l0SHViIFJlbGVhc2UgYXNzZXRzLgoKYGBgdGV4dApDb2RleC1BZGFwdGl2ZS1NYXN0ZXItU3ViYWdlbnQtT3JjaGVzdHJhdGlvbi8K4pSc4pSA4pSAIGFkYXB0aXZlLW1hc3Rlci1zdWJhZ2VudC1vcmNoZXN0cmF0aW9uLTMuMDkuemlwCuKUnOKUgOKUgCBpbnN0YWxsLnBzMQrilJTilIDilIAgaW5zdGFsbC5zaApgYGAKClBhY2thZ2UgVVJMOgoKYGBgdGV4dApodHRwczovL2dpdGh1Yi5jb20vSW5zZWN1cmVQYXNzd29yZC9Db2RleC1BZGFwdGl2ZS1NYXN0ZXItU3ViYWdlbnQtT3JjaGVzdHJhdGlvbi9yYXcvcmVmcy9oZWFkcy9tYWluL2FkYXB0aXZlLW1hc3Rlci1zdWJhZ2VudC1vcmNoZXN0cmF0aW9uLTMuMDkuemlwCmBgYAoKUGFja2FnZSBTSEEtMjU2OgoKYGBgdGV4dApmMzVhYTI4Y2FkN2MyNjkxZTgwODIzZTM2Y2EyNzZjYmVlOGIyMGRlMDY3NjAwZmQ4ZWRiOGYyYWFmMTBmZTRiCmBgYAoKRGVmYXVsdCBza2lsbCBsb2NhdGlvbjoKCmBgYHRleHQKJEhPTUUvLmFnZW50cy9za2lsbHMvYWRhcHRpdmUtbWFzdGVyLXN1YmFnZW50LW9yY2hlc3RyYXRpb24vCmBgYAoKRGVmYXVsdCBwcm9maWxlIGxvY2F0aW9uOgoKYGBgdGV4dAokQ09ERVhfSE9NRS9hZ2VudHMvCmBgYAoKV2hlbiBgQ09ERVhfSE9NRWAgaXMgdW5zZXQsIHRoZSBwcm9maWxlIGxvY2F0aW9uIGlzIGAkSE9NRS8uY29kZXgvYWdlbnRzL2AuCgpUaGUgaW5zdGFsbGVycyB2ZXJpZnkgdGhlIGNoZWNrc3VtLCBleGFjdCBwYWNrYWdlIGludmVudG9yeSwgYXJjaGl2ZSBpbnRlZ3JpdHksIGZpbGUtc2l6ZSBsaW1pdHMsIHN5bWJvbGljLWxpbmsgc2FmZXR5LCBtYW5hZ2VkLXByb2ZpbGUgbWFya2VycywgYW5kIGBWRVJTSU9OID0gMy4wOWAuIFRoZXkgdHJhbnNhY3Rpb25hbGx5IGluc3RhbGwgdGhlIHNraWxsIGFuZCBjb21wbGV0ZSAxOC1wcm9maWxlIG1hdHJpeCB3aGlsZSBwcmVzZXJ2aW5nIHVucmVsYXRlZCBza2lsbHMsIHByb2plY3Qgc2V0dGluZ3MsIHJlY292ZXJ5IHN0YXRlLCBhbmQgdXNlci1hdXRob3JlZCBwcm9maWxlcy4KClNlZSBbSU5TVEFMTEFUSU9OLm1kXShJTlNUQUxMQVRJT04ubWQpIGZvciBtYW51YWwgdmVyaWZpY2F0aW9uLCBlbnZpcm9ubWVudCBvdmVycmlkZXMsIHVwZGF0ZSwgcmVwYWlyLCBhbmQgdW5pbnN0YWxsIGNvbW1hbmRzLg==');
+            const profiles = decode('IyMgQWdlbnQgcHJvZmlsZSBtYW5hZ2VtZW50CgpUaGUgcGFja2FnZSBpbmNsdWRlcyB0aGUgY29tcGxldGUgY2Fub25pY2FsIHByb2ZpbGUgbWF0cml4IHVuZGVyOgoKYGBgdGV4dAphZGFwdGl2ZS1tYXN0ZXItc3ViYWdlbnQtb3JjaGVzdHJhdGlvbi9hc3NldHMvYWdlbnQtcHJvZmlsZXMvCmBgYAoKVGhlIGluc3RhbGxlciBkZXBsb3lzIGFsbCAxOCBwcm9maWxlcyB0byBgJENPREVYX0hPTUUvYWdlbnRzL2AsIG9yIGAkSE9NRS8uY29kZXgvYWdlbnRzL2Agd2hlbiBgQ09ERVhfSE9NRWAgaXMgdW5zZXQ6CgpgYGB0ZXh0CmFtc188c29sfHRlcnJhfGx1bmE+Xzxsb3d8bWVkaXVtfGhpZ2h8eGhpZ2h8bWF4PgphbXNfc3BhcmtfPGxvd3xtZWRpdW18aGlnaD4KYGBgCgpUaGUgcGFja2FnZWQgbW9kZWwgZGVmYXVsdHMgYXJlIGBncHQtNS42LXNvbGAsIGBncHQtNS42LXRlcnJhYCwgYGdwdC01LjYtbHVuYWAsIGFuZCBgZ3B0LTUuMy1jb2RleC1zcGFya2AuIFJ1bnRpbWUgYXZhaWxhYmlsaXR5IGlzIHN0aWxsIHZlcmlmaWVkIGJlZm9yZSByb3V0aW5nOyBhbiB1bmF2YWlsYWJsZSBmYW1pbHkgb3IgZWZmb3J0IGRvZXMgbm90IGF1dGhvcml6ZSBzaWxlbnQgcmV3cml0aW5nIG9mIHRoZSBjYW5vbmljYWwgcGFja2FnZSBhc3NldC4KCkV2ZXJ5IG1hbmFnZWQgZmlsZSBiZWdpbnMgd2l0aDoKCmBgYHRleHQKIyBtYW5hZ2VkLWJ5OiBhZGFwdGl2ZS1tYXN0ZXItc3ViYWdlbnQtb3JjaGVzdHJhdGlvbgojIHByb2ZpbGUtc2NoZW1hOiAzCmBgYAoKRWFjaCBwcm9maWxlIGluY2x1ZGVzIGl0cyBleGFjdCBkaXNjb3ZlcmFibGUgcm9sZSBuYW1lLCBtb2RlbCwgcmVhc29uaW5nIGVmZm9ydCwgYm91bmRlZCBub24tcm9vdCBkZXZlbG9wZXIgaW5zdHJ1Y3Rpb25zLCBhbmQgQ29kZXggVjIgZ3VpZGFuY2Ugb3ZlcnJpZGVzLiBFeHBsaWNpdCBBTVMgY3VzdG9tLXJvbGUgZGlzcGF0Y2ggdXNlcyBgZm9ya190dXJucyA9ICJub25lImAgc28gdGhlIHJvb3Qgc3VwcGxpZXMgdGhlIGNvbXBhY3Qgd29yayBvcmRlciBkaXJlY3RseSBpbnN0ZWFkIG9mIGZvcndhcmRpbmcgcm9vdC1vbmx5IG9yY2hlc3RyYXRpb24gY29udGV4dC4KClNvbCwgVGVycmEsIGFuZCBMdW5hIHByb2ZpbGVzIGFyZSByb2xlLW5ldXRyYWw6IGEgd29yayBvcmRlciB0ZW1wb3JhcmlseSBhc3NpZ25zIGB3b3JrZXIgLyBub25lYCBvciBgZGVsZWdhdGVkLW1hbmFnZXIgLyByZXF1ZXN0YC4gU3BhcmsgcmVtYWlucyBgd29ya2VyIC8gbm9uZWAgb25seS4gTm8gcGVybWFuZW50IG1hbmFnZXItcHJvZmlsZSBmYW1pbHkgZXhpc3RzLgoKRHVyaW5nIGluc3RhbGxhdGlvbjoKCi0gYnl0ZS1pZGVudGljYWwgcHJvZmlsZXMgcmVtYWluIHVuY2hhbmdlZDsKLSBhIGRpZmZlcmluZyBmaWxlIGlzIHJlcGxhY2VkIG9ubHkgd2hlbiBpdHMgZXhhY3QgbWFuYWdlZCBtYXJrZXIgcHJvdmVzIEFNUyBvd25lcnNoaXA7Ci0gdW5yZWNvZ25pemVkIG9yIHVzZXItYXV0aG9yZWQgY29sbGlzaW9ucyBmYWlsIGNsb3NlZDsKLSBza2lsbCBhbmQgcHJvZmlsZSBjaGFuZ2VzIHJvbGwgYmFjayB0b2dldGhlciBvbiBmYWlsdXJlLgoKQWZ0ZXIgaW5zdGFsbGF0aW9uLCBgcHJvZmlsZV9tYW5hZ2VtZW50ID0gImF1dG8iYCBwZXJtaXRzIHNlbGVjdGVkIG1pc3Npbmcgb3IgcmVjb2duaXplZCBkZWZlY3RpdmUgQU1TIHByb2ZpbGVzIHRvIGJlIHJlc3RvcmVkIGZyb20gdGhlIGV4YWN0IGJ1bmRsZWQgYXNzZXQuIGBwcm9maWxlX21hbmFnZW1lbnQgPSAiaW5zdGFsbGVyImAgZGlzYWJsZXMgYXV0b21hdGljIHJlcGFpciBidXQgc3RpbGwgYWxsb3dzIGFuIGV4cGxpY2l0IHJlcGFpciByZXF1ZXN0LiBBbWJpZ3VvdXMgZmlsZXMgYXJlIHByZXNlcnZlZC4KCkEgZnJlc2ggQ29kZXggc2Vzc2lvbiBtYXkgYmUgcmVxdWlyZWQgYmVmb3JlIG5ld2x5IGluc3RhbGxlZCBvciByZXBhaXJlZCBwcm9maWxlcyBiZWNvbWUgZGlzY292ZXJhYmxlLg==');
+            const directory = decode('IyMgRGlyZWN0b3J5IHN0cnVjdHVyZQoKIyMjIFJlcG9zaXRvcnkKCmBgYHRleHQKQ29kZXgtQWRhcHRpdmUtTWFzdGVyLVN1YmFnZW50LU9yY2hlc3RyYXRpb24vCuKUnOKUgOKUgCBSRUFETUUubWQK4pSc4pSA4pSAIElOU1RBTExBVElPTi5tZArilJzilIDilIAgUFJPRFVDVCBET0NVTUVOVEFUSU9OLm1kCuKUnOKUgOKUgCBhZGFwdGl2ZS1tYXN0ZXItc3ViYWdlbnQtb3JjaGVzdHJhdGlvbi0zLjA5LnppcArilJzilIDilIAgaW5zdGFsbC5wczEK4pSc4pSA4pSAIGluc3RhbGwuc2gK4pSU4pSA4pSAIGFkYXB0aXZlLW1hc3Rlci1zdWJhZ2VudC1vcmNoZXN0cmF0aW9uLwogICAg4pSc4pSA4pSAIFNLSUxMLm1kCiAgICDilJzilIDilIAgVkVSU0lPTgogICAg4pSc4pSA4pSAIGFnZW50cy8KICAgIOKUgiAgIOKUlOKUgOKUgCBvcGVuYWkueWFtbAogICAg4pSc4pSA4pSAIGFzc2V0cy8KICAgIOKUgiAgIOKUlOKUgOKUgCBhZ2VudC1wcm9maWxlcy8KICAgIOKUgiAgICAgICDilJTilIDilIAgMTggY2Fub25pY2FsIGFtc18qLnRvbWwgcHJvZmlsZXMKICAgIOKUlOKUgOKUgCByZWZlcmVuY2VzLwogICAgICAgIOKUnOKUgOKUgCBoaWVyYXJjaHktY29udHJvbC5tZAogICAgICAgIOKUnOKUgOKUgCBpbnRlbnNpdHktY29udHJvbC5tZAogICAgICAgIOKUnOKUgOKUgCBwYWNrYWdlLW1haW50ZW5hbmNlLm1kCiAgICAgICAg4pSc4pSA4pSAIHByb2ZpbGUtbWFuYWdlbWVudC5tZAogICAgICAgIOKUnOKUgOKUgCBwcm9qZWN0LWNvbnRyb2wubWQKICAgICAgICDilJzilIDilIAgcnVudGltZS1jb3JlLm1kCiAgICAgICAg4pSU4pSA4pSAIHplcmdsaW5nLXJ1c2gubWQKYGBgCgojIyMgSW5zdGFsbGVkIHNraWxsCgpgYGB0ZXh0CiRIT01FLy5hZ2VudHMvc2tpbGxzLwrilJTilIDilIAgYWRhcHRpdmUtbWFzdGVyLXN1YmFnZW50LW9yY2hlc3RyYXRpb24vCiAgICDilJzilIDilIAgU0tJTEwubWQKICAgIOKUnOKUgOKUgCBWRVJTSU9OCiAgICDilJzilIDilIAgYWdlbnRzLwogICAg4pSCICAg4pSU4pSA4pSAIG9wZW5haS55YW1sCiAgICDilJzilIDilIAgYXNzZXRzLwogICAg4pSCICAg4pSU4pSA4pSAIGFnZW50LXByb2ZpbGVzLwogICAg4pSCICAgICAgIOKUlOKUgOKUgCAxOCBjYW5vbmljYWwgYW1zXyoudG9tbCBwcm9maWxlcwogICAg4pSU4pSA4pSAIHJlZmVyZW5jZXMvCiAgICAgICAg4pSc4pSA4pSAIGhpZXJhcmNoeS1jb250cm9sLm1kCiAgICAgICAg4pSc4pSA4pSAIGludGVuc2l0eS1jb250cm9sLm1kCiAgICAgICAg4pSc4pSA4pSAIHBhY2thZ2UtbWFpbnRlbmFuY2UubWQKICAgICAgICDilJzilIDilIAgcHJvZmlsZS1tYW5hZ2VtZW50Lm1kCiAgICAgICAg4pSc4pSA4pSAIHByb2plY3QtY29udHJvbC5tZAogICAgICAgIOKUnOKUgOKUgCBydW50aW1lLWNvcmUubWQKICAgICAgICDilJTilIDilIAgemVyZ2xpbmctcnVzaC5tZApgYGAKCiMjIyBJbnN0YWxsZWQgYWdlbnQgcHJvZmlsZXMKCmBgYHRleHQKJENPREVYX0hPTUUvYWdlbnRzLwrilJzilIDilIAgYW1zX3NvbF9sb3cudG9tbArilJzilIDilIAgYW1zX3NvbF9tZWRpdW0udG9tbArilJzilIDilIAgYW1zX3NvbF9oaWdoLnRvbWwK4pSc4pSA4pSAIGFtc19zb2xfeGhpZ2gudG9tbArilJzilIDilIAgYW1zX3NvbF9tYXgudG9tbArilJzilIDilIAgYW1zX3RlcnJhX2xvdy50b21sCuKUnOKUgOKUgCBhbXNfdGVycmFfbWVkaXVtLnRvbWwK4pSc4pSA4pSAIGFtc190ZXJyYV9oaWdoLnRvbWwK4pSc4pSA4pSAIGFtc190ZXJyYV94aGlnaC50b21sCuKUnOKUgOKUgIGFtc190ZXJyYV9tYXgudG9tbArilJzilIDilIAgYW1zX2x1bmFfbG93LnRvbWwK4pSc4pSA4pSAIGFtc19sdW5hX21lZGl1bS50b21sCuKUnOKUgOKUgIGFtc19sdW5hX2hpZ2gudG9tbArilJzilIDilIAgYW1zX2x1bmFfeGhpZ2gudG9tbArilJzilIDilIAgYW1zX2x1bmFfbWF4LnRvbWwK4pSc4pSA4pSAIGFtc19zcGFya19sb3cudG9tbArilJzilIDilIAgYW1zX3NwYXJrX21lZGl1bS50b21sCuKUlOKUgOKUgCBhbXNfc3BhcmtfaGlnaC50b21sCmBgYAoKIyMjIFByb2plY3Qgc2V0dGluZ3MgYW5kIG9wdGlvbmFsIHJlY292ZXJ5CgpgYGB0ZXh0Cjxwcm9qZWN0LXJvb3Q+LwrilJTilIDilIAgLmNvZGV4LwogICAg4pSc4pSA4pSAIGFtcy1vcmNoZXN0cmF0aW9uLnRvbWwKICAgIOKUlOKUgOKUgIGFtcy1yZWNvdmVyeS5qc29uICAjIG9ubHkgd2hlbiBubyBwcm9qZWN0LW5hdGl2ZSBzdGF0ZSBzeXN0ZW0gaXMgc3VmZmljaWVudApgYGA=');
+            const missingProfile = decode('IyMjIEEgcHJvZmlsZSBpcyBtaXNzaW5nIG9yIGludmFsaWQKClJlcnVuIHRoZSByZXBvc2l0b3J5LWhvc3RlZCBpbnN0YWxsZXIuIEl0IHJlc3RvcmVzIHRoZSBjb21wbGV0ZSBjYW5vbmljYWwgbWF0cml4IGZyb20gdGhlIHBhY2thZ2Ugd2hpbGUgcmVmdXNpbmcgdG8gb3ZlcndyaXRlIHVucmVjb2duaXplZCBvciB1c2VyLWF1dGhvcmVkIGNvbGxpc2lvbnMuCgpXaXRoIGBwcm9maWxlX21hbmFnZW1lbnQgPSAiYXV0byJgLCBBTVMgbWF5IGFsc28gcmVzdG9yZSBhIHNlbGVjdGVkIG1pc3Npbmcgb3IgcmVjb2duaXplZCBkZWZlY3RpdmUgcHJvZmlsZSBmcm9tIHRoZSBleGFjdCBpbnN0YWxsZWQgcGFja2FnZSBhc3NldC4gUmVzdGFydCBDb2RleCBpZiBhIG5ld2x5IGluc3RhbGxlZCBvciByZXBhaXJlZCBwcm9maWxlIGlzIG5vdCBpbW1lZGlhdGVseSB2aXNpYmxlLg==');
+            const checksum = decode('IyMjIFRoZSBjaGVja3N1bSBkb2VzIG5vdCBtYXRjaAoKRG8gbm90IGJ5cGFzcyB0aGUgY2hlY2suIFRoZSBleHBlY3RlZCBTSEEtMjU2IGZvciB0aGUgcmVwb3NpdG9yeS1yb290IHBhY2thZ2UgaXM6CgpgYGB0ZXh0CmYzNWFhMjhjYWQ3YzI2OTFlODA4MjNlMzZjYTI3NmNiZWU4YjIwZGUwNjc2MDBmZDhlZGI4ZjJhYWYxMGZlNGIKYGBgCgpDb25maXJtIHRoYXQgdGhlIHBhY2thZ2UgY2FtZSBmcm9tOgoKYGBgdGV4dApodHRwczovL2dpdGh1Yi5jb20vSW5zZWN1cmVQYXNzd29yZC9Db2RleC1BZGFwdGl2ZS1NYXN0ZXItU3ViYWdlbnQtT3JjaGVzdHJhdGlvbi9yYXcvcmVmcy9oZWFkcy9tYWluL2FkYXB0aXZlLW1hc3Rlci1zdWJhZ2VudC1vcmNoZXN0cmF0aW9uLTMuMDkuemlwCmBgYA==');
+            const entries = decode('IyMjIFRoZSBpbnN0YWxsZXIgcmVwb3J0cyBhbiB1bmV4cGVjdGVkIGRpcmVjdG9yeSBlbnRyeQoKVGhlIDMuMDkgYXJjaGl2ZSBtYXkgY29udGFpbiBvbmx5IHRoZXNlIGRpcmVjdG9yeSBlbnRyaWVzOgoKYGBgdGV4dAphZGFwdGl2ZS1tYXN0ZXItc3ViYWdlbnQtb3JjaGVzdHJhdGlvbi8KYWRhcHRpdmUtbWFzdGVyLXN1YmFnZW50LW9yY2hlc3RyYXRpb24vYWdlbnRzLwphZGFwdGl2ZS1tYXN0ZXItc3ViYWdlbnQtb3JjaGVzdHJhdGlvbi9hc3NldHMvCmFkYXB0aXZlLW1hc3Rlci1zdWJhZ2VudC1vcmNoZXN0cmF0aW9uL2Fzc2V0cy9hZ2VudC1wcm9maWxlcy8KYWRhcHRpdmUtbWFzdGVyLXN1YmFnZW50LW9yY2hlc3RyYXRpb24vcmVmZXJlbmNlcy8KYGBgCgpBbnkgb3RoZXIgZGlyZWN0b3J5IGVudHJ5IGlzIHJlamVjdGVkLg==');
+
+            function replaceExactOnce(text, oldValue, newValue, label) {
+              const count = text.split(oldValue).length - 1;
+              if (count !== 1) throw new Error(`${label}: expected one match; found ${count}`);
+              return text.replace(oldValue, newValue);
+            }
+
+            function replaceSection(text, start, end, replacement, label) {
+              const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const pattern = new RegExp(`${escape(start)}\\n[\\s\\S]*?\\n${escape(end)}`);
+              const matches = text.match(pattern);
+              if (!matches || matches.length !== 1) throw new Error(`${label}: section not found exactly once`);
+              return text.replace(pattern, `${replacement}\n\n${end}`);
+            }
+
+            async function getTextFile(path) {
+              const response = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
+              if (Array.isArray(response.data) || response.data.type !== 'file') {
+                throw new Error(`${path} is not a regular file`);
+              }
+              return {
+                sha: response.data.sha,
+                text: Buffer.from(response.data.content, response.data.encoding).toString('utf8'),
+              };
+            }
+
+            async function putTextFile(path, text, sha, message) {
+              await github.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path,
+                branch: 'main',
+                message,
+                sha,
+                content: Buffer.from(text, 'utf8').toString('base64'),
+              });
+            }
+
+            async function deletePath(path, message) {
+              try {
+                const response = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
+                if (Array.isArray(response.data) || response.data.type !== 'file') return false;
+                await github.rest.repos.deleteFile({
+                  owner,
+                  repo,
+                  path,
+                  branch: 'main',
+                  message,
+                  sha: response.data.sha,
+                });
+                return true;
+              } catch (error) {
+                if (error.status === 404) return false;
+                throw error;
+              }
+            }
+
+            async function paged(route, params, key = null) {
+              const all = [];
+              for (let page = 1; ; page += 1) {
+                const response = await github.request(route, { owner, repo, per_page: 100, page, ...params });
+                const batch = key ? response.data[key] : response.data;
+                all.push(...batch);
+                if (batch.length < 100) break;
+              }
+              return all;
+            }
+
+            const report = {
+              deletedBranches: [],
+              skippedBranches: [],
+              deletedReleases: [],
+              deletedTags: [],
+              deletedArtifacts: 0,
+              deletedCaches: 0,
+              deletedWorkflowRuns: 0,
+              errors: [],
+            };
+
+            const oldRuntimeSentence = 'The installed skill contains Markdown, YAML, and a version file only. Shell tools are used for installation and maintenance, not while AMS is orchestrating project work.';
+            const newRuntimeSentence = 'The installed skill contains Markdown, YAML, TOML agent profiles, and a version file. Shell tools are used for installation and maintenance, not while AMS is orchestrating project work.';
+
+            const product = await getTextFile('PRODUCT DOCUMENTATION.md');
+            let text = replaceExactOnce(product.text, oldRuntimeSentence, newRuntimeSentence, 'installed skill sentence');
+            text = replaceSection(text, '## Installation', '## Starting and stopping AMS', installation, 'installation');
+            text = replaceSection(text, '## Agent profile management', '## Validation and completion', profiles, 'agent profiles');
+            text = replaceSection(text, '## Directory structure', '## Troubleshooting', directory, 'directory structure');
+            text = replaceSection(text, '### A profile is missing or invalid', '### The package reports', missingProfile, 'missing profile troubleshooting');
+            text = replaceSection(text, '### The checksum does not match', '### The installer reports', checksum, 'checksum troubleshooting');
+            text = replaceSection(text, '### The installer reports an unexpected directory entry', '### The skill changed', entries, 'directory entry troubleshooting');
+
+            for (const forbidden of [
+              'ReleaseZip',
+              '/releases/download/',
+              'virtual-hierarchy-final-audited',
+              '74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514',
+            ]) {
+              if (text.includes(forbidden)) throw new Error(`obsolete public reference remains: ${forbidden}`);
+            }
+
+            await putTextFile('PRODUCT DOCUMENTATION.md', text, product.sha, 'Reconcile public product documentation');
+
+            await deletePath('.github/workflows/one-time-public-repository-cleanup.yml', 'Remove temporary public cleanup workflow');
+            await deletePath('.github/public-cleanup-trigger', 'Remove temporary public cleanup trigger');
+            await deletePath('.github/workflows/one-time-public-cleanup-pr-trigger.yml', 'Remove temporary PR cleanup workflow');
+
+            const repository = await github.rest.repos.get({ owner, repo });
+            const defaultBranch = repository.data.default_branch;
+            await github.rest.repos.update({ owner, repo, delete_branch_on_merge: true });
+
+            const releases = await paged('GET /repos/{owner}/{repo}/releases', {});
+            for (const release of releases) {
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/releases/{release_id}', {
+                  owner,
+                  repo,
+                  release_id: release.id,
+                });
+                report.deletedReleases.push({ id: release.id, tag: release.tag_name, name: release.name });
+              } catch (error) {
+                report.errors.push(`release ${release.id}: ${error.message}`);
+              }
+            }
+
+            const tags = await paged('GET /repos/{owner}/{repo}/tags', {});
+            for (const tag of tags) {
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                  owner,
+                  repo,
+                  ref: `tags/${tag.name}`,
+                });
+                report.deletedTags.push(tag.name);
+              } catch (error) {
+                report.errors.push(`tag ${tag.name}: ${error.message}`);
+              }
+            }
+
+            try {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: '3.09',
+                target_commitish: defaultBranch,
+                name: 'Adaptive Master–Subagent Orchestration 3.09',
+                body: [
+                  'First public release of Adaptive Master–Subagent Orchestration 3.09.',
+                  '',
+                  'The live installers and verified package are maintained directly on the `main` branch.',
+                  '',
+                  `PowerShell: \`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/${repoFullName}/raw/refs/heads/main/install.ps1' | iex"\``,
+                  '',
+                  `Bash: \`curl -fsSL 'https://github.com/${repoFullName}/raw/refs/heads/main/install.sh' | bash\``,
+                  '',
+                  'Package SHA-256: `f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b`',
+                ].join('\n'),
+                draft: false,
+                prerelease: false,
+                generate_release_notes: false,
+              });
+            } catch (error) {
+              report.errors.push(`create release 3.09: ${error.message}`);
+            }
+
+            const artifacts = await paged('GET /repos/{owner}/{repo}/actions/artifacts', {}, 'artifacts');
+            for (const artifact of artifacts) {
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/actions/artifacts/{artifact_id}', {
+                  owner,
+                  repo,
+                  artifact_id: artifact.id,
+                });
+                report.deletedArtifacts += 1;
+              } catch (error) {
+                report.errors.push(`artifact ${artifact.id}: ${error.message}`);
+              }
+            }
+
+            try {
+              const caches = await paged('GET /repos/{owner}/{repo}/actions/caches', {}, 'actions_caches');
+              for (const cache of caches) {
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/actions/caches/{cache_id}', {
+                    owner,
+                    repo,
+                    cache_id: cache.id,
+                  });
+                  report.deletedCaches += 1;
+                } catch (error) {
+                  report.errors.push(`cache ${cache.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`cache inventory: ${error.message}`);
+            }
+
+            const runs = await paged('GET /repos/{owner}/{repo}/actions/runs', {}, 'workflow_runs');
+            for (const run of runs) {
+              if (run.id === currentRunId) continue;
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/actions/runs/{run_id}', {
+                  owner,
+                  repo,
+                  run_id: run.id,
+                });
+                report.deletedWorkflowRuns += 1;
+              } catch (error) {
+                report.errors.push(`workflow run ${run.id}: ${error.message}`);
+              }
+            }
+
+            try {
+              await github.rest.pulls.update({ owner, repo, pull_number: currentPullNumber, state: 'closed' });
+            } catch (error) {
+              report.errors.push(`close cleanup PR ${currentPullNumber}: ${error.message}`);
+            }
+
+            const openPulls = await paged('GET /repos/{owner}/{repo}/pulls', { state: 'open' });
+            const openHeadBranches = new Set(
+              openPulls
+                .filter(pr => pr.head?.repo?.full_name === repoFullName)
+                .map(pr => pr.head.ref),
+            );
+
+            const branches = await paged('GET /repos/{owner}/{repo}/branches', {});
+            for (const branch of branches) {
+              if (branch.name === defaultBranch || branch.protected || openHeadBranches.has(branch.name)) {
+                report.skippedBranches.push({
+                  name: branch.name,
+                  protected: branch.protected,
+                  openPullRequest: openHeadBranches.has(branch.name),
+                });
+                continue;
+              }
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                  owner,
+                  repo,
+                  ref: `heads/${branch.name}`,
+                });
+                report.deletedBranches.push(branch.name);
+              } catch (error) {
+                report.errors.push(`branch ${branch.name}: ${error.message}`);
+              }
+            }
+
+            console.log(JSON.stringify(report, null, 2));
+            await core.summary
+              .addHeading('Public repository cleanup')
+              .addRaw(`Deleted branches: ${report.deletedBranches.length}\n`)
+              .addRaw(`Deleted old releases: ${report.deletedReleases.length}\n`)
+              .addRaw(`Deleted old tags: ${report.deletedTags.length}\n`)
+              .addRaw(`Deleted Actions artifacts: ${report.deletedArtifacts}\n`)
+              .addRaw(`Deleted Actions caches: ${report.deletedCaches}\n`)
+              .addRaw(`Deleted old workflow runs: ${report.deletedWorkflowRuns}\n`)
+              .addRaw(`Non-fatal cleanup errors: ${report.errors.length}\n`)
+              .write();
