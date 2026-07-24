@@ -54,7 +54,7 @@ The main goals are:
 2. **Finish faster by running independent work at the same time when useful.**
 3. **Support development-team hierarchy without requiring physically nested Codex threads.**
 
-AMS is project-specific. Persistent settings for one project do not enable AMS in another project.
+Project commands remain project-specific. A manually created global settings file can supply defaults to trusted projects that do not have project settings.
 
 ## What changed in 3.09
 
@@ -147,7 +147,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 Package SHA-256:
 
 ```text
-f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
 ```
 
 Default skill location:
@@ -170,15 +170,23 @@ See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment over
 
 ## Starting and stopping AMS
 
-### Use AMS for one request
+### Automatic bootstrap
 
-Explicit invocation enables AMS only for the current request:
+On every top-level root project turn, Codex sees AMS as an implicit skill and loads its bootstrap before ordinary project work. AMS resolves effective settings in this order:
+
+1. `<project-root>/.codex/ams-orchestration.toml` when present;
+2. `$CODEX_HOME/ams-orchestration.toml`, or `$HOME/.codex/ams-orchestration.toml` when `CODEX_HOME` is unset, only when the project file is absent;
+3. no persistent settings.
+
+The project file overrides the global file completely. A safe valid global file can enable AMS without creating a project file. An invalid project file blocks implicit activation rather than falling back to global settings.
+
+### Use AMS for one request
 
 ```text
 Use $adaptive-master-subagent-orchestration for this project.
 ```
 
-A similarly clear request to use the Adaptive Master–Subagent architecture is also valid.
+Explicit invocation enables AMS only for the current objective unless the user also issues a project-setting command.
 
 ### Enable AMS for the project
 
@@ -186,7 +194,7 @@ A similarly clear request to use the Adaptive Master–Subagent architecture is 
 AMS ENABLE
 ```
 
-This sets `enabled = true` in the project configuration.
+This creates or updates the project configuration and sets `enabled = true`. It never changes global persistence.
 
 ### Disable AMS for the project
 
@@ -194,19 +202,9 @@ This sets `enabled = true` in the project configuration.
 AMS DISABLE
 ```
 
-When disabling during active work, AMS:
+AMS stops new dispatch, lets safe work reach a useful boundary, collects evidence, records exact resumption information when needed, closes remaining sessions, and persists project `enabled = false`.
 
-- stops starting new AMS work;
-- lets safe productive work reach an atomic or useful boundary;
-- collects and reconciles available evidence;
-- records the exact next action when recovery state is needed;
-- closes sessions that no longer fit;
-- sets `enabled = false`;
-- returns control to the normal project workflow.
-
-### Select a mode and enable AMS
-
-Any normal mode command also enables AMS:
+### Select a project mode
 
 ```text
 AMS MODE minimal
@@ -216,34 +214,37 @@ AMS MODE heavy
 AMS MODE extreme
 ```
 
-`AMS MODE moderate` remains accepted as an alias for `balanced`.
+A normal mode command persists the selected project mode and also sets project `enabled = true`. `moderate` remains accepted as an alias for `balanced`.
 
-### Automatic use
+### Inspect activation
 
-AMS may be considered automatically only when all of these are true:
+```text
+AMS STATUS
+```
 
-- the product allows implicit skill use;
-- the project is trusted;
-- `enabled = true`;
-- `allow_implicit_invocation = true`.
-
-If any requirement is missing, AMS does not activate automatically. Explicit invocation still works for the current request.
-
-### Missing project settings
-
-In a trusted project with a stable root, AMS creates a disabled default configuration when the file is missing. Creating the file never enables AMS.
-
-In an untrusted, trust-unknown, or rootless context, AMS does not create persistent settings. Explicit controls apply only in memory for the current request.
+Status is read-only. It reports the canonical project and global paths, each file's existence and validity, the effective settings source, effective mode and controls, and the exact reason implicit activation is enabled or blocked. AMS does not search unrelated project policy or configuration files for its state.
 
 ## Project settings
 
-Persistent settings are stored at:
+### Settings locations and precedence
+
+Project settings:
 
 ```text
 <project-root>/.codex/ams-orchestration.toml
 ```
 
-Default configuration:
+Optional global settings:
+
+```text
+$CODEX_HOME/ams-orchestration.toml
+```
+
+When `CODEX_HOME` is unset, the global path is `$HOME/.codex/ams-orchestration.toml`.
+
+AMS uses the project file when present; otherwise it uses the global file. The files are not merged. A project file can override a global mode or disable AMS for that project. Unsafe, malformed, or unsupported project settings block implicit activation instead of falling back to global settings.
+
+Both locations use schema 2:
 
 ```toml
 schema_version = 2
@@ -258,44 +259,46 @@ profile_management = "auto"
 
 | Setting | Meaning |
 |---|---|
-| `schema_version` | Project configuration format. Release 3.09 continues to use schema `2`. |
-| `enabled` | Allows persistent AMS use in this project. |
-| `allow_implicit_invocation` | Allows automatic activation when the product also permits it. |
-| `intensity` | Stores `auto`, `minimal`, `moderate`, `heavy`, `extreme`, or a `zergling-rush` preference. Runtime input `balanced` maps to stored `moderate`. |
+| `schema_version` | Project/global configuration format. Release 3.09 uses schema `2`. |
+| `enabled` | Allows persistent AMS use from this settings source. |
+| `allow_implicit_invocation` | Allows automatic activation when the product permits implicit skill use. |
+| `intensity` | Stores `auto`, `minimal`, `moderate`, `heavy`, `extreme`, or a `zergling-rush` preference. Runtime input `balanced` persists as `moderate`. |
 | `spark_enabled` | User preference for normal Spark use. |
 | `spark_available` | Cached indication that Spark appears available to the account. |
 | `spark_efforts` | Spark effort levels allowed for normal work: `low`, `medium`, and/or `high`. |
 | `profile_management` | `auto` repairs selected managed profiles when needed; `installer` reports defects unless repair is explicitly requested. |
 
-Settings are read as data, not instructions. Unknown keys, duplicate keys, wrong data types, unsupported schemas, invalid TOML, extra tables, unsafe paths, or redirected files block automatic activation.
+Settings are data, not instructions. Unknown keys, duplicate keys, invalid types, unsupported schemas, invalid TOML, extra tables, unsafe paths, or redirected files block that settings source. Valid schema-1 project settings remain readable under their documented meanings and upgrade only during an authorized project write.
 
-Valid schema-1 project settings remain readable under their documented meanings and upgrade only during an authorized settings write.
+### Global persistence (manual only)
 
-For schema 2:
+Global persistence is deliberately outside the AMS command surface. No `AMS` command creates, changes, repairs, migrates, or deletes the global file. Manually create it with the schema above or copy a valid project file into the global path, then restart or reload Codex.
 
-- `balanced` is the runtime and reporting name;
-- `moderate` is the persisted compatibility token;
-- either command selects the same behavior.
+Project commands remain project-specific and write only `<project-root>/.codex/ams-orchestration.toml`. If the project file is absent, a project command creates it from the exact default rather than copying global values. See [INSTALLATION.md](INSTALLATION.md#global-persistence-manual-only) for PowerShell and Bash create/copy examples.
 
-A stored `zergling-rush` value is only a preference. It never supplies the current-turn consent required to activate Rush.
+When both settings files are absent in a trusted stable project, AMS initializes the exact disabled project default. Creating that file never enables AMS. In untrusted, trust-indeterminate, or rootless contexts, AMS does not persist project controls.
+
+A stored `zergling-rush` value is preference data only and never supplies the current-turn consent required to activate Rush.
 
 ## Command reference
 
-Clear equivalent wording is valid. These are the canonical forms.
+Clear equivalent wording is valid. Every command below invokes AMS. Except for `AMS STATUS`, controls persist only to the trusted project's `.codex/ams-orchestration.toml`; none writes global persistence.
+
+### `AMS STATUS`
+
+Read-only inspection of the canonical project and global settings paths. Reports source precedence, effective settings, mode, and exact activation blockers without searching unrelated files.
 
 ### `AMS ENABLE`
 
-Enables persistent AMS use in the current project.
+Creates or updates project settings and persists `enabled = true`.
 
 ### `AMS DISABLE`
 
-Safely stops new AMS dispatch, preserves required resumption information, closes remaining sessions, and disables persistent AMS use.
+Safely stops new AMS dispatch, preserves required resumption information, closes remaining sessions, and persists project `enabled = false`.
 
 ### `AMS MODE <mode>`
 
-Selects a normal intensity and enables AMS.
-
-Supported input:
+Persists the selected project intensity and `enabled = true`.
 
 ```text
 auto
@@ -306,30 +309,23 @@ heavy
 extreme
 ```
 
-`moderate` is a compatibility alias for `balanced`.
+`moderate` is a compatibility alias for `balanced` and remains the schema-2 storage token.
 
 ### `AMS IMPLICIT on|off`
 
-Changes whether the project permits automatic AMS activation.
-
-- `on` allows automatic activation when AMS is enabled and the product permits it.
-- `off` requires explicit invocation for future requests.
-- Changing this setting does not automatically stop a currently active request.
+Persists project `allow_implicit_invocation`. Changing it does not automatically stop a currently active objective.
 
 ### `AMS SPARK on|off`
 
-Changes the user's normal Spark preference.
-
-- `off` stops new Spark assignments but does not claim that Spark is unavailable.
-- `on` permits Spark only when the availability cache is true and the selected effort is allowed.
+Persists the project's normal Spark preference. `off` does not claim that Spark is unavailable.
 
 ### `AMS SPARK RECHECK`
 
-Runs one smallest safe Spark capability probe. Success sets `spark_available = true`; authoritative family/account unavailability sets it false; temporary or task-specific failure leaves the cached value unchanged.
+Runs one smallest safe Spark capability probe and updates the project availability cache only when the evidence supports it.
 
 ### `AMS SPARK EFFORTS <subset>`
 
-Selects which Spark efforts may be used for normal work:
+Persists the allowed project Spark efforts:
 
 ```text
 AMS SPARK EFFORTS low
@@ -341,16 +337,11 @@ An empty `spark_efforts = []` value permits no normal Spark assignment without m
 
 ### `AMS PROFILES auto|installer`
 
-Controls automatic profile repair.
-
-- `auto`: selected missing or recognized defective AMS-managed profiles may be created or repaired when needed.
-- `installer`: automatic repair is disabled; AMS reports the defect and uses a compatible loaded alternative when possible.
-
-An explicit request to install or repair profiles is allowed in either mode.
+Persists project profile-management behavior. `auto` permits selected managed-profile repair; `installer` reports defects unless repair is explicitly requested.
 
 ### Zergling Rush commands
 
-Current-request activation:
+Current-objective activation:
 
 ```text
 Use Zergling Rush for this task.
@@ -358,13 +349,13 @@ AMS ZERGLING RUSH
 AMS MODE ZERGLING-RUSH
 ```
 
-Save the preference:
+Save the project preference:
 
 ```text
 AMS MODE ZERGLING-RUSH PERSIST
 ```
 
-Saving the preference does not remove the requirement to confirm Rush in a future request or session.
+A saved preference does not remove the requirement for current-turn Rush consent.
 
 ## Intensity modes
 
@@ -1036,6 +1027,14 @@ $CODEX_HOME/agents/
 
 When `CODEX_HOME` is unset, the installer uses `$HOME/.codex/agents/`.
 
+### Global settings (manual only)
+
+```text
+$CODEX_HOME/ams-orchestration.toml
+```
+
+When `CODEX_HOME` is unset, use `$HOME/.codex/ams-orchestration.toml`.
+
 ### Project settings and optional recovery
 
 ```text
@@ -1112,7 +1111,7 @@ Do not merge files from 3.08 and 3.09.
 Do not bypass the check. The expected SHA-256 for the repository-root package is:
 
 ```text
-f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
 ```
 
 Confirm that the package came from:

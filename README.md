@@ -75,7 +75,7 @@ The repository-root distribution uses these files from `main`:
 The repository-root package is verified by both installer scripts with this SHA-256:
 
 ```text
-f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
 ```
 
 Default install location:
@@ -86,29 +86,61 @@ $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 
 ## Start using AMS
 
-### Use it once
+The installed skill bootstraps itself on every top-level root project turn. Before ordinary project work it checks the project settings file first, then the optional global settings file. When the effective settings enable implicit use, AMS loads automatically in the stored mode.
 
-Use AMS for only the current request:
+### Use it once
 
 ```text
 Use $adaptive-master-subagent-orchestration for this project.
 ```
 
-### Enable it for a project
+### Project-specific persistence
 
-From inside the project, tell Codex:
+From inside a trusted project:
 
 ```text
+AMS STATUS
 AMS ENABLE
-```
-
-Disable it later with:
-
-```text
+AMS MODE auto
 AMS DISABLE
 ```
 
-AMS stores its settings separately for each project. A new project starts with AMS disabled unless you explicitly enable it or invoke the skill for a task.
+Project commands write only:
+
+```text
+<project-root>/.codex/ams-orchestration.toml
+```
+
+`AMS ENABLE` persists `enabled = true`. A normal `AMS MODE ...` command persists the selected mode and also enables AMS. `AMS STATUS` reports the project path, global path, effective source, settings, and any activation blocker.
+
+### Global persistence (manual only)
+
+To supply defaults for every trusted project that has no project settings file, manually create or copy:
+
+```text
+$CODEX_HOME/ams-orchestration.toml
+```
+
+When `CODEX_HOME` is unset, use:
+
+```text
+$HOME/.codex/ams-orchestration.toml
+```
+
+Use the same schema as a project file. For persistent auto mode:
+
+```toml
+schema_version = 2
+enabled = true
+allow_implicit_invocation = true
+intensity = "auto"
+spark_enabled = true
+spark_available = true
+spark_efforts = ["low", "medium", "high"]
+profile_management = "auto"
+```
+
+A project file overrides the global file completely, so a project can select another mode or disable AMS. Global persistence is manual: no `AMS` command creates, changes, or removes the global file. Restart or reload Codex after changing it.
 
 ## Intensity modes
 
@@ -182,6 +214,7 @@ AMS chooses the lowest-cost model and reasoning level that should complete the t
 ## Useful project commands
 
 ```text
+AMS STATUS
 AMS ENABLE
 AMS DISABLE
 AMS MODE auto|minimal|balanced|moderate|heavy|extreme

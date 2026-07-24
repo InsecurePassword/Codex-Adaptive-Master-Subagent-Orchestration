@@ -55,7 +55,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 Package SHA-256:
 
 ```text
-f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
 ```
 
 The archive contains one top-level directory:
@@ -168,7 +168,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 
 ```powershell
 $Zip = ".\adaptive-master-subagent-orchestration-3.09.zip"
-$Expected = "f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b"
+$Expected = "f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018"
 $Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($Actual -ne $Expected) {
@@ -180,7 +180,7 @@ if ($Actual -ne $Expected) {
 
 ```bash
 printf '%s  %s\n' \
-  'f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b' \
+  'f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018' \
   'adaptive-master-subagent-orchestration-3.09.zip' | sha256sum -c -
 ```
 
@@ -188,7 +188,7 @@ printf '%s  %s\n' \
 
 ```bash
 actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.09.zip | awk '{print $1}')"
-test "$actual" = 'f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b'
+test "$actual" = 'f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018'
 ```
 
 ## Manual extraction
@@ -265,25 +265,108 @@ Expected version and profile count:
 
 ## Start using AMS
 
-Use AMS once without enabling it permanently:
+The installed skill is visible for implicit invocation and bootstraps AMS before ordinary work on every top-level root project turn. It checks the project configuration first and the optional global configuration only when the project file is absent.
+
+### Use AMS once
 
 ```text
 Use $adaptive-master-subagent-orchestration for this project.
 ```
 
-Enable AMS for the current project:
+### Project-specific persistence
+
+From inside a trusted project:
 
 ```text
+AMS STATUS
 AMS ENABLE
-```
-
-Choose a mode and enable AMS:
-
-```text
 AMS MODE auto
 ```
 
-A trusted project with no AMS configuration receives a disabled default configuration. Creating that file does not enable AMS.
+These commands write only:
+
+```text
+<project-root>/.codex/ams-orchestration.toml
+```
+
+`AMS ENABLE` sets `enabled = true`. `AMS MODE auto` sets `enabled = true` and `intensity = "auto"`. `AMS STATUS` is read-only. Project commands never modify global persistence.
+
+### Global persistence (manual only)
+
+Global settings supply defaults to trusted projects that do not contain a project settings file. The path is:
+
+```text
+$CODEX_HOME/ams-orchestration.toml
+```
+
+When `CODEX_HOME` is unset, use:
+
+```text
+$HOME/.codex/ams-orchestration.toml
+```
+
+The global and project files use the same schema. Project settings override global settings completely; the files are not merged. An invalid project file blocks implicit activation instead of falling back to global settings. To opt one project out of a globally enabled configuration, create a valid project file with `enabled = false`.
+
+No AMS command creates, changes, repairs, migrates, or deletes the global file. Create or copy it manually, then restart or reload Codex.
+
+#### Create a global auto-mode file with Windows PowerShell
+
+```powershell
+$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$GlobalConfig = Join-Path $CodexHome 'ams-orchestration.toml'
+New-Item -ItemType Directory -Force -Path $CodexHome | Out-Null
+
+$Content = @'
+schema_version = 2
+enabled = true
+allow_implicit_invocation = true
+intensity = "auto"
+spark_enabled = true
+spark_available = true
+spark_efforts = ["low", "medium", "high"]
+profile_management = "auto"
+'@
+
+[IO.File]::WriteAllText(
+    $GlobalConfig,
+    $Content.TrimStart() + "`n",
+    [Text.UTF8Encoding]::new($false)
+)
+```
+
+#### Copy a project configuration with Windows PowerShell
+
+```powershell
+$ProjectConfig = 'G:\path\to\project\.codex\ams-orchestration.toml'
+$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+New-Item -ItemType Directory -Force -Path $CodexHome | Out-Null
+Copy-Item -LiteralPath $ProjectConfig -Destination (Join-Path $CodexHome 'ams-orchestration.toml')
+```
+
+#### Create a global auto-mode file with Bash
+
+```bash
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$codex_home"
+cat > "$codex_home/ams-orchestration.toml" <<'EOF'
+schema_version = 2
+enabled = true
+allow_implicit_invocation = true
+intensity = "auto"
+spark_enabled = true
+spark_available = true
+spark_efforts = ["low", "medium", "high"]
+profile_management = "auto"
+EOF
+```
+
+#### Copy a project configuration with Bash
+
+```bash
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$codex_home"
+cp /path/to/project/.codex/ams-orchestration.toml "$codex_home/ams-orchestration.toml"
+```
 
 ## Agent profiles
 
@@ -362,4 +445,4 @@ fi
 
 Restart or reload Codex after removal.
 
-Project settings and installed profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
+Project settings, manually created global settings, and installed profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
