@@ -19,10 +19,14 @@ def write(path, text):
 
 
 def section(text, start, end, replacement, label):
-    a = text.find(start)
-    b = text.find(end, a + len(start))
-    if a < 0 or b < 0 or text.find(start, a + 1) >= 0:
+    start_token = "\n" + start + "\n"
+    end_token = "\n" + end + "\n"
+    a = text.find(start_token)
+    b = text.find(end_token, a + len(start_token))
+    if a < 0 or b < 0:
         raise SystemExit(f"bad {label} markers")
+    a += 1
+    b += 1
     return text[:a] + replacement.rstrip() + "\n\n" + text[b:]
 
 
