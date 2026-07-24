@@ -1,20 +1,24 @@
 name: Temporary finalize AMS persistence fix
 
 on:
-  push:
+  pull_request:
     branches:
-      - "agent/fix-ams-persistence-bootstrap"
+      - main
+    types:
+      - opened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   finalize:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/fix-ams-persistence-bootstrap'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: agent/fix-ams-persistence-bootstrap
           fetch-depth: 0
 
       - name: Rebuild package and synchronize documentation
@@ -29,10 +33,11 @@ jobs:
         shell: bash
         run: |
           rm -rf -- .github/ams-fix
+          rm -- .github/ams-persistence-finalize-trigger
           rm -- .github/workflows/temporary-finalize-ams-persistence.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
           git commit -m "Finalize AMS persistence bootstrap"
-          git push origin HEAD:"${GITHUB_REF_NAME}"
+          git push origin HEAD:agent/fix-ams-persistence-bootstrap
