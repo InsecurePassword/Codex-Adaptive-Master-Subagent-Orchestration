@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   align:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/align-final-public-release'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/align-final-public-release-v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,20 +46,18 @@ jobs:
           fi
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/3.09" >/dev/null 2>&1 || true
 
-          release_body="$(cat <<'EOF'
-First public release of Adaptive Master–Subagent Orchestration 3.09.
-
-The live installers and verified package are maintained directly on the `main` branch; this release intentionally has no uploaded assets.
-
-PowerShell:
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex\"`
-
-Bash:
-`curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash`
-
-Package SHA-256: `f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b`
-EOF
-)"
+          release_body="$(printf '%s\n' \
+            'First public release of Adaptive Master–Subagent Orchestration 3.09.' \
+            '' \
+            'The live installers and verified package are maintained directly on the main branch; this release intentionally has no uploaded assets.' \
+            '' \
+            'PowerShell installer:' \
+            'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' \
+            '' \
+            'Bash installer:' \
+            'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' \
+            '' \
+            'Package SHA-256: f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b')"
 
           gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
             -f tag_name='3.09' \
@@ -75,4 +73,5 @@ EOF
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" >/dev/null 2>&1 || true
           done < <(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" --jq '.workflow_runs[].id')
 
-          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was recreated at final clean main commit ${final_sha}, with zero uploaded assets. The temporary alignment workflow and branch were removed, and superseded Actions runs were pruned."
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/align-final-public-release" >/dev/null 2>&1 || true
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was recreated at final clean main commit ${final_sha}, with zero uploaded assets. The temporary alignment workflow and both alignment branches were removed, and superseded Actions runs were pruned."
