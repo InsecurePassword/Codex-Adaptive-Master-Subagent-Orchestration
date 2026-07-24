@@ -1,0 +1,103 @@
+name: Temporary polish AMS persistence documentation
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/fix-ams-persistence-bootstrap'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-ams-persistence-bootstrap
+          fetch-depth: 0
+
+      - name: Reconcile remaining persistence wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+
+          product = Path('PRODUCT DOCUMENTATION.md')
+          replace_once(
+              product,
+              'They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project settings, recovery state, and user-authored profiles.',
+              'They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project and global settings, recovery state, and user-authored profiles.',
+              'product installer preservation',
+          )
+          replace_once(
+              product,
+              '''### AMS does not activate automatically
+
+Check:
+
+```toml
+enabled = true
+allow_implicit_invocation = true
+```
+
+Also confirm that the project is trusted and Codex permits implicit skill use. Explicit invocation works independently of persistent automatic activation.
+
+### A new project has AMS disabled
+
+This is expected. Missing settings are initialized with `enabled = false`. Use `AMS ENABLE` or select a mode.''',
+              '''### AMS does not activate automatically
+
+Run `AMS STATUS` first. It reports whether project settings override global settings, whether the effective file is safe and valid, and the exact activation blocker. The effective settings must contain:
+
+```toml
+enabled = true
+allow_implicit_invocation = true
+```
+
+Also confirm that the project is trusted and Codex permits implicit skill use. Explicit invocation works independently of persistent automatic activation.
+
+### A new project has AMS disabled
+
+This is expected only when no enabled global file applies. When both settings files are absent, AMS initializes a disabled project default. When a global file is enabled and the project has no project file, `AMS STATUS` should report `global` as the effective source.''',
+              'product activation troubleshooting',
+          )
+
+          readme = Path('README.md')
+          replace_once(
+              readme,
+              'Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.',
+              'Most users only need `AMS STATUS`, `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.',
+              'README common commands',
+          )
+
+          installation = Path('INSTALLATION.md')
+          replace_once(
+              installation,
+              '$Content.TrimStart() + "`n",',
+              '$Content.Trim() + "`n",',
+              'PowerShell global config newline',
+          )
+          PY
+
+      - name: Remove workflow and commit
+        shell: bash
+        run: |
+          rm -- .github/workflows/temporary-polish-ams-persistence-docs.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Polish AMS persistence documentation"
+          git push origin HEAD:agent/fix-ams-persistence-bootstrap
