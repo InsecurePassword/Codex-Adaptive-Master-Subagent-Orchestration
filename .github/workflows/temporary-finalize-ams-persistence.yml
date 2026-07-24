@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   finalize:
@@ -23,8 +24,26 @@ jobs:
 
       - name: Rebuild package and synchronize documentation
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          python .github/ams-fix/finalize.py | tee /tmp/ams-finalize.txt
+          set +e
+          python .github/ams-fix/finalize.py > /tmp/ams-finalize.txt 2>&1
+          status=$?
+          set -e
+          cat /tmp/ams-finalize.txt
+          if [ "$status" -ne 0 ]; then
+            {
+              echo 'AMS finalizer failed:'
+              echo
+              echo '```text'
+              tail -80 /tmp/ams-finalize.txt
+              echo '```'
+            } > /tmp/ams-finalize-comment.md
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/ams-finalize-comment.md
+            exit "$status"
+          fi
           bash -n install.sh
           pwsh -NoProfile -Command '$null = [scriptblock]::Create((Get-Content -Raw ./install.ps1))'
           grep '^PACKAGE_' /tmp/ams-finalize.txt >> "$GITHUB_STEP_SUMMARY"
