@@ -1,0 +1,306 @@
+name: One-time final public repository cleanup
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/run-final-public-cleanup'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove pre-release repository residue
+        uses: actions/github-script@v7
+        env:
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repoFullName = `${owner}/${repo}`;
+            const currentRunId = Number(process.env.CURRENT_RUN_ID);
+            const currentPullNumber = context.issue.number;
+            const workflowPath = '.github/workflows/one-time-final-public-cleanup.yml';
+
+            const report = {
+              deletedBranches: [],
+              preservedBranches: [],
+              deletedReleases: [],
+              deletedTags: [],
+              createdRelease: null,
+              deletedArtifacts: 0,
+              deletedCaches: 0,
+              deletedWorkflowRuns: 0,
+              removedTemporaryFiles: [],
+              errors: [],
+            };
+
+            async function paged(route, params, key = null) {
+              const all = [];
+              for (let page = 1; ; page += 1) {
+                const response = await github.request(route, {
+                  owner,
+                  repo,
+                  per_page: 100,
+                  page,
+                  ...params,
+                });
+                const batch = key ? response.data[key] : response.data;
+                all.push(...batch);
+                if (batch.length < 100) break;
+              }
+              return all;
+            }
+
+            async function removeMainFile(path) {
+              try {
+                const response = await github.rest.repos.getContent({ owner, repo, path, ref: 'main' });
+                if (Array.isArray(response.data) || response.data.type !== 'file') return;
+                await github.rest.repos.deleteFile({
+                  owner,
+                  repo,
+                  path,
+                  branch: 'main',
+                  message: `Remove temporary cleanup file ${path}`,
+                  sha: response.data.sha,
+                });
+                report.removedTemporaryFiles.push(path);
+              } catch (error) {
+                if (error.status !== 404) report.errors.push(`temporary file ${path}: ${error.message}`);
+              }
+            }
+
+            let defaultBranch = 'main';
+            try {
+              const repository = await github.rest.repos.get({ owner, repo });
+              defaultBranch = repository.data.default_branch;
+            } catch (error) {
+              report.errors.push(`repository metadata: ${error.message}`);
+            }
+
+            try {
+              const releases = await paged('GET /repos/{owner}/{repo}/releases', {});
+              for (const release of releases) {
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/releases/{release_id}', {
+                    owner,
+                    repo,
+                    release_id: release.id,
+                  });
+                  report.deletedReleases.push({ id: release.id, tag: release.tag_name, name: release.name });
+                } catch (error) {
+                  report.errors.push(`release ${release.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`release inventory: ${error.message}`);
+            }
+
+            try {
+              const tags = await paged('GET /repos/{owner}/{repo}/tags', {});
+              for (const tag of tags) {
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                    owner,
+                    repo,
+                    ref: `tags/${tag.name}`,
+                  });
+                  report.deletedTags.push(tag.name);
+                } catch (error) {
+                  report.errors.push(`tag ${tag.name}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`tag inventory: ${error.message}`);
+            }
+
+            try {
+              const release = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: '3.09',
+                target_commitish: defaultBranch,
+                name: 'Adaptive Master–Subagent Orchestration 3.09',
+                body: [
+                  'First public release of Adaptive Master–Subagent Orchestration 3.09.',
+                  '',
+                  'The live installers and verified package are maintained directly on the `main` branch; this release intentionally has no uploaded assets.',
+                  '',
+                  `PowerShell: \`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/${repoFullName}/raw/refs/heads/main/install.ps1' | iex"\``,
+                  '',
+                  `Bash: \`curl -fsSL 'https://github.com/${repoFullName}/raw/refs/heads/main/install.sh' | bash\``,
+                  '',
+                  'Package SHA-256: `f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b`',
+                ].join('\n'),
+                draft: false,
+                prerelease: false,
+                generate_release_notes: false,
+              });
+              report.createdRelease = {
+                id: release.data.id,
+                tag: release.data.tag_name,
+                name: release.data.name,
+                assets: release.data.assets.length,
+              };
+            } catch (error) {
+              report.errors.push(`create release 3.09: ${error.message}`);
+            }
+
+            try {
+              const artifacts = await paged('GET /repos/{owner}/{repo}/actions/artifacts', {}, 'artifacts');
+              for (const artifact of artifacts) {
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/actions/artifacts/{artifact_id}', {
+                    owner,
+                    repo,
+                    artifact_id: artifact.id,
+                  });
+                  report.deletedArtifacts += 1;
+                } catch (error) {
+                  report.errors.push(`artifact ${artifact.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`artifact inventory: ${error.message}`);
+            }
+
+            try {
+              const caches = await paged('GET /repos/{owner}/{repo}/actions/caches', {}, 'actions_caches');
+              for (const cache of caches) {
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/actions/caches/{cache_id}', {
+                    owner,
+                    repo,
+                    cache_id: cache.id,
+                  });
+                  report.deletedCaches += 1;
+                } catch (error) {
+                  report.errors.push(`cache ${cache.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`cache inventory: ${error.message}`);
+            }
+
+            try {
+              const runs = await paged('GET /repos/{owner}/{repo}/actions/runs', {}, 'workflow_runs');
+              for (const run of runs) {
+                if (run.id === currentRunId) continue;
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/actions/runs/{run_id}', {
+                    owner,
+                    repo,
+                    run_id: run.id,
+                  });
+                  report.deletedWorkflowRuns += 1;
+                } catch (error) {
+                  report.errors.push(`workflow run ${run.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`workflow-run inventory: ${error.message}`);
+            }
+
+            for (const path of [
+              workflowPath,
+              '.github/public-cleanup-trigger',
+              '.github/repository-cleanup-inventory-trigger',
+              '.github/workflows/one-time-public-repository-cleanup.yml',
+              '.github/workflows/one-time-public-cleanup-pr-trigger.yml',
+              '.github/workflows/temporary-repository-cleanup-inventory.yml',
+            ]) {
+              await removeMainFile(path);
+            }
+
+            try {
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: currentPullNumber,
+                state: 'closed',
+              });
+            } catch (error) {
+              report.errors.push(`close cleanup PR ${currentPullNumber}: ${error.message}`);
+            }
+
+            let openHeadBranches = new Set();
+            try {
+              const openPulls = await paged('GET /repos/{owner}/{repo}/pulls', { state: 'open' });
+              openHeadBranches = new Set(
+                openPulls
+                  .filter(pr => pr.head?.repo?.full_name === repoFullName)
+                  .map(pr => pr.head.ref),
+              );
+            } catch (error) {
+              report.errors.push(`open-PR inventory: ${error.message}`);
+            }
+
+            try {
+              const branches = await paged('GET /repos/{owner}/{repo}/branches', {});
+              for (const branch of branches) {
+                if (branch.name === defaultBranch || branch.protected || openHeadBranches.has(branch.name)) {
+                  report.preservedBranches.push({
+                    name: branch.name,
+                    protected: branch.protected,
+                    openPullRequest: openHeadBranches.has(branch.name),
+                  });
+                  continue;
+                }
+                try {
+                  await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                    owner,
+                    repo,
+                    ref: `heads/${branch.name}`,
+                  });
+                  report.deletedBranches.push(branch.name);
+                } catch (error) {
+                  report.errors.push(`branch ${branch.name}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`branch inventory: ${error.message}`);
+            }
+
+            const reportBody = [
+              'One-time public repository cleanup completed.',
+              '',
+              `- Deleted branches: ${report.deletedBranches.length}`,
+              `- Preserved branches: ${report.preservedBranches.length}`,
+              `- Deleted old releases: ${report.deletedReleases.length}`,
+              `- Deleted old tags: ${report.deletedTags.length}`,
+              `- Created release: ${report.createdRelease ? `${report.createdRelease.tag} with ${report.createdRelease.assets} assets` : 'failed'}`,
+              `- Deleted Actions artifacts: ${report.deletedArtifacts}`,
+              `- Deleted Actions caches: ${report.deletedCaches}`,
+              `- Deleted old workflow runs: ${report.deletedWorkflowRuns}`,
+              `- Removed temporary files: ${report.removedTemporaryFiles.length}`,
+              `- Cleanup errors: ${report.errors.length}`,
+              '',
+              'Deleted branches:',
+              report.deletedBranches.length ? report.deletedBranches.map(name => `- \`${name}\``).join('\n') : '- None',
+              '',
+              'Errors:',
+              report.errors.length ? report.errors.map(error => `- ${error}`).join('\n') : '- None',
+            ].join('\n');
+
+            try {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: currentPullNumber,
+                body: reportBody,
+              });
+            } catch (error) {
+              console.log(`Unable to post cleanup report: ${error.message}`);
+            }
+
+            console.log(JSON.stringify(report, null, 2));
+            await core.summary.addRaw(reportBody).write();
