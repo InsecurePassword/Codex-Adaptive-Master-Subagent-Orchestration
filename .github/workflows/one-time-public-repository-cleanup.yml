@@ -1,0 +1,561 @@
+name: One-time public repository cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconcile public product documentation
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path("PRODUCT DOCUMENTATION.md")
+          text = path.read_text(encoding="utf-8")
+
+          old_runtime_sentence = (
+              "The installed skill contains Markdown, YAML, and a version file only. "
+              "Shell tools are used for installation and maintenance, not while AMS is orchestrating project work."
+          )
+          new_runtime_sentence = (
+              "The installed skill contains Markdown, YAML, TOML agent profiles, and a version file. "
+              "Shell tools are used for installation and maintenance, not while AMS is orchestrating project work."
+          )
+          if text.count(old_runtime_sentence) != 1:
+              raise SystemExit("Unexpected installed-skill description count")
+          text = text.replace(old_runtime_sentence, new_runtime_sentence)
+
+          installation = r'''## Installation
+
+### Recommended one-line installation
+
+Windows PowerShell:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
+```
+
+Linux or macOS:
+
+```bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
+```
+
+Restart or reload Codex afterward.
+
+### Repository distribution
+
+AMS 3.09 is distributed directly from the repository root on the `main` branch. Installation does not depend on GitHub Release assets.
+
+```text
+Codex-Adaptive-Master-Subagent-Orchestration/
+├── adaptive-master-subagent-orchestration-3.09.zip
+├── install.ps1
+└── install.sh
+```
+
+Package URL:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
+```
+
+Package SHA-256:
+
+```text
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+```
+
+Default skill location:
+
+```text
+$HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```
+
+Default profile location:
+
+```text
+$CODEX_HOME/agents/
+```
+
+When `CODEX_HOME` is unset, the profile location is `$HOME/.codex/agents/`.
+
+The installers verify the checksum, exact package inventory, archive integrity, file-size limits, symbolic-link safety, managed-profile markers, and `VERSION = 3.09`. They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project settings, recovery state, and user-authored profiles.
+
+See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment overrides, update, repair, and uninstall commands.'''
+
+          text, count = re.subn(
+              r"## Installation\n.*?\n## Starting and stopping AMS",
+              installation + "\n\n## Starting and stopping AMS",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Installation section was not replaced exactly once")
+
+          profiles = r'''## Agent profile management
+
+The package includes the complete canonical profile matrix under:
+
+```text
+adaptive-master-subagent-orchestration/assets/agent-profiles/
+```
+
+The installer deploys all 18 profiles to `$CODEX_HOME/agents/`, or `$HOME/.codex/agents/` when `CODEX_HOME` is unset:
+
+```text
+ams_<sol|terra|luna>_<low|medium|high|xhigh|max>
+ams_spark_<low|medium|high>
+```
+
+The packaged model defaults are `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, and `gpt-5.3-codex-spark`. Runtime availability is still verified before routing; an unavailable family or effort does not authorize silent rewriting of the canonical package asset.
+
+Every managed file begins with:
+
+```text
+# managed-by: adaptive-master-subagent-orchestration
+# profile-schema: 3
+```
+
+Each profile includes its exact discoverable role name, model, reasoning effort, bounded non-root developer instructions, and Codex V2 guidance overrides. Explicit AMS custom-role dispatch uses `fork_turns = "none"` so the root supplies the compact work order directly instead of forwarding root-only orchestration context.
+
+Sol, Terra, and Luna profiles are role-neutral: a work order temporarily assigns `worker / none` or `delegated-manager / request`. Spark remains `worker / none` only. No permanent manager-profile family exists.
+
+During installation:
+
+- byte-identical profiles remain unchanged;
+- a differing file is replaced only when its exact managed marker proves AMS ownership;
+- unrecognized or user-authored collisions fail closed;
+- skill and profile changes roll back together on failure.
+
+After installation, `profile_management = "auto"` permits selected missing or recognized defective AMS profiles to be restored from the exact bundled asset. `profile_management = "installer"` disables automatic repair but still allows an explicit repair request. Ambiguous files are preserved.
+
+A fresh Codex session may be required before newly installed or repaired profiles become discoverable.'''
+
+          text, count = re.subn(
+              r"## Agent profile management\n.*?\n## Validation and completion",
+              profiles + "\n\n## Validation and completion",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Agent profile section was not replaced exactly once")
+
+          directory = r'''## Directory structure
+
+### Repository
+
+```text
+Codex-Adaptive-Master-Subagent-Orchestration/
+├── README.md
+├── INSTALLATION.md
+├── PRODUCT DOCUMENTATION.md
+├── adaptive-master-subagent-orchestration-3.09.zip
+├── install.ps1
+├── install.sh
+└── adaptive-master-subagent-orchestration/
+    ├── SKILL.md
+    ├── VERSION
+    ├── agents/
+    │   └── openai.yaml
+    ├── assets/
+    │   └── agent-profiles/
+    │       └── 18 canonical ams_*.toml profiles
+    └── references/
+        ├── hierarchy-control.md
+        ├── intensity-control.md
+        ├── package-maintenance.md
+        ├── profile-management.md
+        ├── project-control.md
+        ├── runtime-core.md
+        └── zergling-rush.md
+```
+
+### Installed skill
+
+```text
+$HOME/.agents/skills/
+└── adaptive-master-subagent-orchestration/
+    ├── SKILL.md
+    ├── VERSION
+    ├── agents/
+    │   └── openai.yaml
+    ├── assets/
+    │   └── agent-profiles/
+    │       └── 18 canonical ams_*.toml profiles
+    └── references/
+        ├── hierarchy-control.md
+        ├── intensity-control.md
+        ├── package-maintenance.md
+        ├── profile-management.md
+        ├── project-control.md
+        ├── runtime-core.md
+        └── zergling-rush.md
+```
+
+### Installed agent profiles
+
+```text
+$CODEX_HOME/agents/
+├── ams_sol_low.toml
+├── ams_sol_medium.toml
+├── ams_sol_high.toml
+├── ams_sol_xhigh.toml
+├── ams_sol_max.toml
+├── ams_terra_low.toml
+├── ams_terra_medium.toml
+├── ams_terra_high.toml
+├── ams_terra_xhigh.toml
+├── ams_terra_max.toml
+├── ams_luna_low.toml
+├── ams_luna_medium.toml
+├── ams_luna_high.toml
+├── ams_luna_xhigh.toml
+├── ams_luna_max.toml
+├── ams_spark_low.toml
+├── ams_spark_medium.toml
+└── ams_spark_high.toml
+```
+
+### Project settings and optional recovery
+
+```text
+<project-root>/
+└── .codex/
+    ├── ams-orchestration.toml
+    └── ams-recovery.json  # only when no project-native state system is sufficient
+```'''
+
+          text, count = re.subn(
+              r"## Directory structure\n.*?\n## Troubleshooting",
+              directory + "\n\n## Troubleshooting",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Directory section was not replaced exactly once")
+
+          missing_profile = r'''### A profile is missing or invalid
+
+Rerun the repository-hosted installer. It restores the complete canonical matrix from the package while refusing to overwrite unrecognized or user-authored collisions.
+
+With `profile_management = "auto"`, AMS may also restore a selected missing or recognized defective profile from the exact installed package asset. Restart Codex if a newly installed or repaired profile is not immediately visible.'''
+
+          text, count = re.subn(
+              r"### A profile is missing or invalid\n.*?\n### The package reports",
+              missing_profile + "\n\n### The package reports",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Missing-profile troubleshooting section was not replaced")
+
+          checksum = r'''### The checksum does not match
+
+Do not bypass the check. The expected SHA-256 for the repository-root package is:
+
+```text
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
+```
+
+Confirm that the package came from:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
+```'''
+
+          text, count = re.subn(
+              r"### The checksum does not match\n.*?\n### The installer reports",
+              checksum + "\n\n### The installer reports",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Checksum troubleshooting section was not replaced")
+
+          entries = r'''### The installer reports an unexpected directory entry
+
+The 3.09 archive may contain only these directory entries:
+
+```text
+adaptive-master-subagent-orchestration/
+adaptive-master-subagent-orchestration/agents/
+adaptive-master-subagent-orchestration/assets/
+adaptive-master-subagent-orchestration/assets/agent-profiles/
+adaptive-master-subagent-orchestration/references/
+```
+
+Any other directory entry is rejected.'''
+
+          text, count = re.subn(
+              r"### The installer reports an unexpected directory entry\n.*?\n### The skill changed",
+              entries + "\n\n### The skill changed",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Directory-entry troubleshooting section was not replaced")
+
+          forbidden = (
+              "ReleaseZip",
+              "/releases/download/",
+              "virtual-hierarchy-final-audited",
+              "74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514",
+          )
+          for value in forbidden:
+              if value in text:
+                  raise SystemExit(f"Obsolete public reference remains: {value}")
+
+          path.write_text(text, encoding="utf-8", newline="\n")
+          PY
+
+      - name: Commit documentation reconciliation and remove this workflow
+        shell: bash
+        run: |
+          rm -- .github/workflows/one-time-public-repository-cleanup.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'PRODUCT DOCUMENTATION.md' .github/workflows/one-time-public-repository-cleanup.yml
+          git commit -m "Clean public repository state"
+          git push origin HEAD:main
+
+      - name: Remove pre-release residue and establish the public 3.09 release
+        uses: actions/github-script@v7
+        env:
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repoFullName = `${owner}/${repo}`;
+            const currentRunId = Number(process.env.CURRENT_RUN_ID);
+
+            async function paged(route, params, key = null) {
+              const all = [];
+              for (let page = 1; ; page += 1) {
+                const response = await github.request(route, {
+                  owner,
+                  repo,
+                  per_page: 100,
+                  page,
+                  ...params,
+                });
+                const batch = key ? response.data[key] : response.data;
+                all.push(...batch);
+                if (batch.length < 100) break;
+              }
+              return all;
+            }
+
+            const report = {
+              deletedBranches: [],
+              skippedBranches: [],
+              deletedReleases: [],
+              deletedTags: [],
+              deletedArtifacts: 0,
+              deletedCaches: 0,
+              deletedWorkflowRuns: 0,
+              errors: [],
+            };
+
+            const repository = await github.rest.repos.get({ owner, repo });
+            const defaultBranch = repository.data.default_branch;
+            await github.rest.repos.update({
+              owner,
+              repo,
+              delete_branch_on_merge: true,
+            });
+
+            const openPulls = await paged(
+              'GET /repos/{owner}/{repo}/pulls',
+              { state: 'open' },
+            );
+            const openHeadBranches = new Set(
+              openPulls
+                .filter(pr => pr.head?.repo?.full_name === repoFullName)
+                .map(pr => pr.head.ref),
+            );
+
+            const releases = await paged('GET /repos/{owner}/{repo}/releases', {});
+            for (const release of releases) {
+              try {
+                await github.request(
+                  'DELETE /repos/{owner}/{repo}/releases/{release_id}',
+                  { owner, repo, release_id: release.id },
+                );
+                report.deletedReleases.push({ id: release.id, tag: release.tag_name, name: release.name });
+              } catch (error) {
+                report.errors.push(`release ${release.id}: ${error.message}`);
+              }
+            }
+
+            const tags = await paged('GET /repos/{owner}/{repo}/tags', {});
+            for (const tag of tags) {
+              try {
+                await github.request(
+                  'DELETE /repos/{owner}/{repo}/git/refs/{ref}',
+                  { owner, repo, ref: `tags/${tag.name}` },
+                );
+                report.deletedTags.push(tag.name);
+              } catch (error) {
+                report.errors.push(`tag ${tag.name}: ${error.message}`);
+              }
+            }
+
+            try {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: '3.09',
+                target_commitish: defaultBranch,
+                name: 'Adaptive Master–Subagent Orchestration 3.09',
+                body: [
+                  'First public release of Adaptive Master–Subagent Orchestration 3.09.',
+                  '',
+                  'The live installers and verified package are maintained directly on the `main` branch.',
+                  '',
+                  'PowerShell:',
+                  '```powershell',
+                  `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/${repoFullName}/raw/refs/heads/main/install.ps1' | iex"`,
+                  '```',
+                  '',
+                  'Bash:',
+                  '```bash',
+                  `curl -fsSL 'https://github.com/${repoFullName}/raw/refs/heads/main/install.sh' | bash`,
+                  '```',
+                  '',
+                  'Package SHA-256:',
+                  '`f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b`',
+                ].join('\n'),
+                draft: false,
+                prerelease: false,
+                generate_release_notes: false,
+              });
+            } catch (error) {
+              report.errors.push(`create release 3.09: ${error.message}`);
+            }
+
+            const artifacts = await paged(
+              'GET /repos/{owner}/{repo}/actions/artifacts',
+              {},
+              'artifacts',
+            );
+            for (const artifact of artifacts) {
+              try {
+                await github.request(
+                  'DELETE /repos/{owner}/{repo}/actions/artifacts/{artifact_id}',
+                  { owner, repo, artifact_id: artifact.id },
+                );
+                report.deletedArtifacts += 1;
+              } catch (error) {
+                report.errors.push(`artifact ${artifact.id}: ${error.message}`);
+              }
+            }
+
+            try {
+              const caches = await paged(
+                'GET /repos/{owner}/{repo}/actions/caches',
+                {},
+                'actions_caches',
+              );
+              for (const cache of caches) {
+                try {
+                  await github.request(
+                    'DELETE /repos/{owner}/{repo}/actions/caches/{cache_id}',
+                    { owner, repo, cache_id: cache.id },
+                  );
+                  report.deletedCaches += 1;
+                } catch (error) {
+                  report.errors.push(`cache ${cache.id}: ${error.message}`);
+                }
+              }
+            } catch (error) {
+              report.errors.push(`cache inventory: ${error.message}`);
+            }
+
+            const runs = await paged(
+              'GET /repos/{owner}/{repo}/actions/runs',
+              {},
+              'workflow_runs',
+            );
+            for (const run of runs) {
+              if (run.id === currentRunId) continue;
+              try {
+                await github.request(
+                  'DELETE /repos/{owner}/{repo}/actions/runs/{run_id}',
+                  { owner, repo, run_id: run.id },
+                );
+                report.deletedWorkflowRuns += 1;
+              } catch (error) {
+                report.errors.push(`workflow run ${run.id}: ${error.message}`);
+              }
+            }
+
+            const branches = await paged('GET /repos/{owner}/{repo}/branches', {});
+            for (const branch of branches) {
+              if (branch.name === defaultBranch || branch.protected || openHeadBranches.has(branch.name)) {
+                report.skippedBranches.push({
+                  name: branch.name,
+                  protected: branch.protected,
+                  openPullRequest: openHeadBranches.has(branch.name),
+                });
+                continue;
+              }
+              try {
+                await github.request(
+                  'DELETE /repos/{owner}/{repo}/git/refs/{ref}',
+                  { owner, repo, ref: `heads/${branch.name}` },
+                );
+                report.deletedBranches.push(branch.name);
+              } catch (error) {
+                report.errors.push(`branch ${branch.name}: ${error.message}`);
+              }
+            }
+
+            const summary = [
+              '# Public repository cleanup',
+              '',
+              `- Deleted branches: ${report.deletedBranches.length}`,
+              `- Preserved branches: ${report.skippedBranches.length}`,
+              `- Deleted old releases: ${report.deletedReleases.length}`,
+              `- Deleted old tags: ${report.deletedTags.length}`,
+              '- Created clean release: 3.09',
+              `- Deleted Actions artifacts: ${report.deletedArtifacts}`,
+              `- Deleted Actions caches: ${report.deletedCaches}`,
+              `- Deleted old workflow runs: ${report.deletedWorkflowRuns}`,
+              `- Non-fatal cleanup errors: ${report.errors.length}`,
+              '',
+              '## Deleted branches',
+              '',
+              report.deletedBranches.length ? report.deletedBranches.map(name => `- \`${name}\``).join('\n') : '- None',
+              '',
+              '## Errors',
+              '',
+              report.errors.length ? report.errors.map(error => `- ${error}`).join('\n') : '- None',
+            ].join('\n');
+
+            await core.summary.addRaw(summary).write();
+            console.log(JSON.stringify(report, null, 2));
