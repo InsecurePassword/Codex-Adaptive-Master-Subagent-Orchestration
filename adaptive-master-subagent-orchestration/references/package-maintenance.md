@@ -22,4 +22,4 @@ The current session continues under its pre-change contract only for bounded rep
 
 ## Uninstall
 
-Standard uninstall removes only the verified installed AMS package root. Preserve project settings, recovery state, generated profiles, and unrelated skills/profiles unless the user explicitly authorizes separate proven cleanup. Refuse redirected or ambiguous roots. Report what remains and require reload.
+Standard uninstall removes only the verified installed AMS package root. Preserve project and global settings, recovery state, generated profiles, and unrelated skills/profiles unless the user explicitly authorizes separate proven cleanup. Refuse redirected or ambiguous roots. Report what remains and require reload.
