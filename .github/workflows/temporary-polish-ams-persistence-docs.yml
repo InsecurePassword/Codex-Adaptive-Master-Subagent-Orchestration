@@ -6,6 +6,7 @@ on:
       - main
     types:
       - opened
+      - reopened
       - synchronize
 
 permissions:
@@ -95,6 +96,7 @@ This is expected only when no enabled global file applies. When both settings fi
         shell: bash
         run: |
           rm -- .github/workflows/temporary-polish-ams-persistence-docs.yml
+          rm -f -- .github/polish-ams-persistence-docs-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
