@@ -107,7 +107,7 @@ Release 3.09 also:
 - Spark access only when Spark routing is enabled and the account supports it
 - A Codex restart or reload after installing, updating, repairing, or uninstalling AMS
 
-The installed skill contains Markdown, YAML, and a version file only. Shell tools are used for installation and maintenance, not while AMS is orchestrating project work.
+The installed skill contains Markdown, YAML, TOML agent profiles, and a version file. Shell tools are used for installation and maintenance, not while AMS is orchestrating project work.
 
 ## Installation
 
@@ -116,53 +116,55 @@ The installed skill contains Markdown, YAML, and a version file only. Shell tool
 Windows PowerShell:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.ps1' | iex"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
 ```
 
 Linux or macOS:
 
 ```bash
-curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/install.sh' | bash
+curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
 ```
 
 Restart or reload Codex afterward.
 
-### Release channels
+### Repository distribution
 
-The stable installer channel contains:
+AMS 3.09 is distributed directly from the repository root on the `main` branch. Installation does not depend on GitHub Release assets.
 
 ```text
-3.09/
+Codex-Adaptive-Master-Subagent-Orchestration/
+├── adaptive-master-subagent-orchestration-3.09.zip
 ├── install.ps1
-├── install.sh
-└── adaptive-master-subagent-orchestration-3.09.zip
+└── install.sh
 ```
 
-Installer-channel package:
+Package URL:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09.zip
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
 ```
 
-The numbered release retains the descriptive audit filename:
+Package SHA-256:
 
 ```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/releases/download/3.09/adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
 ```
 
-The two ZIP filenames identify the same audited 3.09 package content. Both use:
-
-```text
-SHA-256: 74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
-```
-
-Default installation location:
+Default skill location:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-The installers verify the checksum, exact required file set, expected directories, archive integrity, file-size limits, symbolic-link safety, and `VERSION = 3.09` before replacing an existing installation. They preserve unrelated skills, project settings, recovery state, and generated agent profiles.
+Default profile location:
+
+```text
+$CODEX_HOME/agents/
+```
+
+When `CODEX_HOME` is unset, the profile location is `$HOME/.codex/agents/`.
+
+The installers verify the checksum, exact package inventory, archive integrity, file-size limits, symbolic-link safety, managed-profile markers, and `VERSION = 3.09`. They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project settings, recovery state, and user-authored profiles.
 
 See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment overrides, update, repair, and uninstall commands.
 
@@ -692,55 +694,42 @@ Those failures are handled for the current route without disabling Spark for the
 
 ## Agent profile management
 
-AMS uses custom profiles named:
+The package includes the complete canonical profile matrix under:
 
 ```text
-ams_sol_<effort>
-ams_terra_<effort>
-ams_luna_<effort>
-ams_spark_<effort>
+adaptive-master-subagent-orchestration/assets/agent-profiles/
 ```
 
-Sol, Terra, and Luna support:
+The installer deploys all 18 profiles to `$CODEX_HOME/agents/`, or `$HOME/.codex/agents/` when `CODEX_HOME` is unset:
 
 ```text
-low, medium, high, xhigh, max
+ams_<sol|terra|luna>_<low|medium|high|xhigh|max>
+ams_spark_<low|medium|high>
 ```
 
-Spark supports:
+The packaged model defaults are `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, and `gpt-5.3-codex-spark`. Runtime availability is still verified before routing; an unavailable family or effort does not authorize silent rewriting of the canonical package asset.
 
-```text
-low, medium, high
-```
-
-Preferred profile location:
-
-```text
-$CODEX_HOME/agents/
-```
-
-Project-local profiles may be used only when global profiles are unavailable, deliberate project isolation is needed, or authoritative project instructions provide an override.
-
-Release 3.09 managed profiles use:
+Every managed file begins with:
 
 ```text
 # managed-by: adaptive-master-subagent-orchestration
 # profile-schema: 3
 ```
 
-The profile enforces the bounded non-root boundary. The work order supplies the temporary `worker` or `delegated-manager` role. Release 3.09 intentionally does not add a permanent manager profile.
+Each profile includes its exact discoverable role name, model, reasoning effort, bounded non-root developer instructions, and Codex V2 guidance overrides. Explicit AMS custom-role dispatch uses `fork_turns = "none"` so the root supplies the compact work order directly instead of forwarding root-only orchestration context.
 
-Each auto-discovered profile includes its exact role name and Codex V2 guidance overrides that preserve root-only physical spawning. An explicit AMS custom-role spawn uses `fork_turns = "none"`; the root supplies the compact authoritative work order directly instead of inheriting the root transcript.
+Sol, Terra, and Luna profiles are role-neutral: a work order temporarily assigns `worker / none` or `delegated-manager / request`. Spark remains `worker / none` only. No permanent manager-profile family exists.
 
-With `profile_management = "auto"`, AMS checks only profiles selected for actual work. It may create a missing managed profile or repair a recognized defective AMS-managed profile. It does not rewrite unrelated or ambiguous user-created profiles.
+During installation:
 
-With `profile_management = "installer"`, AMS reports defects and uses a truthful compatible loaded alternative when possible. Explicit installation or full repair remains allowed.
+- byte-identical profiles remain unchanged;
+- a differing file is replaced only when its exact managed marker proves AMS ownership;
+- unrecognized or user-authored collisions fail closed;
+- skill and profile changes roll back together on failure.
 
-Release 3.09 can migrate only profiles whose complete content proves recognized AMS provenance, including current schema-3 profiles, the exact pre-correction 3.09 signature, exact 3.08 schema-2 direct-child/no-spawn signatures, official earlier v3 managed signatures, exact 3.07 Spark schema-1 signatures, and original narrow marker-only AMS signatures.
+After installation, `profile_management = "auto"` permits selected missing or recognized defective AMS profiles to be restored from the exact bundled asset. `profile_management = "installer"` disables automatic repair but still allows an explicit repair request. Ambiguous files are preserved.
 
-The 3.08 direct-child profile reference is historical provenance, not current behavior. Managed legacy files are backed up before upgrade. Ambiguous, partially matching, malformed, or user-authored files are preserved.
-
-A fresh Codex session may be required before newly created profiles become discoverable.
+A fresh Codex session may be required before newly installed or repaired profiles become discoverable.
 
 ## Validation and completion
 
@@ -978,42 +967,25 @@ Codex-Adaptive-Master-Subagent-Orchestration/
 ├── README.md
 ├── INSTALLATION.md
 ├── PRODUCT DOCUMENTATION.md
-├── install.ps1
-└── install.sh
-```
-
-### Stable installer release
-
-```text
-3.09/
 ├── adaptive-master-subagent-orchestration-3.09.zip
 ├── install.ps1
-└── install.sh
-```
-
-### Numbered release
-
-```text
-3.09/
-└── adaptive-master-subagent-orchestration-3.09-virtual-hierarchy-final-audited.zip
-```
-
-### Release package
-
-```text
-adaptive-master-subagent-orchestration/
-├── SKILL.md
-├── VERSION
-├── agents/
-│   └── openai.yaml
-└── references/
-    ├── hierarchy-control.md
-    ├── intensity-control.md
-    ├── package-maintenance.md
-    ├── profile-management.md
-    ├── project-control.md
-    ├── runtime-core.md
-    └── zergling-rush.md
+├── install.sh
+└── adaptive-master-subagent-orchestration/
+    ├── SKILL.md
+    ├── VERSION
+    ├── agents/
+    │   └── openai.yaml
+    ├── assets/
+    │   └── agent-profiles/
+    │       └── 18 canonical ams_*.toml profiles
+    └── references/
+        ├── hierarchy-control.md
+        ├── intensity-control.md
+        ├── package-maintenance.md
+        ├── profile-management.md
+        ├── project-control.md
+        ├── runtime-core.md
+        └── zergling-rush.md
 ```
 
 ### Installed skill
@@ -1025,6 +997,9 @@ $HOME/.agents/skills/
     ├── VERSION
     ├── agents/
     │   └── openai.yaml
+    ├── assets/
+    │   └── agent-profiles/
+    │       └── 18 canonical ams_*.toml profiles
     └── references/
         ├── hierarchy-control.md
         ├── intensity-control.md
@@ -1035,7 +1010,7 @@ $HOME/.agents/skills/
         └── zergling-rush.md
 ```
 
-### Generated agent profiles
+### Installed agent profiles
 
 ```text
 $CODEX_HOME/agents/
@@ -1048,27 +1023,7 @@ $CODEX_HOME/agents/
 ├── ams_terra_medium.toml
 ├── ams_terra_high.toml
 ├── ams_terra_xhigh.toml
-├── ams_terra_max.toml
-├── ams_luna_low.toml
-├── ams_luna_medium.toml
-├── ams_luna_high.toml
-├── ams_luna_xhigh.toml
-├── ams_luna_max.toml
-├── ams_spark_low.toml
-├── ams_spark_medium.toml
-└── ams_spark_high.toml
-```
-
-The exact generated set depends on models and efforts supported by the current Codex runtime. No separate manager profile family is generated.
-
-### Project settings and optional recovery
-
-```text
-<project-root>/
-└── .codex/
-    ├── ams-orchestration.toml
-    └── ams-recovery.json  # only when no project-native state system is sufficient
-```
+├──����}ѕ�Ʌ}���ѽ��+�Rs�R�R ����}�չ�}��ܹѽ��+�Rs�R�R ����}�չ�}����մ�ѽ��+�Rs�R�R�5��V����v��F����)I�)H)H�5��V�����v��F����)I�)H)H�5��V�����F����)I�)H)H�5�7&����r�F����)I�)H)H�5�7&���VF�V��F����)IN)H)H�5�7&����v��F���� ��222&��V7B6WGF��w2�B�F����&V6�fW'���FW�@��&��V7B�&��C��)IN)H)H�6�FW��)I�)H)H�2��&6�W7G&F����F����)IN)H)H[\�\�X�ݙ\�K���ۈ�ۛH�[����ڙX�[�]]�H�]H�\�[H\��Y��X�Y[��
 
 ## Troubleshooting
 
@@ -1117,13 +1072,9 @@ Run `AMS SPARK RECHECK` when account capability may have changed.
 
 ### A profile is missing or invalid
 
-With `profile_management = "auto"`, explicitly invoke AMS for work that needs the profile or request:
+Rerun the repository-hosted installer. It restores the complete canonical matrix from the package while refusing to overwrite unrecognized or user-authored collisions.
 
-```text
-Install or repair AMS agent profiles.
-```
-
-Restart Codex if newly created profiles are not immediately visible.
+With `profile_management = "auto"`, AMS may also restore a selected missing or recognized defective profile from the exact installed package asset. Restart Codex if a newly installed or repaired profile is not immediately visible.
 
 ### The package reports 3.08 or lacks `hierarchy-control.md`
 
@@ -1138,13 +1089,17 @@ Do not merge files from 3.08 and 3.09.
 
 ### The checksum does not match
 
-Do not bypass the check. The expected SHA-256 is:
+Do not bypass the check. The expected SHA-256 for the repository-root package is:
 
 ```text
-74e48106fc26a6516db3e9f6cc15e66e745d4fe71e24fdee233a6cf972fe4514
+f35aa28cad7c2691e80823e36ca276cbee8b20de067600fd8edb8f2aaf10fe4b
 ```
 
-Confirm that the downloaded filename belongs to either the synchronized `3.09` channel or numbered `3.09` release described above.
+Confirm that the package came from:
+
+```text
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
+```
 
 ### The installer reports an unexpected directory entry
 
@@ -1153,6 +1108,8 @@ The 3.09 archive may contain only these directory entries:
 ```text
 adaptive-master-subagent-orchestration/
 adaptive-master-subagent-orchestration/agents/
+adaptive-master-subagent-orchestration/assets/
+adaptive-master-subagent-orchestration/assets/agent-profiles/
 adaptive-master-subagent-orchestration/references/
 ```
 
