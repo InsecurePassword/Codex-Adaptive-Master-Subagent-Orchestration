@@ -11,7 +11,7 @@ $RepositoryBranch = "main"
 $AssetName = "adaptive-master-subagent-orchestration-$PackageVersion.zip"
 $DefaultPackageUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/$RepositoryBranch/$AssetName"
 $PackageUrl = if ($env:AMS_PACKAGE_URL) { $env:AMS_PACKAGE_URL } elseif ($env:AMS_RELEASE_URL) { $env:AMS_RELEASE_URL } else { $DefaultPackageUrl }
-$ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018" }
+$ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4" }
 $UserAgent = "AMS-$PackageVersion-Installer"
 $SkillName = "adaptive-master-subagent-orchestration"
 $ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
@@ -51,6 +51,7 @@ $RequiredFiles = @(
     "agents/openai.yaml",
     "references/hierarchy-control.md",
     "references/intensity-control.md",
+    "references/model-tracking.md",
     "references/package-maintenance.md",
     "references/profile-management.md",
     "references/project-control.md",

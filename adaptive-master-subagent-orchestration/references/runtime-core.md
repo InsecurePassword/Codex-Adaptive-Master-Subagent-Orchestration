@@ -10,9 +10,13 @@ Reuse references already read completely within the objective; reread only after
 
 Before first use of a route, verify its effective profile. Family/effort, bounded non-root behavior, role gating, instruction/control protections, permissions, tools, provider, network, and sandbox must match. On a selected missing/malformed/mismatched profile or explicit repair, load `references/profile-management.md`; `profile_management = "installer"` blocks automatic, not explicit, repair.
 
-Resolve intensity before dispatch. `auto` uses Section 3. For `minimal`, `balanced`, legacy `moderate`, `heavy`, or `extreme`, load `references/intensity-control.md`; normalize `moderate` to `balanced`. Load `references/hierarchy-control.md` before any delegated-manager order/request/result, descendant relay, or manager-custody change. Load `references/zergling-rush.md` before resolving any Rush candidate. Load `references/project-control.md` for steering, Spark state, durable state, interruption, or recovery, and `references/package-maintenance.md` only for package operations/integrity/reload state.
+Resolve effective settings through `project-control.md` before intensity or optional tracking. `auto` uses Section 3. For `minimal`, `balanced`, legacy `moderate`, `heavy`, or `extreme`, load `references/intensity-control.md`; normalize `moderate` to `balanced`. Load `references/hierarchy-control.md` before any delegated-manager order/request/result, descendant relay, or manager-custody change. Load `references/zergling-rush.md` before resolving any Rush candidate. Load `references/project-control.md` for steering, Spark state, durable state, interruption, or recovery, and `references/package-maintenance.md` only for package operations/integrity/reload state. When effective `model_tracking = true`, load `references/model-tracking.md` only before the first tracked row or model-annotated topology; never newly load it while tracking is false.
 
-A required unreadable reference fails closed for the behavior it owns; do not invent substitutes.
+A required unreadable reference fails closed for the behavior it owns; do not invent substitutes. An unavailable model-tracking reference or log disables only logging and model annotations for the objective, warns once, and never blocks otherwise valid orchestration.
+
+When tracking is enabled, after each successful new non-root `spawn_agent`, follow `model-tracking.md` using the returned canonical `task_name` and the final selected capability profile after any reroute or substitution. Do not log failed spawns or later turns on an existing physical session.
+
+`AMS TOPOLOGY` is read-only. Use `list_agents` or the supported equivalent and current live work-order lineage; show the root and only open non-final sessions (`PendingInit`, `Running`, or still-open `Interrupted`). Exclude completed, closed, shutdown, errored, failed-to-start, not-found, and superseded sessions. Omit inactive logical parents from the displayed tree, attaching active descendants to the nearest active ancestor or root with `[logical parent inactive]`; never rewrite stored lineage. Do not pause, cancel, steer, resume, or otherwise modify a session. When tracking is off, show the same active topology without loading `model-tracking.md` or adding model annotations.
 
 <adaptive_master_subagent_orchestration>
 
@@ -41,7 +45,7 @@ Before planning, read recognized instructions by precedence and delegate relevan
 
 ## 3. Intensity eligibility ladder
 
-Resolve intensity from the latest valid current-turn/steer value, valid project settings, then `auto`; report invalid values and record value/source. Normalize legacy `moderate` to `balanced`.
+Resolve intensity from the latest valid current-turn/steer value, valid effective settings (project or global), then `auto`; report invalid values and record value/source. Normalize legacy `moderate` to `balanced`.
 
 `auto` has no target, quota, concurrency bias, logical-depth ceiling, manager ceiling, worker ratio, or team-shape constraint. Select the smallest beneficial adaptive topology and expand, flatten, or reorganize only as the live task graph warrants. `minimal` and `balanced` use their bounded rows in `intensity-control.md`. `heavy`, `extreme`, and active Rush have no AMS-defined logical-depth or shape limit. Intensity never changes model quality, safety, validation, dependencies, ownership, or sole root physical-spawn authority.
 
@@ -112,7 +116,7 @@ A direct worker uses `worker`/`none`. Before any delegated-manager role, request
 
 Provide authoritative relevant context, not the noisy transcript. Command work reports exact commands, exit codes, relevant output, observable duration, and artifacts. Prefer distilled evidence. Sessions own only their orders; out-of-scope needs return to the logical parent. Worker/manager completion are claims; only root decides project completion.
 
-Allow one writer per surface across all active sessions; prefer disjoint paths/isolated workspaces and serialize manifests, locks, schemas, interfaces, migrations, indexes, and authoritative state. Manager paths additionally obey `hierarchy-control.md`. Exclude all AMS settings/config, package files, managed profiles, orchestration records, and ledgers from non-root filesystem ownership, commands, and Git operations; mixed control/execution files remain root-owned for writes/Git.
+Allow one writer per surface across all active sessions; prefer disjoint paths/isolated workspaces and serialize manifests, locks, schemas, interfaces, migrations, indexes, and authoritative state. Manager paths additionally obey `hierarchy-control.md`. Exclude all AMS settings/config, package files, managed profiles, model-tracking logs, orchestration records, and ledgers from non-root filesystem ownership, commands, and Git operations; mixed control/execution files remain root-owned for writes/Git.
 
 Read-only reviewers do not edit; high-risk implementers are not sole reviewers. Source edits, checkpoints, integration execution, and Git/history require exact authority. Managers/workers may integrate project work excluding controls only when authorized; root retains final integration decisions and acceptance. Preserve user changes and define change shape before write-heavy work; delegate warranted checkpoints excluding controls. Uncommitted session work is not stable. Unauthorized control access, delegation, lineage/ownership change, destruction, or material scope drift triggers supervision.
 

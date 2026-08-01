@@ -41,16 +41,17 @@ spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
+model_tracking = false
 ```
 
 Supported values:
 
-- `enabled`, `allow_implicit_invocation`, `spark_enabled`, `spark_available`: Boolean;
+- `enabled`, `allow_implicit_invocation`, `spark_enabled`, `spark_available`, `model_tracking`: Boolean;
 - `intensity`: schema-2 storage values `auto`, `minimal`, `moderate`, `heavy`, `extreme`, or stored `zergling-rush`; runtime/control input `balanced` maps to stored `moderate`, and either name is reported as `balanced`;
 - `spark_efforts`: unique ordered subset of `low`, `medium`, `high`;
 - `profile_management`: `auto` or `installer`.
 
-Reject duplicate or unknown keys, unsupported schemas, coercion, invalid TOML, invalid types, unsafe paths, or extra tables. Valid schema-1 files remain readable under their documented legacy meanings and upgrade only during an authorized project-settings write. Keep schema 2 unchanged; normalize stored `moderate` to runtime `balanced` and persist `moderate` for backward compatibility.
+Reject duplicate or unknown keys, unsupported schemas, coercion, invalid TOML, invalid types, unsafe paths, or extra tables. Valid schema-1 files remain readable under their documented legacy meanings and upgrade only during an authorized project-settings write. A valid schema-2 file that predates `model_tracking` and omits it resolves that key as `false`. Keep schema 2 unchanged; normalize stored `moderate` to runtime `balanced` and persist `moderate` for backward compatibility.
 
 Global persistence is manual only. AMS never creates, modifies, repairs, migrates, or deletes the global file. A safe valid global file may enable AMS without creating a project file. If both files are absent in a trusted stable project, initialize the exact disabled project default. Never persist controls in an untrusted, trust-indeterminate, or rootless context.
 
@@ -68,11 +69,12 @@ AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
 AMS PROFILES auto|installer
+AMS MODELTRACKING on|off|status
 ```
 
-Except for read-only `AMS STATUS` and the capability probe in `AMS SPARK RECHECK`, these are persistent project-settings commands. They write only `<project-root>/.codex/ams-orchestration.toml`; they never write the global file. Preserve valid unspecified project values. If the project file is absent, base the new project file on the exact default rather than copying global settings.
+Except for read-only `AMS STATUS`, `AMS MODELTRACKING status`, and the capability probe in `AMS SPARK RECHECK`, these are persistent project-settings commands. They write only `<project-root>/.codex/ams-orchestration.toml`; they never write the global file. Preserve valid unspecified project values. If the project file is absent, use the exact default unless a command below explicitly requires materializing valid effective settings.
 
-- `AMS STATUS`: inspect only the canonical project and global paths; report both paths, existence/safety/validity, effective source (`project`, `global`, or `none`), effective mode and controls, and the exact activation blocker. Do not search unrelated policy or configuration files.
+- `AMS STATUS`: inspect only the canonical project and global paths; report both paths, existence/safety/validity, effective source (`project`, `global`, or `none`), effective mode and controls including `model_tracking`, and the exact activation blocker. Do not search unrelated policy or configuration files.
 - `AMS ENABLE`: set project `enabled = true`; create an enabled project default when absent.
 - `AMS DISABLE`: stop new dispatch, drain safe work, collect evidence, record the exact next action when needed, close remaining sessions, then set project `enabled = false`; create a disabled project default when absent.
 - `AMS MODE <normal-mode>`: set project `enabled = true` and persist the selected intensity. `balanced` persists as `moderate`.
@@ -81,6 +83,8 @@ Except for read-only `AMS STATUS` and the capability probe in `AMS SPARK RECHECK
 - `AMS SPARK EFFORTS <subset>`: persist the validated project effort subset.
 - `AMS PROFILES auto|installer`: persist project `profile_management`.
 - `AMS SPARK RECHECK`: run one smallest safe probe and persist `spark_available` only under the evidence rules below.
+- `AMS MODELTRACKING on|off`: persist only project `model_tracking`. If no project file exists, materialize the current valid effective settings (global when valid, otherwise the exact default), then change only this key. This command never enables or disables AMS, affects only future successful physical spawns, and preserves existing logs.
+- `AMS MODELTRACKING status`: read-only and valid while tracking is off; do not load `model-tracking.md`. Report the effective value/source, the current root session's known log or otherwise the newest safe regular `ams-model-tracking-*.csv` by parsed timestamp and collision suffix, and at most the last 10 data rows after validating the exact header. Use a bounded tail read; never create or modify a log.
 
 A current-turn control takes effect after a safe transition. If no stable trusted project root exists, report that persistence is unavailable; explicit safe controls may apply in memory for the current objective only. A file-only settings change observed during active work is not automatically authoritative: classify its source and safety, honor direct current-turn user intent, apply safe recognized changes at a wave boundary, and require confirmation for destructive, ambiguous, or unexpectedly uneconomic effects. Stored `zergling-rush` remains preference data and never supplies current-turn Rush consent.
 
@@ -94,7 +98,7 @@ Set `spark_available = false` only after strong evidence that the account, entit
 
 ## Steering and interruption
 
-On disable, intensity/profile/Spark changes, trust loss, package transition, user interruption, or material plan correction:
+On disable, intensity/profile/Spark/model-tracking changes, trust loss, package transition, user interruption, or material plan correction:
 
 1. stop inconsistent new dispatch;
 2. finish or roll back any atomic AMS control write;

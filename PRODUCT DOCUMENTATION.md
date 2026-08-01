@@ -3,7 +3,7 @@
 **Product:** Adaptive Master–Subagent Orchestration (AMS)  
 **Current release:** 3.09
 
-This document describes every supported AMS control, the 3.09 virtual-hierarchy model, model and profile routing, installation and maintenance, recovery, completion rules, and uninstall behavior.
+This document describes every supported AMS control, the 3.09 virtual-hierarchy model, optional model tracking, model and profile routing, installation and maintenance, recovery, completion rules, and uninstall behavior.
 
 ## Contents
 
@@ -14,20 +14,21 @@ This document describes every supported AMS control, the 3.09 virtual-hierarchy 
 5. [Starting and stopping AMS](#starting-and-stopping-ams)
 6. [Project settings](#project-settings)
 7. [Command reference](#command-reference)
-8. [Intensity modes](#intensity-modes)
-9. [Virtual hierarchy](#virtual-hierarchy)
-10. [Zergling Rush](#zergling-rush)
-11. [Model and effort routing](#model-and-effort-routing)
-12. [How AMS manages work](#how-ams-manages-work)
-13. [Spark controls](#spark-controls)
-14. [Agent profile management](#agent-profile-management)
-15. [Validation and completion](#validation-and-completion)
-16. [Failure handling](#failure-handling)
-17. [Pausing and recovery](#pausing-and-recovery)
-18. [Package updates and repair](#package-updates-and-repair)
-19. [Uninstall](#uninstall)
-20. [Directory structure](#directory-structure)
-21. [Troubleshooting](#troubleshooting)
+8. [Model tracking and active topology](#model-tracking-and-active-topology)
+9. [Intensity modes](#intensity-modes)
+10. [Virtual hierarchy](#virtual-hierarchy)
+11. [Zergling Rush](#zergling-rush)
+12. [Model and effort routing](#model-and-effort-routing)
+13. [How AMS manages work](#how-ams-manages-work)
+14. [Spark controls](#spark-controls)
+15. [Agent profile management](#agent-profile-management)
+16. [Validation and completion](#validation-and-completion)
+17. [Failure handling](#failure-handling)
+18. [Pausing and recovery](#pausing-and-recovery)
+19. [Package updates and repair](#package-updates-and-repair)
+20. [Uninstall](#uninstall)
+21. [Directory structure](#directory-structure)
+22. [Troubleshooting](#troubleshooting)
 
 ## What AMS does
 
@@ -96,7 +97,8 @@ Release 3.09 also:
 - keeps Spark worker-only;
 - uses existing Sol, Terra, and Luna profiles for either worker or delegated-manager roles through bounded work orders;
 - adds hierarchy lineage, custody, allocation, replay, replacement, and recovery rules;
-- upgrades managed profiles to role-neutral bounded-session schema 3 with Codex V2 dispatch safeguards.
+- upgrades managed profiles to role-neutral bounded-session schema 3 with Codex V2 dispatch safeguards;
+- adds optional, off-by-default model/effort CSV monitoring and current-active topology reporting.
 
 ## Requirements
 
@@ -147,7 +149,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 Package SHA-256:
 
 ```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
+4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4
 ```
 
 Default skill location:
@@ -164,7 +166,7 @@ $CODEX_HOME/agents/
 
 When `CODEX_HOME` is unset, the profile location is `$HOME/.codex/agents/`.
 
-The installers verify the checksum, exact package inventory, archive integrity, file-size limits, symbolic-link safety, managed-profile markers, and `VERSION = 3.09`. They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project settings, recovery state, and user-authored profiles.
+The installers verify the checksum, exact package inventory, archive integrity, file-size limits, symbolic-link safety, managed-profile markers, and `VERSION = 3.09`. They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project/global settings, model-tracking logs, recovery state, and user-authored profiles.
 
 See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment overrides, update, repair, and uninstall commands.
 
@@ -255,6 +257,7 @@ spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
+model_tracking = false
 ```
 
 | Setting | Meaning |
@@ -267,6 +270,7 @@ profile_management = "auto"
 | `spark_available` | Cached indication that Spark appears available to the account. |
 | `spark_efforts` | Spark effort levels allowed for normal work: `low`, `medium`, and/or `high`. |
 | `profile_management` | `auto` repairs selected managed profiles when needed; `installer` reports defects unless repair is explicitly requested. |
+| `model_tracking` | Off by default. When true, records the final AMS-selected model family and reasoning effort for successful new non-root spawns. |
 
 Settings are data, not instructions. Unknown keys, duplicate keys, invalid types, unsupported schemas, invalid TOML, extra tables, unsafe paths, or redirected files block that settings source. Valid schema-1 project settings remain readable under their documented meanings and upgrade only during an authorized project write.
 
@@ -274,7 +278,7 @@ Settings are data, not instructions. Unknown keys, duplicate keys, invalid types
 
 Global persistence is deliberately outside the AMS command surface. No `AMS` command creates, changes, repairs, migrates, or deletes the global file. Manually create it with the schema above or copy a valid project file into the global path, then restart or reload Codex.
 
-Project commands remain project-specific and write only `<project-root>/.codex/ams-orchestration.toml`. If the project file is absent, a project command creates it from the exact default rather than copying global values. See [INSTALLATION.md](INSTALLATION.md#global-persistence-manual-only) for PowerShell and Bash create/copy examples.
+Project commands remain project-specific and write only `<project-root>/.codex/ams-orchestration.toml`. Most commands create an absent project file from the exact default. `AMS MODELTRACKING on|off` instead materializes current valid effective settings first so toggling tracking does not reset a valid global mode or disable AMS. See [INSTALLATION.md](INSTALLATION.md#global-persistence-manual-only) for PowerShell and Bash create/copy examples.
 
 When both settings files are absent in a trusted stable project, AMS initializes the exact disabled project default. Creating that file never enables AMS. In untrusted, trust-indeterminate, or rootless contexts, AMS does not persist project controls.
 
@@ -282,7 +286,7 @@ A stored `zergling-rush` value is preference data only and never supplies the cu
 
 ## Command reference
 
-Clear equivalent wording is valid. Every command below invokes AMS. Except for `AMS STATUS`, controls persist only to the trusted project's `.codex/ams-orchestration.toml`; none writes global persistence.
+Clear equivalent wording is valid. Every command below invokes AMS. Except for `AMS STATUS`, `AMS MODELTRACKING status`, and `AMS TOPOLOGY`, controls persist only to the trusted project's `.codex/ams-orchestration.toml`; none writes global persistence.
 
 ### `AMS STATUS`
 
@@ -339,6 +343,20 @@ An empty `spark_efforts = []` value permits no normal Spark assignment without m
 
 Persists project profile-management behavior. `auto` permits selected managed-profile repair; `installer` reports defects unless repair is explicitly requested.
 
+### `AMS MODELTRACKING on|off|status`
+
+Model tracking is off by default.
+
+- `on` persists only project `model_tracking = true`; it does not enable AMS or change the intensity.
+- `off` persists only project `model_tracking = false`; it preserves existing logs.
+- `status` is read-only and displays the effective value/source, the current or newest safe log, and up to the last 10 data rows. It does not load the optional tracking reference or create a file.
+
+No model-tracking command writes global settings.
+
+### `AMS TOPOLOGY`
+
+Read-only current topology. It includes only open, non-final sessions and never displays completed, closed, terminated, failed, not-found, or superseded sessions. Tracking adds model/effort annotations when enabled; topology remains available without annotations when tracking is off.
+
 ### Zergling Rush commands
 
 Current-objective activation:
@@ -356,6 +374,35 @@ AMS MODE ZERGLING-RUSH PERSIST
 ```
 
 A saved preference does not remove the requirement for current-turn Rush consent.
+
+## Model tracking and active topology
+
+Model tracking is an optional monitoring feature and is **off by default**:
+
+```toml
+model_tracking = false
+```
+
+While it is off, AMS does not load `references/model-tracking.md`, create `.codex/logs`, write CSV rows, or add model annotations to topology. Only an explicit `AMS MODELTRACKING on` command or a manually written `model_tracking = true` setting enables it. `AMS ENABLE`, normal mode changes, Rush, installation, and updates do not enable tracking.
+
+When enabled, AMS lazily creates one CSV for each top-level root session after its first successful non-root physical spawn:
+
+```text
+<project-root>/.codex/logs/ams-model-tracking-YYYYMMDDTHHMMSSZ.csv
+```
+
+```csv
+timestamp,subagent/worker name,model level,reasoning
+2026-08-01T21:04:18.337Z,semantic_reviewer,sol,high
+```
+
+One row is written for each successful new physical non-root spawn. Planned work, failed spawns, later turns on an existing session, results, completion, and termination do not create rows. Newly spawned replacements do.
+
+The name is the canonical returned task name. Model level and reasoning come from the final selected AMS capability profile after any reroute or substitution. The log records AMS's routing decision; it is not proof of the model actually executed. Icons, generated nicknames, output style, duration, and the root model are not identity evidence.
+
+Logs are root-owned AMS control output and are excluded from non-root commands and Git/history. Logging failure warns once and disables monitoring for the objective without blocking valid orchestration.
+
+`AMS TOPOLOGY` uses live agent status plus current work-order lineage and shows only current open sessions. An inactive logical parent is omitted from the diagram; an active descendant is displayed under the nearest active ancestor/root without rewriting stored lineage. CSV history is never used to reconstruct topology.
 
 ## Intensity modes
 
@@ -654,7 +701,7 @@ A session's `complete` status is a claim for its parent to evaluate. It is never
 
 ### Git operations
 
-A non-root session may perform a Git or history operation only when its work order explicitly authorizes the exact action. AMS settings, package files, managed profiles, global orchestration state, and recovery records remain root-owned and are excluded from project-agent Git operations unless the user explicitly makes a safely separated control artifact part of the project.
+A non-root session may perform a Git or history operation only when its work order explicitly authorizes the exact action. AMS settings, package files, managed profiles, model-tracking logs, global orchestration state, and recovery records remain root-owned and are excluded from project-agent Git operations unless the user explicitly makes a safely separated control artifact part of the project.
 
 ## Spark controls
 
@@ -858,6 +905,7 @@ VERSION
 agents/openai.yaml
 references/hierarchy-control.md
 references/intensity-control.md
+references/model-tracking.md
 references/package-maintenance.md
 references/profile-management.md
 references/project-control.md
@@ -876,6 +924,8 @@ AMS treats installed skill files as protected. It rejects package files that are
 Standard uninstall removes only the installed AMS skill directory. It preserves:
 
 - per-project AMS settings;
+- manually created global settings;
+- model-tracking logs;
 - project recovery state;
 - generated AMS agent profiles;
 - unrelated skills and profiles.
@@ -949,6 +999,8 @@ Do not remove every `ams_*.toml` file blindly.
 
 If AMS created a separate recovery ledger, remove only the exact path recorded in the handoff or AMS report. Do not guess or delete unrelated project state.
 
+Optional model-tracking logs are under `<project-root>/.codex/logs/ams-model-tracking-*.csv`. Remove only those exact files when their history is no longer wanted; do not delete the whole `.codex` directory.
+
 ## Directory structure
 
 ### Repository
@@ -972,6 +1024,7 @@ Codex-Adaptive-Master-Subagent-Orchestration/
     `-- references/
         |-- hierarchy-control.md
         |-- intensity-control.md
+        |-- model-tracking.md
         |-- package-maintenance.md
         |-- profile-management.md
         |-- project-control.md
@@ -994,6 +1047,7 @@ $HOME/.agents/skills/
     `-- references/
         |-- hierarchy-control.md
         |-- intensity-control.md
+        |-- model-tracking.md
         |-- package-maintenance.md
         |-- profile-management.md
         |-- project-control.md
@@ -1041,6 +1095,8 @@ When `CODEX_HOME` is unset, use `$HOME/.codex/ams-orchestration.toml`.
 <project-root>/
 `-- .codex/
     |-- ams-orchestration.toml
+    |-- logs/
+    |   `-- ams-model-tracking-*.csv  # only when model tracking is enabled and a worker is spawned
     `-- ams-recovery.json  # only when no project-native state system is sufficient
 ```
 
@@ -1106,12 +1162,20 @@ references/hierarchy-control.md exists
 
 Do not merge files from 3.08 and 3.09.
 
+### Model tracking creates no CSV
+
+Check the effective setting with `AMS MODELTRACKING status`. Tracking must be explicitly enabled and AMS must successfully start a new non-root physical session; enabling tracking alone creates no directory or empty log. A redirected or unsafe `.codex/logs` path disables only monitoring and should be reported once.
+
+### Topology omits completed agents
+
+This is expected. `AMS TOPOLOGY` shows only current open sessions. Historical CSV rows are not a topology source.
+
 ### The checksum does not match
 
 Do not bypass the check. The expected SHA-256 for the repository-root package is:
 
 ```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
+4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4
 ```
 
 Confirm that the package came from:

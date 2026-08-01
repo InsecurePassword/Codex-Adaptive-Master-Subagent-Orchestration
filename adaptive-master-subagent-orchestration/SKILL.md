@@ -23,7 +23,7 @@ Global persistence is manual only. AMS commands never create, modify, or delete 
 
 ## Project controls
 
-Use this skill for every command beginning with `AMS ` and every AMS status, activation, mode, or settings question. Load `references/project-control.md` before acting.
+Use this skill for every command beginning with `AMS `.
 
 ```text
 AMS STATUS
@@ -35,9 +35,11 @@ AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
 AMS PROFILES auto|installer
+AMS MODELTRACKING on|off|status
+AMS TOPOLOGY
 ```
 
-`AMS ENABLE`, normal `AMS MODE ...`, and the other setting commands persist to the project file when the project root is trusted and stable. `AMS MODE ...` also enables AMS. `AMS STATUS` is read-only and reports the project path, global path, effective source, effective settings, and any activation blocker. No command writes global persistence.
+Project-setting commands persist only to the trusted project file; no command writes global persistence. `AMS STATUS`, `AMS MODELTRACKING status`, and `AMS TOPOLOGY` are read-only. `AMS MODE ...` also enables AMS; `AMS MODELTRACKING on|off` changes only model tracking.
 
 ## Root authority and delegated roles
 
@@ -53,8 +55,8 @@ Resolve packaged references beneath the installed skill root. Before loading one
 
 Load only what the objective requires:
 
-- `references/project-control.md` for settings, status, steering, Spark state, interruption, durable state, or recovery;
-- `references/runtime-core.md` for active orchestration or project-facing recovery;
+- `references/project-control.md` for activation, settings, status, Spark controls, model-tracking controls, steering, interruption, durable state, or control-state recovery;
+- `references/runtime-core.md` for active orchestration, project-facing recovery, or `AMS TOPOLOGY`;
 - `references/package-maintenance.md` for install, update, repair, rollback, uninstall, package-integrity suspicion, or reload-required recovery.
 
-`runtime-core.md` routes `intensity-control.md`, `hierarchy-control.md`, `profile-management.md`, and `zergling-rush.md` lazily. Read each selected reference completely. A required unreadable reference fails closed only for the behavior it owns. Control-only actions create no project work lanes, and package maintenance is exclusive with active dispatch or other AMS control writes.
+`runtime-core.md` routes `intensity-control.md`, `hierarchy-control.md`, `profile-management.md`, and `zergling-rush.md` lazily. It loads `references/model-tracking.md` only when effective `model_tracking = true` and a CSV row or model-annotated topology is needed; never newly load it while tracking is false. Read each selected reference completely. A required unreadable reference fails closed only for the behavior it owns. Control-only actions create no project work lanes, and package maintenance is exclusive with active dispatch or other AMS control writes.

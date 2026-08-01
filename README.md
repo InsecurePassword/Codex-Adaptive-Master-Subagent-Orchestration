@@ -75,7 +75,7 @@ The repository-root distribution uses these files from `main`:
 The repository-root package is verified by both installer scripts with this SHA-256:
 
 ```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
+4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4
 ```
 
 Default install location:
@@ -138,9 +138,38 @@ spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
+model_tracking = false
 ```
 
 A project file overrides the global file completely, so a project can select another mode or disable AMS. Global persistence is manual: no `AMS` command creates, changes, or removes the global file. Restart or reload Codex after changing it.
+
+## Optional model tracking and active topology
+
+Model tracking is off by default. AMS does not load its tracking reference, create `.codex/logs`, or write CSV rows unless the effective configuration contains `model_tracking = true`.
+
+Project controls:
+
+```text
+AMS MODELTRACKING on
+AMS MODELTRACKING off
+AMS MODELTRACKING status
+AMS TOPOLOGY
+```
+
+`AMS MODELTRACKING on|off` changes only the project tracking setting and never enables, disables, or changes the AMS mode. `status` is read-only and displays up to the last 10 data rows from the current or newest safe log.
+
+Each top-level root session that successfully spawns a non-root session creates one lazy CSV log:
+
+```text
+<project-root>/.codex/logs/ams-model-tracking-YYYYMMDDTHHMMSSZ.csv
+```
+
+```csv
+timestamp,subagent/worker name,model level,reasoning
+2026-08-01T21:04:18.337Z,semantic_reviewer,sol,high
+```
+
+The CSV records the final AMS-selected profile family and effort, not authoritative proof of the runtime model. `AMS TOPOLOGY` shows only currently open sessions. When tracking is on, active non-root nodes include model/effort annotations; when off, topology remains available without annotations.
 
 ## Intensity modes
 
@@ -248,6 +277,8 @@ AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
 AMS PROFILES auto|installer
+AMS MODELTRACKING on|off|status
+AMS TOPOLOGY
 ```
 
 Most users only need `AMS ENABLE`, `AMS DISABLE`, and `AMS MODE`.

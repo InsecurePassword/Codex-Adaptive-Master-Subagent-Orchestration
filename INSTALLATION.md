@@ -55,7 +55,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 Package SHA-256:
 
 ```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
+4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4
 ```
 
 The archive contains one top-level directory:
@@ -99,7 +99,7 @@ Both installers:
 11. install or update the complete 18-profile matrix;
 12. refuse to overwrite unrecognized or user-authored profile collisions;
 13. restore the previous skill and profile state if installation fails;
-14. preserve unrelated skills, project settings, recovery state, and unrelated profiles.
+14. preserve unrelated skills, project/global settings, model-tracking logs, recovery state, and unrelated profiles.
 
 ## Package contents
 
@@ -134,6 +134,7 @@ adaptive-master-subagent-orchestration/
 └── references/
     ├── hierarchy-control.md
     ├── intensity-control.md
+    ├── model-tracking.md
     ├── package-maintenance.md
     ├── profile-management.md
     ├── project-control.md
@@ -168,7 +169,7 @@ https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration
 
 ```powershell
 $Zip = ".\adaptive-master-subagent-orchestration-3.09.zip"
-$Expected = "f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018"
+$Expected = "4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4"
 $Actual = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
 
 if ($Actual -ne $Expected) {
@@ -180,7 +181,7 @@ if ($Actual -ne $Expected) {
 
 ```bash
 printf '%s  %s\n' \
-  'f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018' \
+  '4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4' \
   'adaptive-master-subagent-orchestration-3.09.zip' | sha256sum -c -
 ```
 
@@ -188,7 +189,7 @@ printf '%s  %s\n' \
 
 ```bash
 actual="$(shasum -a 256 adaptive-master-subagent-orchestration-3.09.zip | awk '{print $1}')"
-test "$actual" = 'f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018'
+test "$actual" = '4f587e93cb4cdd633f6c8e642cd8ef0841b2044fadff4f3eec61e56eea16d4a4'
 ```
 
 ## Manual extraction
@@ -218,7 +219,7 @@ The resulting directory must be:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-Confirm that `VERSION` contains `3.09`, `references/hierarchy-control.md` exists, and all 18 files exist under `assets/agent-profiles/`. Restart or reload Codex afterward.
+Confirm that `VERSION` contains `3.09`, `references/hierarchy-control.md` and `references/model-tracking.md` exist, and all 18 files exist under `assets/agent-profiles/`. Restart or reload Codex afterward.
 
 ## Verify the installed package
 
@@ -325,6 +326,7 @@ spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
+model_tracking = false
 '@
 
 [IO.File]::WriteAllText(
@@ -357,6 +359,7 @@ spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
+model_tracking = false
 EOF
 ```
 
@@ -367,6 +370,32 @@ codex_home="${CODEX_HOME:-$HOME/.codex}"
 mkdir -p "$codex_home"
 cp /path/to/project/.codex/ams-orchestration.toml "$codex_home/ams-orchestration.toml"
 ```
+
+## Optional model tracking
+
+Model tracking is installed but off by default:
+
+```toml
+model_tracking = false
+```
+
+Enable or disable it for the current trusted project:
+
+```text
+AMS MODELTRACKING on
+AMS MODELTRACKING off
+AMS MODELTRACKING status
+```
+
+The toggle changes only the project tracking setting; it does not enable or disable AMS. `status` is read-only and shows up to the last 10 data rows.
+
+When enabled, AMS lazily creates one CSV per top-level root session after the first successful non-root spawn:
+
+```text
+<project-root>/.codex/logs/ams-model-tracking-YYYYMMDDTHHMMSSZ.csv
+```
+
+`AMS TOPOLOGY` shows only current open sessions. Model/reasoning annotations are added only while tracking is enabled. Existing logs are preserved when tracking is turned off or AMS is reinstalled.
 
 ## Agent profiles
 
@@ -445,4 +474,4 @@ fi
 
 Restart or reload Codex after removal.
 
-Project settings, manually created global settings, and installed profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
+Project settings, manually created global settings, model-tracking logs, and installed profiles are preserved intentionally. Complete cleanup instructions are documented in [Product Documentation](PRODUCT%20DOCUMENTATION.md#uninstall).
