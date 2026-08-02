@@ -1,0 +1,45 @@
+name: Temporary add profile dispatch report
+
+on:
+  push:
+    branches:
+      - agent/report-subagent-profiles
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/report-subagent-profiles
+          fetch-depth: 0
+
+      - name: Add the single runtime instruction
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('adaptive-master-subagent-orchestration/references/runtime-core.md')
+          text = path.read_text(encoding='utf-8')
+          old = 'Profiles choose model/reasoning and enforce the bounded non-root boundary. Work orders choose temporary execution/management role, logical parent, scope, permissions, ownership, validation, and output. No manager-specific profile is required.'
+          new = "Profiles choose model/reasoning and enforce the bounded non-root boundary. Work orders choose temporary execution/management role, logical parent, scope, permissions, ownership, validation, and output. After each successful non-root spawn, immediately report the new session's task name and requested AMS capability profile, whose name encodes the model family and reasoning effort; batch simultaneous spawns in one concise line and do not present requested configuration as observed runtime identity. No manager-specific profile is required."
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one runtime insertion point, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
+
+      - name: Remove temporary workflow and commit
+        shell: bash
+        run: |
+          rm -- .github/workflows/temporary-add-profile-dispatch-report.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Report the requested profile after each subagent spawn"
+          git push origin HEAD:agent/report-subagent-profiles
