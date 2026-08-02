@@ -1,0 +1,83 @@
+name: One-time finalize direct-tree release
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/finalize-direct-tree-release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove this workflow and establish the clean final commit
+        shell: bash
+        run: |
+          rm -- .github/workflows/one-time-finalize-direct-tree-release.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/one-time-finalize-direct-tree-release.yml
+          git commit -m 'Finalize direct-tree distribution cleanup'
+          git push origin HEAD:main
+
+      - name: Align release metadata, tags, and branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          final_sha="$(git rev-parse HEAD)"
+
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/3.09" \
+            -f sha="$final_sha" \
+            -F force=true >/dev/null
+
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/3.09" --jq '.id')"
+          release_body="$(cat <<'EOF'
+First public release of Adaptive Master–Subagent Orchestration 3.09.
+
+The live installers fetch and verify the AMS files directly from the `main` repository tree through `install-manifest.txt`. This release intentionally has no uploaded assets and the installers do not use a package ZIP.
+
+GitHub's `Source code (zip)` and `Source code (tar.gz)` links are automatically generated repository snapshots. They are not AMS installation packages and are not used by either installer.
+
+PowerShell installer:
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1
+
+Bash installer:
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh
+
+Complete repository:
+git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
+EOF
+)"
+
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -f tag_name='3.09' \
+            -f target_commitish="$final_sha" \
+            -f name='Adaptive Master–Subagent Orchestration 3.09' \
+            -f body="$release_body" \
+            -F draft=false \
+            -F prerelease=false >/dev/null
+
+          old_release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/ReleaseZip" --jq '.id' 2>/dev/null || true)"
+          if [ -n "$old_release_id" ]; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${old_release_id}"
+          fi
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/ReleaseZip" >/dev/null 2>&1 || true
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/direct-tree-installation" >/dev/null 2>&1 || true
+
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was aligned to final main commit ${final_sha}; the obsolete ReleaseZip tag/release, merged feature branch, trigger branch, and temporary workflow were removed."
+          printf 'Release 3.09 aligned to %s. Cleanup completed.\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
