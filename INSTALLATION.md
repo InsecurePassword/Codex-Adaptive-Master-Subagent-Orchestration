@@ -1,8 +1,8 @@
 # Installation
 
-AMS 3.09 is installed directly from the repository tree. The installers do not use GitHub Release assets or a package ZIP.
+AMS 3.09 installs directly from the canonical repository `main` tree. No release asset or package ZIP is used.
 
-## Recommended one-line installation
+## One-line installation
 
 ### Windows PowerShell
 
@@ -10,80 +10,81 @@ AMS 3.09 is installed directly from the repository tree. The installers do not u
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
 ```
 
-Requirements:
+Requirements: Windows PowerShell 5.1 or newer and built-in .NET/PowerShell components.
 
-- Windows PowerShell 5.1 or newer
-- built-in .NET and PowerShell components
-
-### Linux or macOS with Bash
+### Linux or macOS
 
 ```bash
 curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
 ```
 
-Requirements:
-
-- Bash
-- `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, and `dirname`
-- either `sha256sum` or `shasum`
+Requirements: Bash; `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`; and either `sha256sum` or `shasum`.
 
 Restart or reload Codex after installation or update.
 
-## Direct-tree distribution
+## Exact installer scope
 
-The installer reads this repository-root manifest:
+The standard installers use only these canonical URLs:
 
 ```text
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install-manifest.txt
+https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration/...
 ```
 
-The manifest contains the exact path, byte length, and SHA-256 for every installed runtime file. The installer downloads each file directly from:
+They expose no environment-variable override for repository ref, manifest URL, or raw source. Alternate sources require a separate explicit manual procedure.
 
-```text
-adaptive-master-subagent-orchestration/
-```
-
-No custom release asset or repository-root archive is required. GitHub's automatically generated `Source code` links are snapshots of the repository and are not used by the installer.
-
-## What the installers verify
-
-Both installers:
-
-1. download the install manifest from the selected repository ref;
-2. require manifest format `ams-install-manifest-v1` and version `3.09`;
-3. require the exact 28-file AMS runtime/profile set;
-4. reject duplicate, escaping, oversized, or malformed manifest entries;
-5. download every runtime file directly from the repository tree;
-6. verify every file's byte length and SHA-256;
-7. download the manifest again and require it to be byte-identical, preventing mixed-generation installation if `main` changes during the operation;
-8. require `VERSION = 3.09` and verify all 18 bundled profiles carry the AMS managed marker;
-9. stage the complete skill before replacing the installed copy;
-10. install or update the complete 18-profile matrix;
-11. refuse to overwrite unrecognized or user-authored profile collisions;
-12. restore the previous skill and profile state if installation fails;
-13. preserve project/global settings, recovery state, model logs, unrelated skills, and unrelated profiles.
-
-## Installed locations
-
-Default skill location:
+The installers write only:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
+$CODEX_HOME/agents/ams_*.toml
 ```
 
-Default agent-profile location:
+When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME` and `CODEX_HOME` may select destination roots. The installers do not edit `$CODEX_HOME/config.toml`, project `.codex/ams-orchestration.toml`, operating-system ACLs, or other Codex configuration.
+
+## Verification and transaction
+
+Both installers:
+
+1. download `install-manifest.txt` from canonical `main`;
+2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 29-file runtime/profile set;
+3. reject malformed, duplicate, escaping, linked, redirected, oversized, or unexpected entries;
+4. download every declared file and verify byte length and SHA-256;
+5. download the manifest again and require byte equality, preventing mixed-generation installation;
+6. validate `VERSION = 3.09` and all 18 bundled profile markers;
+7. stage the complete skill before replacement;
+8. transactionally install the skill and eligible profiles with rollback;
+9. leave byte-identical profiles unchanged;
+10. upgrade only exact installer-recognized prior official Spark profiles that contained the former sandbox override;
+11. refuse every other differing or ambiguous profile instead of trusting a marker alone;
+12. preserve project/global settings, installed profiles not eligible for replacement, project-native state, unrelated skills, and unrelated files.
+
+## Permission neutrality
+
+All installed profiles inherit platform/user/work-order permissions. No current profile sets:
 
 ```text
-$CODEX_HOME/agents/
+sandbox_mode
+approval policy
+network access
+writable roots
+tool grants
 ```
 
-When `CODEX_HOME` is unset:
+The previous public Spark profile hashes are recognized only so a direct user-authorized reinstall/update can remove their former `workspace-write` override safely.
 
-```text
-$HOME/.codex/agents/
-```
+## Profile collision behavior
 
-## Source-tree contents
+For each target profile:
+
+- exact current bytes: unchanged;
+- exact recognized prior official Spark bytes: backed up and upgraded;
+- missing file: created;
+- any other differing file: installation fails and rolls back without replacing it.
+
+A customized file remains untouched even when its first line contains the AMS managed marker. Review, rename, remove, or manually reconcile it before retrying.
+
+## Installed source tree
 
 ```text
 adaptive-master-subagent-orchestration/
@@ -100,74 +101,35 @@ adaptive-master-subagent-orchestration/
     ├── package-maintenance.md
     ├── profile-management.md
     ├── project-control.md
+    ├── project-governance.md
     ├── runtime-core.md
     └── zergling-rush.md
 ```
 
-## Optional environment overrides
-
-Normal public installation should use the defaults above.
-
-| Variable | Purpose |
-|---|---|
-| `AMS_REPOSITORY_REF` | Repository branch/ref to read; default `main` |
-| `AMS_RAW_BASE_URL` | Alternate raw tree base URL for mirrors or testing |
-| `AMS_MANIFEST_URL` | Alternate manifest URL |
-| `AMS_SKILL_HOME` | Alternate skill parent directory |
-| `CODEX_HOME` | Alternate Codex configuration and agent-profile root |
-
-When overriding the source, keep the manifest and file tree from the same immutable or controlled source. The installer rejects hash mismatches and a manifest that changes during download.
-
 ## Manual installation with Git
-
-To inspect or copy the entire repository, clone it:
 
 ```bash
 git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
 cd Codex-Adaptive-Master-Subagent-Orchestration
 ```
 
-Copy the skill tree to the skill directory:
+Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 18 files under `assets/agent-profiles/` into `$CODEX_HOME/agents/`. Manual installation must preserve the same permission-neutral profile bytes.
 
-```text
-adaptive-master-subagent-orchestration/
-    -> $HOME/.agents/skills/adaptive-master-subagent-orchestration/
-```
+## Verify installation
 
-Then copy the 18 files from:
-
-```text
-adaptive-master-subagent-orchestration/assets/agent-profiles/
-```
-
-into:
-
-```text
-$CODEX_HOME/agents/
-```
-
-Use the automated installer unless you intentionally want to perform and verify those steps yourself.
-
-## Verify the installed files
-
-### Windows PowerShell
+### PowerShell
 
 ```powershell
 $SkillRoot = Join-Path $HOME '.agents\skills\adaptive-master-subagent-orchestration'
 $AgentRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'agents' } else { Join-Path $HOME '.codex\agents' }
 
-Get-Content -LiteralPath (Join-Path $SkillRoot 'VERSION')
-Test-Path -LiteralPath (Join-Path $SkillRoot 'references\runtime-core.md') -PathType Leaf
-(Get-ChildItem -LiteralPath $AgentRoot -Filter 'ams_*.toml' -File).Count
+Get-Content (Join-Path $SkillRoot 'VERSION')
+Test-Path (Join-Path $SkillRoot 'references\project-governance.md')
+(Get-ChildItem $AgentRoot -Filter 'ams_*.toml' -File).Count
+Select-String -Path (Join-Path $AgentRoot 'ams_spark_*.toml') -Pattern '^sandbox_mode\s*='
 ```
 
-Expected:
-
-```text
-3.09
-True
-18
-```
+Expected: version `3.09`, governance reference `True`, profile count `18`, and no `sandbox_mode` matches.
 
 ### Bash
 
@@ -176,141 +138,49 @@ skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
 agent_root="${CODEX_HOME:-$HOME/.codex}/agents"
 
 cat "$skill_root/VERSION"
-test -f "$skill_root/references/runtime-core.md"
+test -f "$skill_root/references/project-governance.md"
 find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
+! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_spark_*.toml
 ```
 
-Expected version and profile count:
+## Settings and governance
 
-```text
-3.09
-18
-```
-
-## Start using AMS
-
-The skill checks project settings first and the optional global settings only when the project file is absent.
-
-### Project persistence
-
-```text
-AMS STATUS
-AMS ENABLE
-AMS MODE auto
-AMS DISABLE
-```
-
-Project commands write only:
-
-```text
-<project-root>/.codex/ams-orchestration.toml
-```
-
-### Global persistence (manual only)
-
-Global path:
-
-```text
-$CODEX_HOME/ams-orchestration.toml
-```
-
-When `CODEX_HOME` is unset:
-
-```text
-$HOME/.codex/ams-orchestration.toml
-```
-
-Use the same schema as a project file:
+Project settings override global settings. A project-setting command creates an absent project file from current valid global values when available, then changes only the requested key.
 
 ```toml
 schema_version = 2
-enabled = true
+enabled = false
 allow_implicit_invocation = true
 intensity = "auto"
+project_governance = true
 spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Project settings override global settings completely. No AMS command creates, changes, repairs, migrates, or deletes the global file.
+An existing schema-2 settings file may omit `project_governance`; AMS treats the omitted value as `true` and writes it during the next authorized project-settings change.
 
-## Agent profiles
-
-The installer deploys the complete profile matrix:
-
-- Sol, Terra, and Luna: `low`, `medium`, `high`, `xhigh`, and `max`
-- Spark: `low`, `medium`, and `high`
-
-Sol, Terra, and Luna profiles can receive temporary worker or delegated-manager authority through bounded work orders. Spark remains worker-only. A differing installed profile is replaced only when its first line proves AMS ownership:
+Disable only the optional project-governance layer with:
 
 ```text
-# managed-by: adaptive-master-subagent-orchestration
+AMS GOVERNANCE off
 ```
 
-An unrecognized collision fails closed and rolls back the installation.
+AMS does not create `.codex/ams-recovery.json`. Live orchestration state remains in the root session; durable continuity uses an existing authorized project-native system or a user-visible handoff.
 
 ## Update and repair
 
-Rerun the appropriate one-line installer. It reads the current manifest and tree, stages the complete source, validates every file, and transactionally replaces the installed skill and recognized profiles.
+Rerun the appropriate one-line installer. A normal update safely migrates exact prior official Spark profiles. Any other differing profile blocks replacement and is reported precisely. Do not bypass the collision check.
 
-Before updating:
-
-1. finish or safely pause active AMS work;
-2. preserve exact resumption state when required;
-3. rerun the installer;
-4. restart or reload Codex;
-5. verify `VERSION = 3.09`, `references/runtime-core.md`, and all 18 profiles.
-
-Do not combine files from different repository states manually.
+Before updating: pause active work safely, rerun the installer, restart/reload Codex, and verify the installed files.
 
 ## Uninstall
 
-Standard uninstall removes only the AMS skill directory. It preserves project/global settings, recovery state, installed profiles, and unrelated files.
+Standard uninstall removes only:
 
-### Windows PowerShell
-
-```powershell
-$SkillRoot = Join-Path $HOME '.agents\skills\adaptive-master-subagent-orchestration'
-if (Test-Path -LiteralPath $SkillRoot) {
-    $Item = Get-Item -LiteralPath $SkillRoot -Force
-    if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing redirected path: $SkillRoot" }
-    if (-not $Item.PSIsContainer) { throw "AMS skill path is not a directory: $SkillRoot" }
-    Remove-Item -LiteralPath $SkillRoot -Recurse -Force
-}
+```text
+$HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-### Bash
-
-```bash
-skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
-if [ -L "$skill_root" ]; then
-  printf 'Refusing redirected path: %s\n' "$skill_root" >&2
-  exit 1
-elif [ -e "$skill_root" ] && [ ! -d "$skill_root" ]; then
-  printf 'AMS skill path is not a directory: %s\n' "$skill_root" >&2
-  exit 1
-elif [ -d "$skill_root" ]; then
-  rm -rf -- "$skill_root"
-fi
-```
-
-Restart or reload Codex after removal.
-
-## Troubleshooting
-
-### A manifest or file hash does not match
-
-Do not bypass the check. The repository may have changed during installation, a mirror may be inconsistent, or a download may be corrupt. Rerun the installer. If the error persists, inspect `install-manifest.txt` and the referenced source file on the same ref.
-
-### The installer reports an unexpected manifest path
-
-The manifest must contain exactly the supported 28 runtime/profile paths. Reinstall from the canonical `main` branch or inspect the repository diff before trusting an alternate source.
-
-### A profile collision is rejected
-
-The installer never overwrites a file that does not carry the exact AMS managed marker. Move or rename the user-authored collision, or intentionally reconcile it before rerunning installation.
-
-### Codex still shows old behavior
-
-Restart or reload Codex. A behavior-changing update is not loaded into the already active session.
+It intentionally preserves project/global settings and all installed profiles for troubleshooting or reinstall. Remove profiles separately only after proving exact AMS ownership and receiving explicit user authorization.

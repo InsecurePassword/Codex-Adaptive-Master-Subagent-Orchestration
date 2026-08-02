@@ -33,6 +33,7 @@ Root Codex setting: ultra
 AMS state: enabled
 AMS intensity: extreme
 AMS physical spawn authority: top-level root only
+AMS project governance: effective project/global setting
 ```
 
 This file is an explicit current-turn invocation of AMS and an explicit current-objective selection of `extreme` intensity.
@@ -93,6 +94,7 @@ Apply these rules:
 - Global persistence is manual only. No AMS command may create, modify, or remove the global file.
 - Canonical `AMS ...` commands remain project-specific.
 - Direct current-turn instructions override stored settings for the current objective.
+- Respect the effective `project_governance` setting. This prompt does not silently enable the optional governance layer when the setting is false.
 - This prompt is an explicit AMS invocation even when implicit invocation is disabled.
 - Do not confuse general Codex configuration with `ams-orchestration.toml`.
 - Do not infer effective AMS state from historical reports, cached output, old handoffs, or unrelated policy files.

@@ -3,11 +3,9 @@ set -Eeuo pipefail
 
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
-repo_ref="${AMS_REPOSITORY_REF:-main}"
-default_raw_base_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/${repo_ref}"
-raw_base_url="${AMS_RAW_BASE_URL:-$default_raw_base_url}"
-raw_base_url="${raw_base_url%/}"
-manifest_url="${AMS_MANIFEST_URL:-${raw_base_url}/install-manifest.txt}"
+repo_ref="main"
+raw_base_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/main"
+manifest_url="${raw_base_url}/install-manifest.txt"
 package_version="3.09"
 skill_name="adaptive-master-subagent-orchestration"
 managed_marker="# managed-by: adaptive-master-subagent-orchestration"
@@ -50,12 +48,26 @@ required_files=(
   "references/package-maintenance.md"
   "references/profile-management.md"
   "references/project-control.md"
+  "references/project-governance.md"
   "references/runtime-core.md"
   "references/zergling-rush.md"
 )
 for profile_file in "${profile_files[@]}"; do
   required_files+=("assets/agent-profiles/${profile_file}")
 done
+
+is_authorized_prior_profile() {
+  case "$1:$2" in
+    "ams_spark_low.toml:b082a31f60627f4364b870c663deed670eff3c5c2adce03cb37b98452d9f0a1b"|\
+    "ams_spark_medium.toml:c387ffa3c419d66e404ebcc9a7b82a21995690a43a12350a690e9aa13dd5f45a"|\
+    "ams_spark_high.toml:bd0122c1f87b08ddb08b24df74979cf89c80c6be47627e9e0270ac2799c5320e")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 fail() {
   printf 'Error: %s\n' "$*" >&2
@@ -279,9 +291,9 @@ for profile_file in "${profile_files[@]}"; do
       profiles_unchanged=$((profiles_unchanged + 1))
       continue
     fi
-    first_line=""
-    IFS= read -r first_line < "$target_profile" || true
-    [[ "$first_line" == "$managed_marker" ]] || fail "Refusing to overwrite an unrecognized or user-authored profile: ${target_profile}"
+    if ! is_authorized_prior_profile "$profile_file" "$target_hash"; then
+      fail "Refusing to replace a differing profile without exact official provenance: ${target_profile}. Review, rename, remove, or manually reconcile it before retrying."
+    fi
     saved_profile="${profile_backup_root}/${profile_file}"
     mv -- "$target_profile" "$saved_profile"
     profile_backup_targets+=("$target_profile")
