@@ -127,46 +127,28 @@ curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-O
 
 Restart or reload Codex afterward.
 
-### Repository distribution
+### Direct repository-tree distribution
 
-AMS 3.09 is distributed directly from the repository root on the `main` branch. Installation does not depend on GitHub Release assets.
+AMS does not use uploaded release assets or a package archive. The installers read `install-manifest.txt` from `main`, download every required file directly from `adaptive-master-subagent-orchestration/`, verify each file's byte length and SHA-256, and require the manifest to remain unchanged for the complete operation.
 
-```text
-Codex-Adaptive-Master-Subagent-Orchestration/
-├── adaptive-master-subagent-orchestration-3.09.zip
-├── install.ps1
-└── install.sh
-```
+The validated source is staged before the existing skill is replaced. The 18 canonical profiles are then installed transactionally; recognized prior AMS files are backed up and restored if installation fails, while unrecognized profile collisions fail closed.
 
-Package URL:
-
-```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
-```
-
-Package SHA-256:
-
-```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
-```
-
-Default skill location:
+The default locations are:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
-```
-
-Default profile location:
-
-```text
 $CODEX_HOME/agents/
 ```
 
-When `CODEX_HOME` is unset, the profile location is `$HOME/.codex/agents/`.
+When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`.
 
-The installers verify the checksum, exact package inventory, archive integrity, file-size limits, symbolic-link safety, managed-profile markers, and `VERSION = 3.09`. They transactionally install the skill and complete 18-profile matrix while preserving unrelated skills, project settings, recovery state, and user-authored profiles.
+For a complete source copy rather than an installation stream:
 
-See [INSTALLATION.md](INSTALLATION.md) for manual verification, environment overrides, update, repair, and uninstall commands.
+```bash
+git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
+```
+
+See [INSTALLATION.md](INSTALLATION.md) for source overrides, manual installation, verification, update, repair, and uninstall details.
 
 ## Starting and stopping AMS
 
@@ -836,40 +818,21 @@ When resuming, the root:
 
 ## Package updates and repair
 
-Rerun the one-line installer for the operating system.
+Rerun the one-line installer. It reads the current repository manifest and direct source tree; no release asset or package archive is involved.
 
-Before changing package instructions:
+Before changing installed instructions:
 
 1. stop new dispatch and package-control starts;
 2. finish or roll back atomic AMS control writes;
 3. let safe project work reach useful boundaries;
 4. collect evidence and preserve exact resumption state;
 5. close all non-root sessions;
-6. replace the complete package;
+6. rerun the installer;
 7. restart or reload Codex.
 
-Do not combine files from different releases.
+The installer requires the exact 28-file runtime/profile set declared in `install-manifest.txt`, verifies every file before replacement, and downloads the manifest a second time to prevent mixed-generation installation if the branch changes during the operation.
 
-Release 3.09 requires:
-
-```text
-SKILL.md
-VERSION
-agents/openai.yaml
-references/hierarchy-control.md
-references/intensity-control.md
-references/package-maintenance.md
-references/profile-management.md
-references/project-control.md
-references/runtime-core.md
-references/zergling-rush.md
-```
-
-An installation missing `hierarchy-control.md` is incomplete and must not improvise manager behavior.
-
-AMS may repair its installed package only with explicit user authority. The current session remains on the old loaded instructions for recovery and reporting, and a fresh session is required before normal work continues.
-
-AMS treats installed skill files as protected. It rejects package files that are redirected, unstable, unexpectedly linked, malformed, mixed across releases, or inconsistent with the package identity.
+AMS may repair its installed package only with explicit user authority. The current session remains on the old loaded instructions for bounded recovery and reporting, and a fresh session is required before normal work continues.
 
 ## Uninstall
 
@@ -958,7 +921,8 @@ Codex-Adaptive-Master-Subagent-Orchestration/
 |-- README.md
 |-- INSTALLATION.md
 |-- PRODUCT DOCUMENTATION.md
-|-- adaptive-master-subagent-orchestration-3.09.zip
+|-- SOL-ULTRA-AMS-EXTREME-ORCHESTRATION-PROMPT.md
+|-- install-manifest.txt
 |-- install.ps1
 |-- install.sh
 `-- adaptive-master-subagent-orchestration/
@@ -1001,32 +965,6 @@ $HOME/.agents/skills/
         `-- zergling-rush.md
 ```
 
-### Installed agent profiles
-
-```text
-$CODEX_HOME/agents/
-|-- ams_sol_low.toml
-|-- ams_sol_medium.toml
-|-- ams_sol_high.toml
-|-- ams_sol_xhigh.toml
-|-- ams_sol_max.toml
-|-- ams_terra_low.toml
-|-- ams_terra_medium.toml
-|-- ams_terra_high.toml
-|-- ams_terra_xhigh.toml
-|-- ams_terra_max.toml
-|-- ams_luna_low.toml
-|-- ams_luna_medium.toml
-|-- ams_luna_high.toml
-|-- ams_luna_xhigh.toml
-|-- ams_luna_max.toml
-|-- ams_spark_low.toml
-|-- ams_spark_medium.toml
-`-- ams_spark_high.toml
-```
-
-When `CODEX_HOME` is unset, the installer uses `$HOME/.codex/agents/`.
-
 ### Global settings (manual only)
 
 ```text
@@ -1055,88 +993,35 @@ enabled = true
 allow_implicit_invocation = true
 ```
 
-Also confirm that the project is trusted and Codex permits implicit skill use. Explicit invocation works independently of persistent automatic activation.
-
-### A new project has AMS disabled
-
-This is expected. Missing settings are initialized with `enabled = false`. Use `AMS ENABLE` or select a mode.
-
-### `balanced` is stored as `moderate`
-
-This is expected for schema-2 compatibility. `balanced` and `moderate` select the same runtime behavior. AMS reports the mode as `balanced` while preserving `moderate` in the existing schema.
+Confirm that the project is trusted and Codex permits implicit skill use. A project file overrides the global file completely.
 
 ### A manager cannot spawn an agent
 
-This is expected. Managers never physically spawn sessions. A manager returns a structured dispatch request, and the root validates the request and performs the physical spawn.
+This is expected. Managers request descendants; the root validates the request and performs the physical spawn.
 
 ### AMS is physically flat
 
-This is expected. Physical session topology and logical management topology are separate. Work-order lineage determines the logical parent even when every session is a direct physical child of the root.
-
-### A manager profile is missing
-
-Release 3.09 does not use a permanent manager profile. Sol, Terra, or Luna profiles receive delegated-manager authority through a valid bounded work order. Spark cannot be a manager.
+This is expected. Physical topology and logical work-order lineage are separate.
 
 ### Spark is not being used
 
-Check:
+Check `spark_enabled`, `spark_available`, and `spark_efforts`, then use `AMS SPARK RECHECK` when account capability may have changed.
 
-```toml
-spark_enabled = true
-spark_available = true
-spark_efforts = ["low", "medium", "high"]
-```
+### A manifest or file hash does not match
 
-Run `AMS SPARK RECHECK` when account capability may have changed.
+Do not bypass the check. Rerun the installer. Persistent failure means the manifest/source ref is inconsistent or a download is corrupt.
 
-### A profile is missing or invalid
+### The installer reports an unexpected manifest path
 
-Rerun the repository-hosted installer. It restores the complete canonical matrix from the package while refusing to overwrite unrecognized or user-authored collisions.
+The canonical manifest contains exactly the supported 28 runtime/profile paths. Inspect the source diff before trusting any alternate manifest.
 
-With `profile_management = "auto"`, AMS may also restore a selected missing or recognized defective profile from the exact installed package asset. Restart Codex if a newly installed or repaired profile is not immediately visible.
+### A profile collision is rejected
 
-### The package reports 3.08 or lacks `hierarchy-control.md`
-
-The installation is not the complete 3.09 package. Reinstall the verified archive and confirm:
-
-```text
-VERSION = 3.09
-references/hierarchy-control.md exists
-```
-
-Do not merge files from 3.08 and 3.09.
-
-### The checksum does not match
-
-Do not bypass the check. The expected SHA-256 for the repository-root package is:
-
-```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
-```
-
-Confirm that the package came from:
-
-```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip
-```
-
-### The installer reports an unexpected directory entry
-
-The 3.09 archive may contain only these directory entries:
-
-```text
-adaptive-master-subagent-orchestration/
-adaptive-master-subagent-orchestration/agents/
-adaptive-master-subagent-orchestration/assets/
-adaptive-master-subagent-orchestration/assets/agent-profiles/
-adaptive-master-subagent-orchestration/references/
-```
-
-Any other directory entry is rejected.
+The installer refuses to overwrite a file without the exact AMS managed marker. Move, rename, or intentionally reconcile the user-authored collision before rerunning installation.
 
 ### The skill changed but Codex still shows old behavior
 
-Restart or reload Codex. AMS never loads changed package instructions into the same active session after package mutation.
+Restart or reload Codex. Changed instructions are not loaded into an already active session.
 
 ### A project is blocked instead of complete
 

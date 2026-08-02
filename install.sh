@@ -3,21 +3,22 @@ set -Eeuo pipefail
 
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
+repo_ref="${AMS_REPOSITORY_REF:-main}"
+default_raw_base_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/${repo_ref}"
+raw_base_url="${AMS_RAW_BASE_URL:-$default_raw_base_url}"
+raw_base_url="${raw_base_url%/}"
+manifest_url="${AMS_MANIFEST_URL:-${raw_base_url}/install-manifest.txt}"
 package_version="3.09"
-repo_branch="main"
-asset_name="adaptive-master-subagent-orchestration-${package_version}.zip"
-default_package_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/${repo_branch}/${asset_name}"
-package_url="${AMS_PACKAGE_URL:-${AMS_RELEASE_URL:-$default_package_url}}"
-expected_sha256="${AMS_EXPECTED_SHA256:-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018}"
-user_agent="AMS-${package_version}-Installer"
 skill_name="adaptive-master-subagent-orchestration"
+managed_marker="# managed-by: adaptive-master-subagent-orchestration"
+user_agent="AMS-${package_version}-Tree-Installer"
 skill_home="${AMS_SKILL_HOME:-${HOME:?HOME is not set}/.agents/skills}"
 codex_home="${CODEX_HOME:-${HOME}/.codex}"
 destination="${skill_home}/${skill_name}"
 agent_home="${codex_home}/agents"
-managed_marker="# managed-by: adaptive-master-subagent-orchestration"
-max_archive_bytes=10485760
-max_expanded_bytes=104857600
+max_manifest_bytes=262144
+max_file_bytes=1048576
+max_total_bytes=104857600
 
 profile_files=(
   "ams_sol_low.toml"
@@ -61,21 +62,89 @@ fail() {
   exit 1
 }
 
-for command_name in curl unzip zipinfo awk sort cmp mktemp; do
+for command_name in curl awk sort cmp mktemp wc tr grep head tail od find dirname; do
   command -v "$command_name" >/dev/null 2>&1 || fail "Required command not found: ${command_name}"
 done
 
-[[ "$expected_sha256" =~ ^[0-9A-Fa-f]{64}$ ]] || fail "AMS_EXPECTED_SHA256 must contain exactly 64 hexadecimal characters."
-expected_sha256="$(printf '%s' "$expected_sha256" | tr '[:upper:]' '[:lower:]')"
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print tolower($1)}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print tolower($1)}'
+  else
+    fail "A SHA-256 tool is required (sha256sum or shasum)."
+  fi
+}
+
+download_file() {
+  local uri=$1
+  local output=$2
+  local description=$3
+  if ! curl --fail --location --silent --show-error \
+      --retry 3 --retry-delay 1 \
+      --connect-timeout 15 --max-time 300 \
+      -H "Accept: application/octet-stream" \
+      -H "User-Agent: ${user_agent}" \
+      "$uri" -o "$output"; then
+    fail "${description} failed: ${uri}"
+  fi
+}
+
+validate_manifest() {
+  local manifest=$1
+  local entries_output=$2
+  local paths_output=$3
+  local manifest_bytes bom last_byte line line_number hash length repo_path extra total_bytes
+
+  [[ -f "$manifest" && ! -L "$manifest" ]] || fail "Install manifest is missing or redirected."
+  manifest_bytes="$(wc -c < "$manifest" | tr -d '[:space:]')"
+  (( manifest_bytes > 0 && manifest_bytes <= max_manifest_bytes )) || fail "Install manifest size is invalid: ${manifest_bytes} bytes"
+  bom="$(head -c 3 "$manifest" | od -An -tx1 | tr -d ' \n')"
+  [[ "$bom" != "efbbbf" ]] || fail "Install manifest must be UTF-8 without BOM."
+  if LC_ALL=C grep -q $'\r' "$manifest"; then fail "Install manifest contains CR characters."; fi
+  if od -An -tx1 "$manifest" | grep -qE '(^| )00( |$)'; then fail "Install manifest contains NUL bytes."; fi
+  last_byte="$(tail -c 1 "$manifest" | od -An -tu1 | tr -d ' \n')"
+  [[ "$last_byte" == "10" ]] || fail "Install manifest is missing final LF."
+
+  : > "$entries_output"
+  : > "$paths_output"
+  line_number=0
+  total_bytes=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_number=$((line_number + 1))
+    if (( line_number == 1 )); then
+      [[ "$line" == "ams-install-manifest-v1" ]] || fail "Unsupported install manifest format."
+      continue
+    fi
+    if (( line_number == 2 )); then
+      [[ "$line" == $'version\t'"${package_version}" ]] || fail "Install manifest version does not match ${package_version}."
+      continue
+    fi
+    [[ -n "$line" ]] || fail "Install manifest contains an unexpected blank line."
+    IFS=$'\t' read -r hash length repo_path extra <<< "$line"
+    [[ -z "${extra:-}" ]] || fail "Malformed install manifest line ${line_number}."
+    [[ "$hash" =~ ^[0-9a-fA-F]{64}$ ]] || fail "Invalid SHA-256 on manifest line ${line_number}."
+    [[ "$length" =~ ^[0-9]+$ ]] || fail "Invalid byte length on manifest line ${line_number}."
+    (( length > 0 && length <= max_file_bytes )) || fail "Unsafe byte length on manifest line ${line_number}."
+    case "$repo_path" in
+      "${skill_name}/"*) ;;
+      *) fail "Install manifest path escapes the skill tree: ${repo_path}" ;;
+    esac
+    total_bytes=$((total_bytes + length))
+    (( total_bytes <= max_total_bytes )) || fail "Install manifest exceeds the total-size limit."
+    printf '%s\t%s\t%s\n' "$(printf '%s' "$hash" | tr '[:upper:]' '[:lower:]')" "$length" "$repo_path" >> "$entries_output"
+    printf '%s\n' "$repo_path" >> "$paths_output"
+  done < "$manifest"
+
+  (( line_number == ${#required_files[@]} + 2 )) || fail "Install manifest entry count is invalid."
+}
 
 [[ ! -L "$skill_home" ]] || fail "Skill parent is redirected: ${skill_home}"
 [[ ! -e "$skill_home" || -d "$skill_home" ]] || fail "Skill parent is not a directory: ${skill_home}"
 mkdir -p "$skill_home"
-
 [[ ! -L "$codex_home" ]] || fail "CODEX_HOME is redirected: ${codex_home}"
 [[ ! -e "$codex_home" || -d "$codex_home" ]] || fail "CODEX_HOME is not a directory: ${codex_home}"
 mkdir -p "$codex_home"
-
 [[ ! -L "$agent_home" ]] || fail "Agent registry is redirected: ${agent_home}"
 [[ ! -e "$agent_home" || -d "$agent_home" ]] || fail "Agent registry is not a directory: ${agent_home}"
 mkdir -p "$agent_home"
@@ -88,8 +157,6 @@ fi
 printf '%s\n' "pid=$$" "host=$(hostname 2>/dev/null || printf unknown)" > "${lock_dir}/owner"
 
 stage_root=""
-archive_path=""
-extract_root=""
 backup_path=""
 profile_backup_root=""
 existing_moved=0
@@ -108,11 +175,9 @@ cleanup() {
     for temp_path in "${profile_temps[@]}"; do
       [[ -n "$temp_path" ]] && rm -f -- "$temp_path" 2>/dev/null || true
     done
-
     for created_path in "${profile_created[@]}"; do
       [[ -n "$created_path" ]] && rm -f -- "$created_path" 2>/dev/null || true
     done
-
     if (( ${#profile_backup_targets[@]} > 0 )); then
       for (( i=${#profile_backup_targets[@]}-1; i>=0; i-- )); do
         target_path=${profile_backup_targets[$i]}
@@ -123,7 +188,6 @@ cleanup() {
         fi
       done
     fi
-
     if (( candidate_installed == 1 )) && [[ -d "$destination" && ! -L "$destination" ]]; then
       rm -rf -- "$destination" 2>/dev/null || true
     fi
@@ -143,92 +207,45 @@ trap 'exit 143' TERM
 trap 'exit 129' HUP
 
 stage_root="$(mktemp -d "${skill_home}/.ams-install.XXXXXXXX")"
-archive_path="${stage_root}/package.zip"
-extract_root="${stage_root}/extract"
+candidate="${stage_root}/${skill_name}"
+manifest_before="${stage_root}/install-manifest.before.txt"
+manifest_after="${stage_root}/install-manifest.after.txt"
+manifest_entries="${stage_root}/manifest-entries.tsv"
+manifest_paths="${stage_root}/manifest-paths.txt"
+expected_paths="${stage_root}/expected-paths.txt"
 backup_path="${skill_home}/.${skill_name}.backup-$(date +%Y%m%d%H%M%S)-$$"
 profile_backup_root="$(mktemp -d "${agent_home}/.ams-profile-backup.XXXXXXXX")"
-mkdir -p "$extract_root"
+mkdir -p "$candidate"
 
-common_curl_args=(
-  --fail --location --silent --show-error
-  --retry 3 --retry-delay 1
-  --connect-timeout 15 --max-time 300
-  --max-filesize "$max_archive_bytes"
-  -H "User-Agent: ${user_agent}"
-)
+printf 'Reading the AMS %s install manifest from repository ref %s...\n' "$package_version" "$repo_ref"
+download_file "$manifest_url" "$manifest_before" "Install manifest download"
+validate_manifest "$manifest_before" "$manifest_entries" "$manifest_paths"
 
-printf 'Downloading Adaptive Master-Subagent Orchestration %s...\n' "$package_version"
-if ! curl "${common_curl_args[@]}" -H "Accept: application/octet-stream" "$package_url" -o "$archive_path"; then
-  fail "Package download failed. Verify the repository raw-file URL or set AMS_PACKAGE_URL to the exact package location."
-fi
-[[ -s "$archive_path" ]] || fail "The package download was empty."
-archive_bytes="$(wc -c < "$archive_path" | tr -d '[:space:]')"
-(( archive_bytes <= max_archive_bytes )) || fail "The compressed package exceeds the 10 MiB safety limit."
-
-if command -v sha256sum >/dev/null 2>&1; then
-  actual_sha256="$(sha256sum "$archive_path" | awk '{print tolower($1)}')"
-elif command -v shasum >/dev/null 2>&1; then
-  actual_sha256="$(shasum -a 256 "$archive_path" | awk '{print tolower($1)}')"
-else
-  fail "A SHA-256 tool is required (sha256sum or shasum)."
-fi
-[[ "$actual_sha256" == "$expected_sha256" ]] || fail "Release checksum mismatch. Expected ${expected_sha256}; received ${actual_sha256}."
-
-archive_list="${stage_root}/entries.txt"
-archive_files="${stage_root}/archive-files.txt"
-archive_dirs="${stage_root}/archive-directories.txt"
-expected_list="${stage_root}/expected.txt"
-zipinfo -1 "$archive_path" > "$archive_list" || fail "The release archive is not a readable ZIP file."
-awk -v files="$archive_files" -v dirs="$archive_dirs" '
-  /\/$/ { print > dirs; next }
-  { print > files }
-' "$archive_list"
 for required in "${required_files[@]}"; do
   printf '%s/%s\n' "$skill_name" "$required"
-done | LC_ALL=C sort > "$expected_list"
-LC_ALL=C sort "$archive_files" -o "$archive_files"
-cmp -s "$expected_list" "$archive_files" || fail "The release archive file set does not exactly match the ${package_version} package contract."
+done | LC_ALL=C sort > "$expected_paths"
+LC_ALL=C sort "$manifest_paths" -o "$manifest_paths"
+cmp -s "$expected_paths" "$manifest_paths" || fail "Install manifest does not contain the exact required file set."
 
-if ! awk -v root="${skill_name}/" -v agents="${skill_name}/agents/" -v assets="${skill_name}/assets/" -v profiles="${skill_name}/assets/agent-profiles/" -v refs="${skill_name}/references/" '
-  $0 != root && $0 != agents && $0 != assets && $0 != profiles && $0 != refs { exit 1 }
-  seen[$0]++ { exit 1 }
-' "$archive_dirs"; then
-  fail "The release archive contains an unexpected or duplicate directory entry."
-fi
+while IFS=$'\t' read -r expected_hash expected_length repo_path; do
+  relative_path=${repo_path#"${skill_name}/"}
+  target_path="${candidate}/${relative_path}"
+  mkdir -p "$(dirname "$target_path")"
+  temp_path="${target_path}.download"
+  download_file "${raw_base_url}/${repo_path}" "$temp_path" "Download of ${repo_path}"
+  [[ -f "$temp_path" && ! -L "$temp_path" ]] || fail "Downloaded path is not a safe regular file: ${repo_path}"
+  actual_length="$(wc -c < "$temp_path" | tr -d '[:space:]')"
+  [[ "$actual_length" == "$expected_length" ]] || fail "Downloaded length mismatch for ${repo_path}. Expected ${expected_length}; received ${actual_length}."
+  actual_hash="$(sha256_file "$temp_path")"
+  [[ "$actual_hash" == "$expected_hash" ]] || fail "Downloaded hash mismatch for ${repo_path}."
+  mv -- "$temp_path" "$target_path"
+done < "$manifest_entries"
 
-if zipinfo -l "$archive_path" | awk '$1 ~ /^l/ { found=1 } END { exit(found ? 0 : 1) }'; then
-  fail "The release archive contains an unsupported symbolic link."
-fi
-unzip -tqq "$archive_path" </dev/null || fail "The release archive failed integrity or encryption validation."
-
-read -r entry_count expanded_bytes < <(
-  unzip -l "$archive_path" | awk '
-    $1 ~ /^[0-9]+$/ && $2 ~ /-/ && $3 ~ /:/ && $4 !~ /\/$/ { count += 1; total += $1 }
-    END { print count + 0, total + 0 }
-  '
-)
-(( entry_count == ${#required_files[@]} )) || fail "The release archive has an invalid expanded entry count: ${entry_count}"
-(( expanded_bytes <= max_expanded_bytes )) || fail "The expanded release exceeds the 100 MiB safety limit."
-
-unzip -q -o "$archive_path" -d "$extract_root"
-candidate="${extract_root}/${skill_name}"
-[[ -d "$candidate" && ! -L "$candidate" ]] || fail "The extracted package root is missing or redirected."
-if find "$candidate" -type l -print -quit | grep -q .; then
-  fail "The extracted package contains an unsupported symbolic link."
-fi
-
-actual_extracted="${stage_root}/extracted.txt"
-: > "$actual_extracted"
-while IFS= read -r -d '' file; do
-  relative="${file#"${candidate}/"}"
-  printf '%s/%s\n' "$skill_name" "$relative" >> "$actual_extracted"
-done < <(find "$candidate" -type f -print0)
-LC_ALL=C sort "$actual_extracted" -o "$actual_extracted"
-cmp -s "$expected_list" "$actual_extracted" || fail "The extracted package file set does not match the ${package_version} package contract."
+download_file "$manifest_url" "$manifest_after" "Final install manifest download"
+cmp -s "$manifest_before" "$manifest_after" || fail "The repository install manifest changed during download. Rerun the installer."
 
 observed_version="$(tr -d '\r\n' < "${candidate}/VERSION")"
-[[ "$observed_version" == "$package_version" ]] || fail "Unexpected package version. Expected ${package_version}; received '${observed_version}'."
-
+[[ "$observed_version" == "$package_version" ]] || fail "Unexpected source version. Expected ${package_version}; received '${observed_version}'."
 for profile_file in "${profile_files[@]}"; do
   source_profile="${candidate}/assets/agent-profiles/${profile_file}"
   [[ -f "$source_profile" && ! -L "$source_profile" ]] || fail "Bundled profile is missing or redirected: ${profile_file}"
@@ -237,18 +254,13 @@ for profile_file in "${profile_files[@]}"; do
   [[ "$first_line" == "$managed_marker" ]] || fail "Bundled profile lacks the required managed marker: ${profile_file}"
 done
 
-if [[ -L "$destination" ]]; then
-  fail "Refusing to replace a redirected existing skill path: ${destination}"
-fi
-if [[ -e "$destination" && ! -d "$destination" ]]; then
-  fail "Refusing to replace a non-directory existing skill path: ${destination}"
-fi
+if [[ -L "$destination" ]]; then fail "Refusing to replace a redirected existing skill path: ${destination}"; fi
+if [[ -e "$destination" && ! -d "$destination" ]]; then fail "Refusing to replace a non-directory existing skill path: ${destination}"; fi
 if [[ -e "$destination" ]]; then
   [[ ! -e "$backup_path" && ! -L "$backup_path" ]] || fail "Unexpected backup collision: ${backup_path}"
   mv -- "$destination" "$backup_path"
   existing_moved=1
 fi
-
 mv -- "$candidate" "$destination" || fail "Installation failed while replacing the skill directory."
 candidate_installed=1
 
@@ -257,18 +269,16 @@ profiles_unchanged=0
 for profile_file in "${profile_files[@]}"; do
   source_profile="${destination}/assets/agent-profiles/${profile_file}"
   target_profile="${agent_home}/${profile_file}"
-
   [[ ! -L "$target_profile" ]] || fail "Refusing to replace a redirected agent profile: ${target_profile}"
-  if [[ -e "$target_profile" && ! -f "$target_profile" ]]; then
-    fail "Agent profile target is not a regular file: ${target_profile}"
-  fi
-
-  if [[ -f "$target_profile" ]] && cmp -s "$source_profile" "$target_profile"; then
-    ((profiles_unchanged+=1))
-    continue
-  fi
+  if [[ -e "$target_profile" && ! -f "$target_profile" ]]; then fail "Agent profile target is not a regular file: ${target_profile}"; fi
 
   if [[ -f "$target_profile" ]]; then
+    source_hash="$(sha256_file "$source_profile")"
+    target_hash="$(sha256_file "$target_profile")"
+    if [[ "$source_hash" == "$target_hash" ]]; then
+      profiles_unchanged=$((profiles_unchanged + 1))
+      continue
+    fi
     first_line=""
     IFS= read -r first_line < "$target_profile" || true
     [[ "$first_line" == "$managed_marker" ]] || fail "Refusing to overwrite an unrecognized or user-authored profile: ${target_profile}"
@@ -280,25 +290,26 @@ for profile_file in "${profile_files[@]}"; do
     profile_created+=("$target_profile")
   fi
 
-  temp_profile="$(mktemp "${agent_home}/.${profile_file}.ams-install.XXXXXXXX")"
+  temp_profile="${agent_home}/.${profile_file}.ams-install.$$"
   profile_temps+=("$temp_profile")
   cp -- "$source_profile" "$temp_profile"
-  cmp -s "$source_profile" "$temp_profile" || fail "Agent profile staging verification failed: ${profile_file}"
+  source_hash="$(sha256_file "$source_profile")"
+  [[ "$(sha256_file "$temp_profile")" == "$source_hash" ]] || fail "Agent profile staging verification failed: ${profile_file}"
   mv -- "$temp_profile" "$target_profile"
-  cmp -s "$source_profile" "$target_profile" || fail "Agent profile installation verification failed: ${profile_file}"
-  ((profiles_changed+=1))
+  [[ "$(sha256_file "$target_profile")" == "$source_hash" ]] || fail "Agent profile installation verification failed: ${profile_file}"
+  profiles_changed=$((profiles_changed + 1))
 done
 
 committed=1
-
 if (( existing_moved == 1 )); then
-  rm -rf -- "$backup_path" 2>/dev/null || true
+  rm -rf -- "$backup_path"
   existing_moved=0
 fi
-rm -rf -- "$profile_backup_root" 2>/dev/null || true
+rm -rf -- "$profile_backup_root"
 profile_backup_root=""
 
-printf 'Installed Adaptive Master-Subagent Orchestration %s to:\n  %s\n' "$package_version" "$destination"
-printf 'Installed or updated %d AMS profiles; %d were already current.\n' "$profiles_changed" "$profiles_unchanged"
-printf 'Agent profile registry:\n  %s\n' "$agent_home"
-printf 'Restart or reload Codex before using the updated skill and profiles.\n'
+printf 'Installed Adaptive Master-Subagent Orchestration %s directly from the repository tree.\n' "$package_version"
+printf 'Repository ref: %s\n' "$repo_ref"
+printf 'Skill: %s\n' "$destination"
+printf 'Profiles: %s (%s changed, %s unchanged)\n' "$agent_home" "$profiles_changed" "$profiles_unchanged"
+printf 'Restart or reload Codex before using the updated skill or profiles.\n'

@@ -6,23 +6,24 @@ $ProgressPreference = "SilentlyContinue"
 
 $RepositoryOwner = "InsecurePassword"
 $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
+$RepositoryRef = if ($env:AMS_REPOSITORY_REF) { $env:AMS_REPOSITORY_REF } else { "main" }
+$DefaultRawBaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/$RepositoryRef"
+$RawBaseUrl = if ($env:AMS_RAW_BASE_URL) { $env:AMS_RAW_BASE_URL.TrimEnd('/') } else { $DefaultRawBaseUrl }
+$ManifestUrl = if ($env:AMS_MANIFEST_URL) { $env:AMS_MANIFEST_URL } else { "$RawBaseUrl/install-manifest.txt" }
 $PackageVersion = "3.09"
-$RepositoryBranch = "main"
-$AssetName = "adaptive-master-subagent-orchestration-$PackageVersion.zip"
-$DefaultPackageUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/$RepositoryBranch/$AssetName"
-$PackageUrl = if ($env:AMS_PACKAGE_URL) { $env:AMS_PACKAGE_URL } elseif ($env:AMS_RELEASE_URL) { $env:AMS_RELEASE_URL } else { $DefaultPackageUrl }
-$ExpectedSha256 = if ($env:AMS_EXPECTED_SHA256) { $env:AMS_EXPECTED_SHA256.Trim().ToLowerInvariant() } else { "f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018" }
-$UserAgent = "AMS-$PackageVersion-Installer"
 $SkillName = "adaptive-master-subagent-orchestration"
 $ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
+$UserAgent = "AMS-$PackageVersion-Tree-Installer"
 $UserHome = if ($HOME) { $HOME } else { [Environment]::GetFolderPath("UserProfile") }
 if (-not $UserHome) { throw "Unable to determine the current user home directory." }
+
 $SkillHome = if ($env:AMS_SKILL_HOME) { $env:AMS_SKILL_HOME } else { Join-Path $UserHome ".agents\skills" }
 $CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $UserHome ".codex" }
 $Destination = Join-Path $SkillHome $SkillName
 $AgentHome = Join-Path $CodexHome "agents"
-$MaxArchiveBytes = 10MB
-$MaxExpandedBytes = 100MB
+$MaxManifestBytes = 256KB
+$MaxFileBytes = 1MB
+$MaxTotalBytes = 100MB
 
 $ProfileFiles = @(
     "ams_sol_low.toml",
@@ -61,21 +62,117 @@ foreach ($ProfileFile in $ProfileFiles) {
     $RequiredFiles += "assets/agent-profiles/$ProfileFile"
 }
 
-if ($ExpectedSha256 -notmatch '^[0-9a-f]{64}$') { throw "AMS_EXPECTED_SHA256 must contain exactly 64 hexadecimal characters." }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 function Assert-SafeDirectory {
-    param([Parameter(Mandatory=$true)][string]$Path, [Parameter(Mandatory=$true)][string]$Label)
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Label
+    )
+
     $Item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if ($Item) {
         if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$Label is redirected: $Path" }
         if (-not $Item.PSIsContainer) { throw "$Label is not a directory: $Path" }
+        return
     }
-    else {
-        New-Item -ItemType Directory -Force -Path $Path | Out-Null
-        $Item = Get-Item -LiteralPath $Path -Force
-        if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$Label became redirected during creation: $Path" }
+
+    New-Item -ItemType Directory -Force -Path $Path | Out-Null
+    $Item = Get-Item -LiteralPath $Path -Force
+    if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$Label became redirected during creation: $Path" }
+}
+
+function Invoke-WithRetry {
+    param(
+        [Parameter(Mandatory=$true)][ScriptBlock]$Operation,
+        [Parameter(Mandatory=$true)][string]$Description
+    )
+
+    $LastError = $null
+    foreach ($Attempt in 1..3) {
+        try { return (& $Operation) }
+        catch {
+            $LastError = $_
+            if ($Attempt -lt 3) { Start-Sleep -Seconds $Attempt }
+        }
     }
+    throw "$Description failed after 3 attempts.`n$($LastError.Exception.Message)"
+}
+
+function Invoke-Download {
+    param(
+        [Parameter(Mandatory=$true)][string]$Uri,
+        [Parameter(Mandatory=$true)][string]$OutFile,
+        [Parameter(Mandatory=$true)][string]$Description
+    )
+
+    $Headers = @{ "Accept" = "application/octet-stream"; "User-Agent" = $UserAgent }
+    $null = Invoke-WithRetry -Description $Description -Operation {
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $Uri -Headers $Headers -OutFile $OutFile
+    }
+}
+
+function Get-Sha256 {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Read-InstallManifest {
+    param([Parameter(Mandatory=$true)][string]$Path)
+
+    $Item = Get-Item -LiteralPath $Path -Force
+    if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Install manifest is not a safe regular file: $Path"
+    }
+    if ($Item.Length -le 0 -or $Item.Length -gt $MaxManifestBytes) {
+        throw "Install manifest size is invalid: $($Item.Length) bytes"
+    }
+
+    $Bytes = [IO.File]::ReadAllBytes($Path)
+    if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) {
+        throw "Install manifest must be UTF-8 without BOM."
+    }
+    if ($Bytes[$Bytes.Length - 1] -ne 0x0A) { throw "Install manifest is missing final LF." }
+    foreach ($Byte in $Bytes) {
+        if ($Byte -eq 0x00 -or $Byte -eq 0x0D) { throw "Install manifest contains a forbidden NUL or CR byte." }
+    }
+
+    $Utf8 = New-Object Text.UTF8Encoding($false, $true)
+    $Text = $Utf8.GetString($Bytes)
+    $Lines = $Text.Split(@("`n"), [StringSplitOptions]::None)
+    if ($Lines.Count -lt 4 -or $Lines[$Lines.Count - 1] -ne "") { throw "Install manifest structure is invalid." }
+    if ($Lines[0] -cne "ams-install-manifest-v1") { throw "Unsupported install manifest format." }
+    if ($Lines[1] -cne "version`t$PackageVersion") { throw "Install manifest version does not match $PackageVersion." }
+
+    $Expected = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    foreach ($Required in $RequiredFiles) { [void]$Expected.Add("$SkillName/$Required") }
+    $Observed = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+    $Entries = New-Object 'System.Collections.Generic.List[object]'
+    [Int64]$TotalBytes = 0
+
+    for ($Index = 2; $Index -lt $Lines.Count - 1; $Index++) {
+        $Line = $Lines[$Index]
+        $Fields = $Line.Split([char]"`t")
+        if ($Fields.Count -ne 3) { throw "Malformed install manifest line $($Index + 1)." }
+        $Hash = $Fields[0].ToLowerInvariant()
+        $LengthText = $Fields[1]
+        $RepoPath = $Fields[2]
+        if ($Hash -notmatch '^[0-9a-f]{64}$') { throw "Invalid SHA-256 on manifest line $($Index + 1)." }
+        if ($LengthText -notmatch '^[0-9]+$') { throw "Invalid byte length on manifest line $($Index + 1)." }
+        [Int64]$Length = 0
+        if (-not [Int64]::TryParse($LengthText, [ref]$Length) -or $Length -le 0 -or $Length -gt $MaxFileBytes) {
+            throw "Unsafe byte length on manifest line $($Index + 1)."
+        }
+        if (-not $Expected.Contains($RepoPath) -or -not $Observed.Add($RepoPath)) {
+            throw "Unexpected or duplicate install manifest path: $RepoPath"
+        }
+        $TotalBytes += $Length
+        if ($TotalBytes -gt $MaxTotalBytes) { throw "Install manifest exceeds the total-size limit." }
+        $Entries.Add([PSCustomObject]@{ Hash = $Hash; Length = $Length; RepoPath = $RepoPath })
+    }
+
+    if ($Observed.Count -ne $Expected.Count) { throw "Install manifest does not contain the exact required file set." }
+    return $Entries.ToArray()
 }
 
 Assert-SafeDirectory -Path $SkillHome -Label "Skill parent"
@@ -100,8 +197,9 @@ catch {
 }
 
 $StageRoot = Join-Path $SkillHome (".ams-install-{0}-{1}" -f $PID, [Guid]::NewGuid().ToString("N"))
-$ArchivePath = Join-Path $StageRoot "package.zip"
-$ExtractRoot = Join-Path $StageRoot "extract"
+$Candidate = Join-Path $StageRoot $SkillName
+$ManifestBefore = Join-Path $StageRoot "install-manifest.before.txt"
+$ManifestAfter = Join-Path $StageRoot "install-manifest.after.txt"
 $BackupPath = Join-Path $SkillHome (".{0}.backup-{1}-{2}" -f $SkillName, (Get-Date -Format "yyyyMMddHHmmss"), $PID)
 $ProfileBackupRoot = Join-Path $AgentHome (".ams-profile-backup-{0}-{1}" -f $PID, [Guid]::NewGuid().ToString("N"))
 $ExistingMoved = $false
@@ -111,101 +209,46 @@ $ProfileCreated = @()
 $ProfileBackups = @()
 $ProfileTemps = @()
 
-function Invoke-WithRetry {
-    param([ScriptBlock]$Operation, [string]$Description)
-    $LastError = $null
-    foreach ($Attempt in 1..3) {
-        try { return (& $Operation) }
-        catch {
-            $LastError = $_
-            if ($Attempt -lt 3) { Start-Sleep -Seconds $Attempt }
-        }
-    }
-    throw "$Description failed after 3 attempts.`n$($LastError.Exception.Message)"
-}
-
 try {
-    New-Item -ItemType Directory -Force -Path $StageRoot, $ExtractRoot, $ProfileBackupRoot | Out-Null
-    $Headers = @{ "Accept" = "application/octet-stream"; "User-Agent" = $UserAgent }
+    New-Item -ItemType Directory -Force -Path $Candidate, $ProfileBackupRoot | Out-Null
 
-    Write-Host "Downloading Adaptive Master-Subagent Orchestration $PackageVersion..."
-    try {
-        $null = Invoke-WithRetry -Description "Package download" -Operation {
-            Invoke-WebRequest -UseBasicParsing -TimeoutSec 300 -Uri $PackageUrl -Headers $Headers -OutFile $ArchivePath
+    Write-Host "Reading the AMS $PackageVersion install manifest from repository ref '$RepositoryRef'..."
+    Invoke-Download -Uri $ManifestUrl -OutFile $ManifestBefore -Description "Install manifest download"
+    $Entries = Read-InstallManifest -Path $ManifestBefore
+
+    foreach ($Entry in $Entries) {
+        $RelativePath = $Entry.RepoPath.Substring($SkillName.Length + 1)
+        $TargetPath = Join-Path $Candidate $RelativePath
+        $Parent = Split-Path -Parent $TargetPath
+        New-Item -ItemType Directory -Force -Path $Parent | Out-Null
+        $TempPath = "$TargetPath.download"
+        $FileUrl = "$RawBaseUrl/$($Entry.RepoPath)"
+        Invoke-Download -Uri $FileUrl -OutFile $TempPath -Description "Download of $($Entry.RepoPath)"
+        $Downloaded = Get-Item -LiteralPath $TempPath -Force
+        if ($Downloaded.PSIsContainer -or ($Downloaded.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Downloaded path is not a safe regular file: $($Entry.RepoPath)"
         }
-    }
-    catch {
-        throw "Package download failed. Verify the repository raw-file URL or set AMS_PACKAGE_URL to the exact package location.`n$($_.Exception.Message)"
-    }
-
-    if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) { throw "The package download is missing." }
-    $ArchiveItem = Get-Item -LiteralPath $ArchivePath
-    if ($ArchiveItem.Length -eq 0) { throw "The package download was empty." }
-    if ($ArchiveItem.Length -gt $MaxArchiveBytes) { throw "The compressed package exceeds the 10 MiB safety limit." }
-    $ActualSha256 = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($ActualSha256 -ne $ExpectedSha256) { throw "Package checksum mismatch. Expected $ExpectedSha256; received $ActualSha256." }
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $Archive = [IO.Compression.ZipFile]::OpenRead($ArchivePath)
-    try {
-        $ExpectedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-        foreach ($Required in $RequiredFiles) { [void]$ExpectedNames.Add("$SkillName/$Required") }
-        $AllowedDirectories = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-        foreach ($DirectoryName in @("$SkillName/", "$SkillName/agents/", "$SkillName/assets/", "$SkillName/assets/agent-profiles/", "$SkillName/references/")) {
-            [void]$AllowedDirectories.Add($DirectoryName)
+        if ($Downloaded.Length -ne $Entry.Length) {
+            throw "Downloaded length mismatch for $($Entry.RepoPath). Expected $($Entry.Length); received $($Downloaded.Length)."
         }
-        $ObservedNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-        $ObservedDirectories = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-        [Int64]$ExpandedBytes = 0
-        $Buffer = New-Object byte[] 81920
-        foreach ($Entry in $Archive.Entries) {
-            $Name = $Entry.FullName
-            $ExternalAttributes = [BitConverter]::ToUInt32([BitConverter]::GetBytes([Int32]$Entry.ExternalAttributes), 0)
-            if ((($ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw "The release archive contains an unsupported symbolic link: $Name" }
-            if ($Name.EndsWith('/')) {
-                if ($Entry.Length -ne 0 -or -not $AllowedDirectories.Contains($Name) -or -not $ObservedDirectories.Add($Name)) {
-                    throw "The release archive contains an unexpected or duplicate directory entry: $Name"
-                }
-                continue
-            }
-            if (-not $ExpectedNames.Contains($Name) -or -not $ObservedNames.Add($Name)) { throw "The release archive file set does not exactly match the $PackageVersion package contract: $Name" }
-            $ExpandedBytes += $Entry.Length
-            if ($ExpandedBytes -gt $MaxExpandedBytes) { throw "The expanded release exceeds the 100 MiB safety limit." }
-            $Stream = $null
-            try {
-                $Stream = $Entry.Open()
-                [Int64]$ReadTotal = 0
-                while (($Read = $Stream.Read($Buffer, 0, $Buffer.Length)) -gt 0) { $ReadTotal += $Read }
-                if ($ReadTotal -ne $Entry.Length) { throw "The release archive entry failed integrity validation: $Name" }
-            }
-            finally { if ($Stream) { $Stream.Dispose() } }
+        $ActualHash = Get-Sha256 -Path $TempPath
+        if ($ActualHash -cne $Entry.Hash) {
+            throw "Downloaded hash mismatch for $($Entry.RepoPath)."
         }
-        if ($ObservedNames.Count -ne $ExpectedNames.Count) { throw "The release archive is missing required files." }
+        Move-Item -LiteralPath $TempPath -Destination $TargetPath
     }
-    finally { $Archive.Dispose() }
 
-    Expand-Archive -LiteralPath $ArchivePath -DestinationPath $ExtractRoot -Force
-    $Candidate = Join-Path $ExtractRoot $SkillName
-    if (-not (Test-Path -LiteralPath $Candidate -PathType Container)) { throw "The extracted package root was not found: $Candidate" }
-    $CandidateItem = Get-Item -LiteralPath $Candidate -Force
-    if ($CandidateItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "The extracted package root is redirected." }
-
-    $ObservedExtracted = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
-    foreach ($File in Get-ChildItem -LiteralPath $Candidate -File -Recurse -Force) {
-        if ($File.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "The extracted package contains a redirected file: $($File.FullName)" }
-        $Relative = $File.FullName.Substring($Candidate.Length).TrimStart([char[]]@('\','/')).Replace('\','/')
-        [void]$ObservedExtracted.Add("$SkillName/$Relative")
-    }
-    if ($ObservedExtracted.Count -ne $RequiredFiles.Count) { throw "The extracted package file count does not match the $PackageVersion package contract." }
-    foreach ($Required in $RequiredFiles) {
-        if (-not $ObservedExtracted.Contains("$SkillName/$Required")) { throw "The extracted package is missing required file: $Required" }
+    Invoke-Download -Uri $ManifestUrl -OutFile $ManifestAfter -Description "Final install manifest download"
+    if ((Get-Item -LiteralPath $ManifestBefore).Length -ne (Get-Item -LiteralPath $ManifestAfter).Length -or
+        (Get-Sha256 -Path $ManifestBefore) -cne (Get-Sha256 -Path $ManifestAfter)) {
+        throw "The repository install manifest changed during download. Rerun the installer."
     }
 
     $ObservedVersion = (Get-Content -LiteralPath (Join-Path $Candidate "VERSION") -Raw).Trim()
-    if ($ObservedVersion -cne $PackageVersion) { throw "Unexpected package version. Expected $PackageVersion; received '$ObservedVersion'." }
+    if ($ObservedVersion -cne $PackageVersion) { throw "Unexpected source version. Expected $PackageVersion; received '$ObservedVersion'." }
 
     foreach ($ProfileFile in $ProfileFiles) {
-        $SourceProfile = Join-Path $Candidate "assets\agent-profiles\$ProfileFile"
+        $SourceProfile = Join-Path $Candidate "assets/agent-profiles/$ProfileFile"
         $SourceItem = Get-Item -LiteralPath $SourceProfile -Force -ErrorAction SilentlyContinue
         if (-not $SourceItem -or $SourceItem.PSIsContainer -or ($SourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw "Bundled profile is missing or redirected: $ProfileFile"
@@ -229,15 +272,15 @@ try {
     $ProfilesChanged = 0
     $ProfilesUnchanged = 0
     foreach ($ProfileFile in $ProfileFiles) {
-        $SourceProfile = Join-Path $Destination "assets\agent-profiles\$ProfileFile"
+        $SourceProfile = Join-Path $Destination "assets/agent-profiles/$ProfileFile"
         $TargetProfile = Join-Path $AgentHome $ProfileFile
         $TargetItem = Get-Item -LiteralPath $TargetProfile -Force -ErrorAction SilentlyContinue
 
         if ($TargetItem) {
             if ($TargetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing to replace a redirected agent profile: $TargetProfile" }
             if ($TargetItem.PSIsContainer) { throw "Agent profile target is not a regular file: $TargetProfile" }
-            $SourceHash = (Get-FileHash -LiteralPath $SourceProfile -Algorithm SHA256).Hash
-            $TargetHash = (Get-FileHash -LiteralPath $TargetProfile -Algorithm SHA256).Hash
+            $SourceHash = Get-Sha256 -Path $SourceProfile
+            $TargetHash = Get-Sha256 -Path $TargetProfile
             if ($SourceHash -ceq $TargetHash) {
                 $ProfilesUnchanged++
                 continue
@@ -256,12 +299,10 @@ try {
         $TempProfile = Join-Path $AgentHome (".{0}.ams-install.{1}" -f $ProfileFile, [Guid]::NewGuid().ToString("N"))
         $ProfileTemps += $TempProfile
         Copy-Item -LiteralPath $SourceProfile -Destination $TempProfile
-        $SourceHash = (Get-FileHash -LiteralPath $SourceProfile -Algorithm SHA256).Hash
-        $TempHash = (Get-FileHash -LiteralPath $TempProfile -Algorithm SHA256).Hash
-        if ($SourceHash -cne $TempHash) { throw "Agent profile staging verification failed: $ProfileFile" }
+        $SourceHash = Get-Sha256 -Path $SourceProfile
+        if ((Get-Sha256 -Path $TempProfile) -cne $SourceHash) { throw "Agent profile staging verification failed: $ProfileFile" }
         Move-Item -LiteralPath $TempProfile -Destination $TargetProfile
-        $TargetHash = (Get-FileHash -LiteralPath $TargetProfile -Algorithm SHA256).Hash
-        if ($SourceHash -cne $TargetHash) { throw "Agent profile installation verification failed: $ProfileFile" }
+        if ((Get-Sha256 -Path $TargetProfile) -cne $SourceHash) { throw "Agent profile installation verification failed: $ProfileFile" }
         $ProfilesChanged++
     }
 
@@ -272,32 +313,26 @@ try {
         $ExistingMoved = $false
     }
     Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
-    $ProfileBackupRoot = $null
 
-    Write-Host "Installed Adaptive Master-Subagent Orchestration $PackageVersion to:"
-    Write-Host "  $Destination"
-    Write-Host "Installed or updated $ProfilesChanged AMS profiles; $ProfilesUnchanged were already current."
-    Write-Host "Agent profile registry:"
-    Write-Host "  $AgentHome"
-    Write-Host "Restart or reload Codex before using the updated skill and profiles."
+    Write-Host "Installed Adaptive Master-Subagent Orchestration $PackageVersion directly from the repository tree."
+    Write-Host "Repository ref: $RepositoryRef"
+    Write-Host "Skill: $Destination"
+    Write-Host "Profiles: $AgentHome ($ProfilesChanged changed, $ProfilesUnchanged unchanged)"
+    Write-Host "Restart or reload Codex before using the updated skill or profiles."
 }
-catch {
+finally {
     if (-not $Committed) {
         foreach ($TempProfile in $ProfileTemps) {
-            if ($TempProfile -and (Test-Path -LiteralPath $TempProfile -PathType Leaf)) {
-                Remove-Item -LiteralPath $TempProfile -Force -ErrorAction SilentlyContinue
-            }
+            Remove-Item -LiteralPath $TempProfile -Force -ErrorAction SilentlyContinue
         }
         foreach ($CreatedProfile in $ProfileCreated) {
-            if ($CreatedProfile -and (Test-Path -LiteralPath $CreatedProfile -PathType Leaf)) {
-                Remove-Item -LiteralPath $CreatedProfile -Force -ErrorAction SilentlyContinue
-            }
+            Remove-Item -LiteralPath $CreatedProfile -Force -ErrorAction SilentlyContinue
         }
         for ($Index = $ProfileBackups.Count - 1; $Index -ge 0; $Index--) {
             $Record = $ProfileBackups[$Index]
             Remove-Item -LiteralPath $Record.Target -Force -ErrorAction SilentlyContinue
             if (Test-Path -LiteralPath $Record.Backup -PathType Leaf) {
-                Move-Item -LiteralPath $Record.Backup -Destination $Record.Target -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $Record.Backup -Destination $Record.Target -ErrorAction SilentlyContinue
             }
         }
         if ($CandidateInstalled -and (Test-Path -LiteralPath $Destination -PathType Container)) {
@@ -307,13 +342,9 @@ catch {
             Move-Item -LiteralPath $BackupPath -Destination $Destination -ErrorAction SilentlyContinue
         }
     }
-    throw
-}
-finally {
-    if ($ProfileBackupRoot -and (Test-Path -LiteralPath $ProfileBackupRoot -PathType Container)) {
-        Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    if (Test-Path -LiteralPath $StageRoot) { Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue }
+
+    Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue
     if ($LockStream) { $LockStream.Dispose() }
     Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
 }
