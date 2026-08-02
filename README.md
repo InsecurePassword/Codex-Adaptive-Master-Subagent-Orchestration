@@ -96,7 +96,7 @@ Disable it for one project with:
 AMS GOVERNANCE off
 ```
 
-Disabling governance does not change Sol-root control, model/reasoning routing, work orders, virtual hierarchy, root-only physical spawning, one-writer safety, or truthful completion. AMS never creates `.codex/ams-recovery.json` or another AMS-specific recovery file.
+Disabling governance does not change Sol-root control, model/reasoning routing, work orders, virtual hierarchy, root-only physical spawning, one-writer safety, or truthful completion.
 
 ## Model and effort routing
 
