@@ -6,8 +6,6 @@ on:
       - main
     types:
       - opened
-      - synchronize
-      - reopened
 
 permissions:
   contents: write
@@ -15,7 +13,7 @@ permissions:
 
 jobs:
   finalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/finalize-direct-tree-release'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/finalize-direct-tree-release-v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +76,7 @@ EOF
           fi
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/ReleaseZip" >/dev/null 2>&1 || true
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/direct-tree-installation" >/dev/null 2>&1 || true
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/finalize-direct-tree-release" >/dev/null 2>&1 || true
 
-          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was aligned to final main commit ${final_sha}; the obsolete ReleaseZip tag/release, merged feature branch, trigger branch, and temporary workflow were removed."
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was aligned to final main commit ${final_sha}; obsolete release/tag/branches and the temporary workflow were removed."
           printf 'Release 3.09 aligned to %s. Cleanup completed.\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
