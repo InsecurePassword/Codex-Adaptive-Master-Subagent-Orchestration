@@ -1,11 +1,10 @@
-name: Temporary update real release notes
+name: Temporary clean real update PR
 
 on:
   pull_request:
     branches:
       - main
     types:
-      - opened
       - synchronize
       - reopened
 
@@ -14,7 +13,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  update:
+  cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/update-real-release-notes'
     runs-on: ubuntu-latest
     steps:
@@ -23,15 +22,10 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Replace release notes and remove this branch
+      - name: Close the temporary PR and delete its branch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set -euo pipefail
-          repo="$GITHUB_REPOSITORY"
-          note='Added model/reasoning reporting for subagents'
-          release_id="$(gh api "repos/${repo}/releases/tags/3.09" --jq '.id')"
-          gh api --method PATCH "repos/${repo}/releases/${release_id}" -f body="$note" >/dev/null
-          gh pr close "$PR_NUMBER" --repo "$repo" --delete-branch --comment "$note"
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment 'Added model/reasoning reporting for subagents'
