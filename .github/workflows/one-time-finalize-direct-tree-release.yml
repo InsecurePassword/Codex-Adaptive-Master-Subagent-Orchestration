@@ -1,16 +1,19 @@
 name: One-time finalize direct-tree release
 
 on:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - opened
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   finalize:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/finalize-direct-tree-release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +35,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           final_sha="$(git rev-parse HEAD)"
 
@@ -73,6 +77,5 @@ EOF
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/ReleaseZip" >/dev/null 2>&1 || true
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/direct-tree-installation" >/dev/null 2>&1 || true
 
-          printf 'Release 3.09 aligned to %s. Obsolete ReleaseZip tag/release and merged branch removed.\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
-
-# trigger
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Release 3.09 was aligned to the final direct-tree commit ${final_sha}; the obsolete ReleaseZip tag/release, merged feature branch, trigger branch, and temporary workflow were removed."
+          printf 'Release 3.09 aligned to %s. Cleanup completed.\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
