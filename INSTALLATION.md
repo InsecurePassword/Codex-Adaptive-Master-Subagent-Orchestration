@@ -47,7 +47,7 @@ When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME
 Both installers:
 
 1. download `install-manifest.txt` from canonical `main`;
-2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 29-file runtime/profile set;
+2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 31-file runtime/profile set;
 3. reject malformed, duplicate, escaping, linked, redirected, oversized, or unexpected entries;
 4. download every declared file and verify byte length and SHA-256;
 5. download the manifest again and require byte equality, preventing mixed-generation installation;
@@ -96,12 +96,14 @@ adaptive-master-subagent-orchestration/
 │   └── agent-profiles/
 │       └── 18 canonical ams_*.toml profiles
 └── references/
+    ├── configuration-maintenance.md
     ├── hierarchy-control.md
     ├── intensity-control.md
     ├── package-maintenance.md
     ├── profile-management.md
     ├── project-control.md
     ├── project-governance.md
+    ├── root-execution-fallback.md
     ├── runtime-core.md
     └── zergling-rush.md
 ```
@@ -125,11 +127,13 @@ $AgentRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'agents' } else { 
 
 Get-Content (Join-Path $SkillRoot 'VERSION')
 Test-Path (Join-Path $SkillRoot 'references\project-governance.md')
+Test-Path (Join-Path $SkillRoot 'references\configuration-maintenance.md')
+Test-Path (Join-Path $SkillRoot 'references\root-execution-fallback.md')
 (Get-ChildItem $AgentRoot -Filter 'ams_*.toml' -File).Count
 Select-String -Path (Join-Path $AgentRoot 'ams_spark_*.toml') -Pattern '^sandbox_mode\s*='
 ```
 
-Expected: version `3.09`, governance reference `True`, profile count `18`, and no `sandbox_mode` matches.
+Expected: version `3.09`, all three reference checks `True`, profile count `18`, and no `sandbox_mode` matches.
 
 ### Bash
 
@@ -139,9 +143,17 @@ agent_root="${CODEX_HOME:-$HOME/.codex}/agents"
 
 cat "$skill_root/VERSION"
 test -f "$skill_root/references/project-governance.md"
+test -f "$skill_root/references/configuration-maintenance.md"
+test -f "$skill_root/references/root-execution-fallback.md"
 find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
 ! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_spark_*.toml
 ```
+
+## Root fallback and configuration updater
+
+The schema-2 default includes `root_execution_fallback = true`. `AMS ROOT FALLBACK on|off` changes only the project fallback setting.
+
+`AMS CONFIGURATION UPDATE` and `AMS CONFIGURATION UPDATE PROJECT` update an existing project configuration as well as creating a missing one. Existing project values are preserved and every missing current field is added from the exact default. Global values are consulted only when the project file is absent; an existing invalid or unsafe global file blocks creation rather than being ignored. `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit AMS command allowed to write the global file and only adds missing defaults or creates the exact disabled default.
 
 ## Settings and governance
 
@@ -153,13 +165,14 @@ enabled = false
 allow_implicit_invocation = true
 intensity = "auto"
 project_governance = true
+root_execution_fallback = true
 spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-An existing schema-2 settings file may omit `project_governance`; AMS treats the omitted value as `true` and writes it during the next authorized project-settings change.
+Any omitted currently supported schema-2 setting resolves from the exact current default and is written during the next authorized settings change. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
 
 Disable only the optional project-governance layer with:
 

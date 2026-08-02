@@ -67,13 +67,14 @@ enabled = false
 allow_implicit_invocation = true
 intensity = "auto"
 project_governance = true
+root_execution_fallback = true
 spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-A schema-2 file created before `project_governance` existed may omit only that key. AMS resolves it as `true` and persists it during the next authorized project-settings write.
+Any omitted currently supported schema-2 setting resolves from the exact current default and is persisted during the next authorized settings write. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
 
 | Setting | Meaning |
 |---|---|
@@ -81,6 +82,7 @@ A schema-2 file created before `project_governance` existed may omit only that k
 | `allow_implicit_invocation` | Allows automatic skill activation when Codex permits it. |
 | `intensity` | Team-formation posture: `auto`, `minimal`, `moderate`/`balanced`, `heavy`, `extreme`, or stored Rush preference. |
 | `project_governance` | Default-on optional project lifecycle, review, acceptance, and continuity layer. |
+| `root_execution_fallback` | Default-on bounded last-resort root action for standard AMS when no viable delegated route remains. |
 | `spark_enabled` | User preference for normal Spark routing. |
 | `spark_available` | Cached Spark availability evidence. |
 | `spark_efforts` | Allowed normal Spark efforts. |
@@ -95,15 +97,15 @@ AMS DISABLE
 AMS MODE auto|minimal|balanced|moderate|heavy|extreme
 AMS IMPLICIT on|off
 AMS GOVERNANCE on|off
+AMS ROOT FALLBACK on|off
+AMS CONFIGURATION UPDATE [PROJECT|GLOBAL]
 AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
 AMS PROFILES auto|installer
 ```
 
-All persistent commands write only the project file. `AMS STATUS` is read-only. `AMS MODE` also enables AMS. `AMS GOVERNANCE` changes only the optional governance layer.
-
-Global persistence is manual; no AMS command writes the global file.
+Normal persistent controls write only the project file. `AMS STATUS` is read-only. `AMS MODE` also enables AMS. `AMS GOVERNANCE` changes only the optional governance layer. `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit global-writing command and only adds missing defaults or creates the exact disabled default.
 
 ## 6. Model and reasoning control
 
@@ -165,7 +167,23 @@ One active writer is allowed per mutable surface. Authority, scope, ownership, p
 
 The root does not perform project inspection, research, implementation, commands, deployment, tests/builds/linting, security checks, independent review, integration execution, Git/history operations, or artifact generation while a compliant delegated route exists. The root changes routing and supervision rather than taking over cheaper-model work.
 
-## 12. Intensity and Rush
+## 12. Root execution fallback
+
+Standard AMS defaults to `root_execution_fallback = true`, but the root remains a management lane while a viable lower-cost delegated route exists. Only a genuine no-viable-route blocker loads the fallback reference. One bounded atomic action is allowed per blocker episode, ownership must be reclaimed before mutation, root-visible output is bounded, and a mutation remains pending independent validation. Zergling Rush and the separate Sol Ultra prompt retain their own mode-specific root rules.
+
+## 13. Configuration maintenance
+
+The explicit updater supports both existing and missing files:
+
+- existing project or global file: preserve every existing supported value and add every missing current field from the exact default;
+- missing project file: use valid global settings when present, use the exact default when the global file is absent, and reject without writing when an existing global file is invalid or unsafe;
+- missing global file: `AMS CONFIGURATION UPDATE GLOBAL` may create the exact disabled default;
+- complete file: validate and perform no write;
+- unknown, duplicate, nested, invalid, or unsupported content: reject without writing.
+
+The updater is never loaded implicitly.
+
+## 14. Intensity and Rush
 
 - `minimal`: root plus at most one active non-root session;
 - `balanced`/stored `moderate`: one bounded small-team shape;
@@ -175,7 +193,7 @@ The root does not perform project inspection, research, implementation, commands
 
 Zergling Rush is separate and requires explicit current-turn consent. It may use stronger routes, competing approaches, speculative preparation, duplicate investigation, and redundant validation, but never changes root authority, permissions, ownership, safety, or completion rules.
 
-## 13. Optional project governance
+## 15. Optional project governance
 
 `project_governance = true` loads `references/project-governance.md`. It adds:
 
@@ -189,19 +207,19 @@ Zergling Rush is separate and requires explicit current-turn consent. It may use
 
 AMS does not create an independent recovery ledger. The live root task graph manages active workers; durable continuity uses already-authorized project-native state or a concise handoff.
 
-## 14. Completion and failure
+## 16. Completion and failure
 
 Worker and manager completion are evidence claims. The root reconciles results and declares completion only when the user/project-defined objective and checks are satisfied, no mandatory work or conflicting writer remains, and any enabled governance requirements are met.
 
 On failure, the root corrects work orders, reroutes, raises effort, escalates family, replaces sessions, changes topology, or reports a genuine blocker. It never repeats an unchanged failed setup or invents observed identity.
 
-## 15. Update, repair, and uninstall
+## 17. Update, repair, and uninstall
 
-Package mutation requires direct user authority and a fresh Codex session afterward. The standard installer uses only canonical `main`, validates the exact 29-file set, and never edits general Codex configuration or permissions.
+Package mutation requires direct user authority and a fresh Codex session afterward. The standard installer uses only canonical `main`, validates the exact 31-file set, and never edits general Codex configuration or permissions.
 
 Standard uninstall removes only the skill directory. Project/global settings and installed profiles remain for troubleshooting or reinstall. Separate profile cleanup requires explicit authorization and proven AMS ownership.
 
-## 16. Directory structure
+## 18. Directory structure
 
 ```text
 Codex-Adaptive-Master-Subagent-Orchestration/
@@ -218,12 +236,14 @@ Codex-Adaptive-Master-Subagent-Orchestration/
     ├── agents/openai.yaml
     ├── assets/agent-profiles/        # 18 profiles
     └── references/
+        ├── configuration-maintenance.md
         ├── hierarchy-control.md
         ├── intensity-control.md
         ├── package-maintenance.md
         ├── profile-management.md
         ├── project-control.md
         ├── project-governance.md
+        ├── root-execution-fallback.md
         ├── runtime-core.md
         └── zergling-rush.md
 ```
