@@ -56,7 +56,7 @@ ams_<sol|terra|luna>_<low|medium|high|xhigh|max>
 ams_spark_<low|medium|high>
 ```
 
-Profiles choose model/reasoning and enforce the bounded non-root boundary. Work orders choose temporary execution/management role, logical parent, scope, permissions, ownership, validation, and output. No manager-specific profile is required. Create no permanent role-by-model profile without separate repeated evidence and explicit authority. Map Light→`low`, Extra High→`xhigh`; reasoning `none` is for supported deterministic non-agent tooling only.
+Profiles choose model/reasoning and enforce the bounded non-root boundary. Work orders choose temporary execution/management role, logical parent, scope, permissions, ownership, validation, and output. After each successful non-root spawn, immediately report the new session's task name and requested AMS capability profile, whose name encodes the model family and reasoning effort; batch simultaneous spawns in one concise line and do not present requested configuration as observed runtime identity. No manager-specific profile is required. Create no permanent role-by-model profile without separate repeated evidence and explicit authority. Map Light→`low`, Extra High→`xhigh`; reasoning `none` is for supported deterministic non-agent tooling only.
 
 Route by failure cost, ambiguity, architecture/security impact, dependencies, novelty, verifiability, repetition/volume, coupling, investigation depth, and supervisory burden:
 

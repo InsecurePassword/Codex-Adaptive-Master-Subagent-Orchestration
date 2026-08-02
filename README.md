@@ -46,7 +46,9 @@ This design does not require a permanent manager profile. Existing Sol, Terra, a
 
 ## Install
 
-The repository-hosted installers download the current AMS package from `main`, verify its SHA-256 checksum, validate the archive, deploy the bundled model profiles, and safely replace an older AMS installation.
+The installers fetch the AMS files directly from the `main` repository tree. They do not use GitHub Release assets or a package ZIP.
+
+The repository-root `install-manifest.txt` lists the exact path, byte length, and SHA-256 for every runtime file. Each installer downloads and verifies those files individually, confirms that the manifest did not change during the operation, stages the complete skill, and then transactionally installs the skill and 18 model profiles.
 
 ### Windows PowerShell
 
@@ -62,26 +64,19 @@ curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-O
 
 Restart or reload Codex after installation or update.
 
-### Repository files
-
-The repository-root distribution uses these files from `main`:
+### Repository distribution
 
 - [PowerShell installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1)
 - [Bash installer](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh)
-- [AMS 3.09 package](https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration-3.09.zip)
+- [Install manifest](install-manifest.txt)
+- [Raw skill tree](adaptive-master-subagent-orchestration/)
 - [Detailed installation guide](INSTALLATION.md)
 - [Complete product documentation](PRODUCT%20DOCUMENTATION.md)
 
-The repository-root package is verified by both installer scripts with this SHA-256:
+For a complete local copy:
 
-```text
-f2bfacac26d39bf21ce492f181bb4c51e9bc3a6b5d7cc3d7b18276d2c1a4d018
-```
-
-Default install location:
-
-```text
-$HOME/.agents/skills/adaptive-master-subagent-orchestration/
+```bash
+git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
 ```
 
 ## Start using AMS
