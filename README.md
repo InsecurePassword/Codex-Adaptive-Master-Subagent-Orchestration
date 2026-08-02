@@ -53,7 +53,7 @@ AMS checks project settings first, then global settings only when the project fi
 $CODEX_HOME/ams-orchestration.toml
 ```
 
-The global file is manual only. Project commands write only the current project file. If a project command creates that file while global settings are active, AMS copies the valid effective global values first and changes only the requested project setting.
+Global configuration is never written implicitly. Normal project controls write only the current project file; `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit global-writing command and only adds missing defaults or creates the exact disabled default. If a project control creates a project file while valid global settings are active, AMS copies the resolved global values first and changes only the requested project setting.
 
 Schema 2 default:
 
@@ -63,13 +63,14 @@ enabled = false
 allow_implicit_invocation = true
 intensity = "auto"
 project_governance = true
+root_execution_fallback = true
 spark_enabled = true
 spark_available = true
 spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Existing schema-2 files created before `project_governance` was added may omit that key. AMS resolves the omitted value as `true` and persists it during the next authorized project-settings write.
+Any omitted currently supported schema-2 setting resolves from the exact current default and is persisted during the next authorized settings write. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
 
 Useful commands:
 
@@ -80,6 +81,8 @@ AMS DISABLE
 AMS MODE auto|minimal|balanced|moderate|heavy|extreme
 AMS IMPLICIT on|off
 AMS GOVERNANCE on|off
+AMS ROOT FALLBACK on|off
+AMS CONFIGURATION UPDATE [PROJECT|GLOBAL]
 AMS SPARK on|off
 AMS SPARK RECHECK
 AMS SPARK EFFORTS low,medium,high
@@ -126,6 +129,28 @@ That is the requested profile, not proof of observed runtime identity.
 - One active writer is allowed per mutable surface.
 - Only the root accepts project completion and communicates with the user.
 - The root remains a management lane and does not take over project execution while a compliant delegated route exists.
+
+## Root execution fallback
+
+`root_execution_fallback = true` is the default for standard AMS operation. The root still delegates every task that a viable lower-cost session can complete and validate. The lazy fallback reference is loaded only when mandatory progress would otherwise stop and no viable delegated route remains. It permits one bounded low-risk atomic unblocker, protects ownership and root context, prevents chaining into a root implementation lane, and requires non-root validation before a root mutation can be finally accepted.
+
+Disable it per project with:
+
+```text
+AMS ROOT FALLBACK off
+```
+
+Specialized modes such as Zergling Rush and the separate Sol Ultra prompt retain their own stricter contracts.
+
+## Configuration maintenance
+
+```text
+AMS CONFIGURATION UPDATE
+AMS CONFIGURATION UPDATE PROJECT
+AMS CONFIGURATION UPDATE GLOBAL
+```
+
+The project forms update an existing project schema-2 file by adding every currently supported missing field from the exact default while preserving every existing value. For a missing project file, valid global settings are used when present; an existing invalid or unsafe global file blocks the operation rather than being ignored. The explicit `GLOBAL` form performs the same missing-field update on the global file or creates the exact disabled default. No form changes an existing value or enables AMS.
 
 ## Intensity modes
 

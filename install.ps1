@@ -55,12 +55,14 @@ $RequiredFiles = @(
     "SKILL.md",
     "VERSION",
     "agents/openai.yaml",
+    "references/configuration-maintenance.md",
     "references/hierarchy-control.md",
     "references/intensity-control.md",
     "references/package-maintenance.md",
     "references/profile-management.md",
     "references/project-control.md",
     "references/project-governance.md",
+    "references/root-execution-fallback.md",
     "references/runtime-core.md",
     "references/zergling-rush.md"
 )
