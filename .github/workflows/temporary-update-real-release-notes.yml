@@ -1,0 +1,31 @@
+name: Temporary update real release notes
+
+on:
+  push:
+    branches:
+      - agent/update-real-release-notes
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Replace release notes and remove this branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          note='Added model/reasoning reporting for subagents'
+          release_id="$(gh api "repos/${repo}/releases/tags/3.09" --jq '.id')"
+          gh api --method PATCH "repos/${repo}/releases/${release_id}" -f body="$note" >/dev/null
+          git push origin --delete agent/update-real-release-notes >/dev/null 2>&1 || true
