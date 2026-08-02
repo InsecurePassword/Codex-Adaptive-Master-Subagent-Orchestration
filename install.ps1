@@ -6,10 +6,9 @@ $ProgressPreference = "SilentlyContinue"
 
 $RepositoryOwner = "InsecurePassword"
 $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
-$RepositoryRef = if ($env:AMS_REPOSITORY_REF) { $env:AMS_REPOSITORY_REF } else { "main" }
-$DefaultRawBaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/$RepositoryRef"
-$RawBaseUrl = if ($env:AMS_RAW_BASE_URL) { $env:AMS_RAW_BASE_URL.TrimEnd('/') } else { $DefaultRawBaseUrl }
-$ManifestUrl = if ($env:AMS_MANIFEST_URL) { $env:AMS_MANIFEST_URL } else { "$RawBaseUrl/install-manifest.txt" }
+$RepositoryRef = "main"
+$RawBaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/main"
+$ManifestUrl = "$RawBaseUrl/install-manifest.txt"
 $PackageVersion = "3.09"
 $SkillName = "adaptive-master-subagent-orchestration"
 $ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
@@ -46,6 +45,12 @@ $ProfileFiles = @(
     "ams_spark_high.toml"
 )
 
+$PriorCanonicalProfileHashes = @{
+    "ams_spark_low.toml" = @("b082a31f60627f4364b870c663deed670eff3c5c2adce03cb37b98452d9f0a1b")
+    "ams_spark_medium.toml" = @("c387ffa3c419d66e404ebcc9a7b82a21995690a43a12350a690e9aa13dd5f45a")
+    "ams_spark_high.toml" = @("bd0122c1f87b08ddb08b24df74979cf89c80c6be47627e9e0270ac2799c5320e")
+}
+
 $RequiredFiles = @(
     "SKILL.md",
     "VERSION",
@@ -55,6 +60,7 @@ $RequiredFiles = @(
     "references/package-maintenance.md",
     "references/profile-management.md",
     "references/project-control.md",
+    "references/project-governance.md",
     "references/runtime-core.md",
     "references/zergling-rush.md"
 )
@@ -286,8 +292,13 @@ try {
                 continue
             }
 
-            $FirstLine = @(Get-Content -LiteralPath $TargetProfile -TotalCount 1)[0]
-            if ($FirstLine -cne $ManagedMarker) { throw "Refusing to overwrite an unrecognized or user-authored profile: $TargetProfile" }
+            $AuthorizedPriorHashes = @()
+            if ($PriorCanonicalProfileHashes.ContainsKey($ProfileFile)) {
+                $AuthorizedPriorHashes = @($PriorCanonicalProfileHashes[$ProfileFile])
+            }
+            if ($AuthorizedPriorHashes -notcontains $TargetHash) {
+                throw "Refusing to replace a differing profile without exact official provenance: $TargetProfile. Review, rename, remove, or manually reconcile it before retrying."
+            }
             $SavedProfile = Join-Path $ProfileBackupRoot $ProfileFile
             Move-Item -LiteralPath $TargetProfile -Destination $SavedProfile
             $ProfileBackups += [PSCustomObject]@{ Target = $TargetProfile; Backup = $SavedProfile }
