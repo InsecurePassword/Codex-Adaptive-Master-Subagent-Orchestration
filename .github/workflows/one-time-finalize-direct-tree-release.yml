@@ -74,3 +74,5 @@ EOF
           gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/agent/direct-tree-installation" >/dev/null 2>&1 || true
 
           printf 'Release 3.09 aligned to %s. Obsolete ReleaseZip tag/release and merged branch removed.\n' "$final_sha" >> "$GITHUB_STEP_SUMMARY"
+
+# trigger
