@@ -1,16 +1,21 @@
 name: Temporary update real release notes
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/update-real-release-notes
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/update-real-release-notes'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,10 +27,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
           note='Added model/reasoning reporting for subagents'
           release_id="$(gh api "repos/${repo}/releases/tags/3.09" --jq '.id')"
           gh api --method PATCH "repos/${repo}/releases/${release_id}" -f body="$note" >/dev/null
-          git push origin --delete agent/update-real-release-notes >/dev/null 2>&1 || true
+          gh pr close "$PR_NUMBER" --repo "$repo" --delete-branch --comment "$note"
