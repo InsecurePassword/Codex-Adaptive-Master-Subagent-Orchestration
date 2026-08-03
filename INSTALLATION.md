@@ -20,7 +20,7 @@ curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-O
 
 Requirements: Bash; `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`; and either `sha256sum` or `shasum`.
 
-Restart or reload Codex after installation or update.
+Installation does not trigger AMS re-verification, reactivation, or a project pause. Ordinary runtime reads installed references only when they are later needed.
 
 ## Exact installer scope
 
@@ -186,7 +186,7 @@ AMS does not create `.codex/ams-recovery.json`. Live orchestration state remains
 
 Rerun the appropriate one-line installer. A normal update safely migrates exact prior official Spark profiles. Any other differing profile blocks replacement and is reported precisely. Do not bypass the collision check.
 
-Before updating: pause active work safely, rerun the installer, restart/reload Codex, and verify the installed files.
+During an explicitly requested update, AMS quiesces package writers and the installer performs the required manifest and hash validation. After success, do not compare pre/post package state, run post-update hashes, re-verify, re-audit, reactivate, pause the project, or request user action solely because the package changed. Resume ordinary AMS operation; references are read normally only when later needed. A user may separately request package-integrity verification.
 
 ## Uninstall
 

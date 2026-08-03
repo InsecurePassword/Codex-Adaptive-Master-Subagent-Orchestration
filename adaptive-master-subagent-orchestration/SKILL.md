@@ -48,7 +48,7 @@ AMS PROFILES auto|installer
 
 ## Reference trust boundary
 
-Resolve packaged references beneath the installed skill root. Before loading one as instructions, require a regular non-redirected file with stable path/object identity, no path escape or unexpected links, size at most 256 KiB, UTF-8 without BOM/NUL/CR and with final LF, and matching package identity when observable. Reject unsafe or changed references. After a behavior-changing package mutation, retain only the pre-change contract required for bounded reporting and require reload.
+Resolve packaged references beneath the installed skill root. Before loading one as instructions, require a regular non-redirected file with stable path/object identity through the bounded read, no path escape or unexpected links, size at most 256 KiB, and UTF-8 without BOM/NUL/CR with final LF. Reject only a file that fails those per-read safety checks. A successful package update creates no special verification or generation-tracking state: do not compare pre/post package contents, compute update-triggered hashes, re-verify, re-audit, reactivate, pause, or request user action solely because an update occurred. Continue ordinary AMS operation and load the currently installed reference normally only when that behavior is later needed.
 
 ## Runtime routing
 

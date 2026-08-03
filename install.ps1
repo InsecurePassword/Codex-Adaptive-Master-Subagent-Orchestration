@@ -331,7 +331,7 @@ try {
     Write-Host "Repository ref: $RepositoryRef"
     Write-Host "Skill: $Destination"
     Write-Host "Profiles: $AgentHome ($ProfilesChanged changed, $ProfilesUnchanged unchanged)"
-    Write-Host "Restart or reload Codex before using the updated skill or profiles."
+    Write-Host "Installation complete. AMS performs no automatic post-update re-verification or project pause."
 }
 finally {
     if (-not $Committed) {

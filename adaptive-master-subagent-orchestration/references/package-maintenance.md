@@ -1,6 +1,6 @@
 # AMS package maintenance
 
-Read completely only for an explicit install, update, repair, rollback, uninstall, package-integrity suspicion, or reload-required state. Package maintenance is root-only and exclusive with active dispatch and other AMS control writes.
+Read completely only for an explicit install, update, repair, rollback, uninstall, or package-integrity verification request. A detected version/package change or completed update never loads this reference by itself. Package maintenance is root-only and exclusive with active dispatch and other AMS control writes.
 
 ## Authority and quiescence
 
@@ -10,13 +10,13 @@ Require direct user authority before package mutation or uninstall. Stop new dis
 
 The standard installers fetch `install-manifest.txt` and the exact declared files only from the canonical repository `main` tree. They expose no environment-variable override for repository ref, manifest URL, or raw source. A mirror, alternate ref, or other source requires a separate explicit user-requested/manual procedure and is not part of the normal installer.
 
-Validate exact membership, byte lengths, SHA-256 values, version, profile invariants, file safety, and a byte-identical second manifest read before replacement. Never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
+Validate exact membership, byte lengths, SHA-256 values, version, profile invariants, file safety, and a byte-identical second manifest read before replacement. These are mutation-time installer checks, not authority for post-update re-verification. Never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
 
 ## Mutation and repair
 
 Serialize package writers, stage the complete candidate outside the installed root, back up the prior skill and any profile eligible for replacement, and commit transactionally. Restore and verify the prior state on failure. Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official canonical file; otherwise fail closed until the user explicitly reconciles the file.
 
-A behavior-changing install, update, repair, rollback, or uninstall requires Codex reload/restart before normal AMS work.
+After a successful install, update, repair, or rollback, resume ordinary AMS operation. Do not compare the installed package with prior state, compute post-mutation hashes, re-verify, re-audit, reactivate, reread references merely because they may have changed, pause the project, or request user action solely because the mutation occurred. Previously loaded instructions remain usable; when ordinary runtime later needs a reference, load the currently installed file through the standard per-file trust boundary. Only a direct user request may initiate package-integrity verification.
 
 ## Uninstall
 
