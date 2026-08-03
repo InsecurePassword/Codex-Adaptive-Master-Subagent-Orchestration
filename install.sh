@@ -326,4 +326,4 @@ printf 'Installed Adaptive Master-Subagent Orchestration %s directly from the re
 printf 'Repository ref: %s\n' "$repo_ref"
 printf 'Skill: %s\n' "$destination"
 printf 'Profiles: %s (%s changed, %s unchanged)\n' "$agent_home" "$profiles_changed" "$profiles_unchanged"
-printf 'Restart or reload Codex before using the updated skill or profiles.\n'
+printf 'Installation complete.\n'

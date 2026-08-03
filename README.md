@@ -172,6 +172,8 @@ Zergling Rush is a separate explicit-consent mode that may use stronger models, 
 
 The installer deploys all 18 global profiles. A byte-identical profile is left unchanged. An exact prior official Spark profile may be upgraded to remove its former sandbox override. Any other differing, customized, marker-only, malformed, or user-authored profile is preserved and blocks replacement until the user reviews and reconciles it.
 
+Installation and updates end when the installer finishes. AMS performs no follow-up package check unless the user explicitly requests one.
+
 Standard uninstall removes only the skill directory and deliberately leaves settings and installed profiles for troubleshooting or reinstall.
 
 ## Requirements
@@ -180,4 +182,3 @@ Standard uninstall removes only the skill directory and deliberately leaves sett
 - a top-level GPT-5.6 Sol Max session, or verified equivalent Sol alias at Max reasoning
 - Windows PowerShell 5.1+ for the PowerShell installer
 - Bash plus `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`, and either `sha256sum` or `shasum`
-- restart or reload Codex after installation or update

@@ -1,23 +1,19 @@
 # AMS package maintenance
 
-Read completely only for an explicit install, update, repair, rollback, uninstall, package-integrity suspicion, or reload-required state. Package maintenance is root-only and exclusive with active dispatch and other AMS control writes.
+Read only for an explicit install, update, repair, rollback, uninstall, or package-integrity request. Do not load this reference merely because package files changed.
 
-## Authority and quiescence
+## Authority
 
-Require direct user authority before package mutation or uninstall. Stop new dispatch, finish or roll back atomic control writes, let safe work reach a useful boundary, collect results, and close non-root sessions before mutation. Preserve continuity through the current root state, an existing authorized project-native record, or a concise user-visible handoff; never create an AMS-specific recovery file.
+Require direct user authority before package mutation or uninstall. Prevent concurrent package writes and pause active dispatch only as needed for the mutation. Preserve project state and never create an AMS-specific recovery file.
 
-## Canonical source and validation
+## Install, update, repair, and rollback
 
-The standard installers fetch `install-manifest.txt` and the exact declared files only from the canonical repository `main` tree. They expose no environment-variable override for repository ref, manifest URL, or raw source. A mirror, alternate ref, or other source requires a separate explicit user-requested/manual procedure and is not part of the normal installer.
+The standard installers read the canonical repository `main` manifest and declared files. During the requested mutation, they verify the download set, version, file lengths and hashes, profile provenance, and transactional replacement. They never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
 
-Validate exact membership, byte lengths, SHA-256 values, version, profile invariants, file safety, and a byte-identical second manifest read before replacement. Never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
+Stage the complete candidate, back up replaceable files, commit transactionally, and restore the prior state on failure. Replace an existing profile only when it is byte-identical to the current asset or an exact installer-recognized prior official file; otherwise preserve it and report the conflict.
 
-## Mutation and repair
-
-Serialize package writers, stage the complete candidate outside the installed root, back up the prior skill and any profile eligible for replacement, and commit transactionally. Restore and verify the prior state on failure. Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official canonical file; otherwise fail closed until the user explicitly reconciles the file.
-
-A behavior-changing install, update, repair, rollback, or uninstall requires Codex reload/restart before normal AMS work.
+After a successful install, update, repair, or rollback, resume ordinary AMS operation. Perform no follow-up package check unless the user explicitly requests one.
 
 ## Uninstall
 
-Standard uninstall removes only the verified AMS skill directory. Preserve project/global settings, installed profiles, and unrelated files unless the user explicitly authorizes separate proven cleanup. Refuse redirected or ambiguous roots.
+Standard uninstall removes only the verified AMS skill directory. Preserve project/global settings, installed profiles, and unrelated files unless the user explicitly authorizes separate proven cleanup.
