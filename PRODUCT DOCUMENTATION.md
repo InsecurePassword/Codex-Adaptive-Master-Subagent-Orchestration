@@ -215,7 +215,7 @@ On failure, the root corrects work orders, reroutes, raises effort, escalates fa
 
 ## 17. Update, repair, and uninstall
 
-Package mutation requires direct user authority and a fresh Codex session afterward. The standard installer uses only canonical `main`, validates the exact 31-file set, and never edits general Codex configuration or permissions.
+Package mutation requires direct user authority. Installer manifest, hash, provenance, and transaction checks occur only inside the requested mutation. After completion, AMS performs no package comparison, re-verification, re-audit, reactivation, project suspension, or user-action gate unless package-integrity verification is directly requested. The standard installer uses only canonical `main`, validates the exact 31-file set, and never edits general Codex configuration or permissions.
 
 Standard uninstall removes only the skill directory. Project/global settings and installed profiles remain for troubleshooting or reinstall. Separate profile cleanup requires explicit authorization and proven AMS ownership.
 

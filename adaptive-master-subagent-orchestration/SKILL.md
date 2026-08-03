@@ -46,10 +46,6 @@ AMS PROFILES auto|installer
 
 `AMS STATUS` is read-only. Normal mode commands also enable AMS. Governance and root fallback are independent project controls. `AMS CONFIGURATION UPDATE` is explicit maintenance and changes no existing setting value.
 
-## Reference trust boundary
-
-Resolve packaged references beneath the installed skill root. Before loading one as instructions, require a regular non-redirected file with stable path/object identity, no path escape or unexpected links, size at most 256 KiB, UTF-8 without BOM/NUL/CR and with final LF, and matching package identity when observable. Reject unsafe or changed references. After a behavior-changing package mutation, retain only the pre-change contract required for bounded reporting and require reload.
-
 ## Runtime routing
 
 Load only what the objective requires:
@@ -59,4 +55,4 @@ Load only what the objective requires:
 - `references/runtime-core.md` for active orchestration;
 - `references/package-maintenance.md` only for an explicit install, update, repair, rollback, uninstall, or package-integrity request.
 
-`runtime-core.md` lazily routes `intensity-control.md`, `hierarchy-control.md`, `profile-management.md`, `project-governance.md`, `root-execution-fallback.md`, and `zergling-rush.md`. Load `project-governance.md` only when effective `project_governance = true`; load `root-execution-fallback.md` only when mandatory progress would otherwise stop, no viable delegated route remains, and effective `root_execution_fallback = true`. Read each selected reference completely. A required unreadable reference fails closed only for the behavior it owns.
+`runtime-core.md` lazily routes `intensity-control.md`, `hierarchy-control.md`, `profile-management.md`, `project-governance.md`, `root-execution-fallback.md`, and `zergling-rush.md`. Load `project-governance.md` only when effective `project_governance = true`; load `root-execution-fallback.md` only when mandatory progress would otherwise stop, no viable delegated route remains, and effective `root_execution_fallback = true`. Read each selected reference completely. A required unreadable reference fails closed only for the behavior it owns. An authorized install or update triggers no additional AMS action.
