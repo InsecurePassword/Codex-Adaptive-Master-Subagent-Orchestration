@@ -1,0 +1,32 @@
+name: Temporary cleanup AMS helper branches
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/cleanup-runtime-simplification-branches'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale helper branches and close this PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for branch in \
+            agent/core-runtime-simplify-helper \
+            agent/runtime-simplify-helper \
+            agent/root-fallback-configuration-update
+          do
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}" >/dev/null 2>&1 || true
+          done
+          gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch --comment "Temporary helper-branch cleanup completed."
