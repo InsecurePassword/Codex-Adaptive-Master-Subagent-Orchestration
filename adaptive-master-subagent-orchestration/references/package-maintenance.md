@@ -1,10 +1,10 @@
 # AMS package maintenance
 
-Read completely only for an explicit install, update, repair, rollback, uninstall, package-integrity suspicion, or reload-required state. Package maintenance is root-only and exclusive with active dispatch and other AMS control writes.
+Read completely only for an explicit install, update, repair, rollback, uninstall, or package-integrity request. A package change or completed update does not load this reference by itself. Package maintenance is root-only and exclusive with other AMS package/control writes.
 
-## Authority and quiescence
+## Authority
 
-Require direct user authority before package mutation or uninstall. Stop new dispatch, finish or roll back atomic control writes, let safe work reach a useful boundary, collect results, and close non-root sessions before mutation. Preserve continuity through the current root state, an existing authorized project-native record, or a concise user-visible handoff; never create an AMS-specific recovery file.
+Require direct user authority before package mutation or uninstall. Serialize package writers and finish or roll back any active AMS control write before mutation. Do not stop or close unrelated project sessions solely because an install, update, repair, or rollback is running. Preserve continuity through the current root state, an existing authorized project-native record, or a concise user-visible handoff; never create an AMS-specific recovery file.
 
 ## Canonical source and validation
 
@@ -16,7 +16,7 @@ Validate exact membership, byte lengths, SHA-256 values, version, profile invari
 
 Serialize package writers, stage the complete candidate outside the installed root, back up the prior skill and any profile eligible for replacement, and commit transactionally. Restore and verify the prior state on failure. Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official canonical file; otherwise fail closed until the user explicitly reconciles the file.
 
-A behavior-changing install, update, repair, rollback, or uninstall requires Codex reload/restart before normal AMS work.
+After a successful install, update, repair, or rollback, resume ordinary AMS operation. A successful install or update does not invoke the `project-control.md` package-transition steering or recovery procedure. Do not compare prior and current package state, compute post-update hashes, re-verify, re-audit, reactivate, pause project work, or request user action solely because the mutation occurred. Package-integrity verification occurs only on direct user request.
 
 ## Uninstall
 
