@@ -3,29 +3,27 @@ name: Temporary simplify AMS runtime update handling
 on:
   pull_request:
     branches:
-      - main
+      - agent/remove-post-update-reverification
     types:
       - opened
-      - reopened
-      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   finalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/remove-post-update-reverification'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/runtime-simplify-helper'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/remove-post-update-reverification
+          ref: agent/runtime-simplify-helper
           fetch-depth: 0
 
       - name: Remove runtime package revalidation machinery
         shell: bash
         run: |
-          git fetch origin main
+          git fetch origin main agent/remove-post-update-reverification
           python3 - <<'PY'
           from pathlib import Path
           import hashlib
@@ -188,7 +186,7 @@ Standard uninstall removes only the verified AMS skill directory. Preserve proje
               assert hashlib.sha256(data).hexdigest() == digest, path
           PY
 
-      - name: Remove temporary workflow and retain one review commit
+      - name: Commit finalized PR branch
         shell: bash
         run: |
           rm -- .github/workflows/temporary-simplify-ams-runtime.yml
