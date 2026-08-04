@@ -13,6 +13,15 @@ function Write-Rollout([string]$Path) {
         '{"type":"turn_context","payload":{"model":"gpt-5.6-terra","effort":"high","sandbox_policy":{"type":"danger-full-access"},"permission_profile":{"type":"disabled"},"cwd":"/fixture"}}'
     ) | Set-Content -LiteralPath $Path -Encoding UTF8
 }
+function Invoke-ExpectedFailure([string]$ThreadId) {
+    $PreviousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ThreadId $ThreadId -SessionsDir $Temp 2>$null | Out-Null
+        return $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $PreviousPreference }
+}
 try {
     New-Item -ItemType Directory -Force -Path $Temp | Out-Null
     $Rollout = Join-Path $Temp "2026\08\03\rollout-x-$Id.jsonl"
@@ -24,11 +33,8 @@ try {
     if ($Data.model -cne "gpt-5.6-terra" -or $Data.effort -cne "high") { throw "wrong routing evidence" }
 
     Write-Rollout (Join-Path $Temp "2026\08\04\rollout-y-$Id.jsonl")
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ThreadId $Id -SessionsDir $Temp 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { throw "duplicate rollout was accepted" }
-
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Helper -ThreadId invalid -SessionsDir $Temp 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { throw "invalid id was accepted" }
+    if ((Invoke-ExpectedFailure -ThreadId $Id) -eq 0) { throw "duplicate rollout was accepted" }
+    if ((Invoke-ExpectedFailure -ThreadId "invalid") -eq 0) { throw "invalid id was accepted" }
     Write-Host "PASS: PowerShell runtime observation fixtures"
 }
 finally { Remove-Item -LiteralPath $Temp -Recurse -Force -ErrorAction SilentlyContinue }
