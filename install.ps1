@@ -104,7 +104,6 @@ function Assert-SafeDirectory {
     if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$Label became redirected during creation: $Path" }
 }
 
-
 function Get-RuntimeAllowedSids {
     return @(
         [Security.Principal.WindowsIdentity]::GetCurrent().User,
@@ -532,6 +531,31 @@ function Acquire-SharedRuntimeLock {
     throw "Package/runtime lock changed repeatedly; retry after inspecting $LockPath."
 }
 
+function Release-SharedRuntimeLock {
+    if (-not (Test-Path -LiteralPath $LockPath)) { return }
+    $Existing = Read-SharedRuntimeLockOwner -Directory $LockPath
+    if ($Existing.Fields['owner_id'] -cne $LockOwner) {
+        throw "Refusing to release a package/runtime lock owned by $($Existing.Fields['owner_id'])."
+    }
+    $ReleasePath = "$LockPath.release.$LockOwner"
+    if (Test-Path -LiteralPath $ReleasePath) { throw "Package/runtime lock release path already exists: $ReleasePath" }
+    Move-Item -LiteralPath $LockPath -Destination $ReleasePath -ErrorAction Stop
+    try {
+        $Released = Read-SharedRuntimeLockOwner -Directory $ReleasePath
+        if ($Released.Fields['owner_id'] -cne $LockOwner) { throw 'Package/runtime lock owner changed during release.' }
+        Remove-Item -LiteralPath $ReleasePath -Recurse -Force -ErrorAction Stop
+    }
+    catch {
+        if (-not (Test-Path -LiteralPath $LockPath) -and (Test-Path -LiteralPath $ReleasePath)) {
+            Move-Item -LiteralPath $ReleasePath -Destination $LockPath -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+    if (Test-Path -LiteralPath $LockPath -or Test-Path -LiteralPath $ReleasePath) {
+        throw "Package/runtime lock release did not complete: $LockPath"
+    }
+}
+
 Acquire-SharedRuntimeLock
 
 $StageRoot = Join-Path $SkillHome (".ams-install-{0}-{1}" -f $PID, [Guid]::NewGuid().ToString("N"))
@@ -709,10 +733,6 @@ finally {
 
     Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue
-    $OwnerPath = Join-Path $LockPath 'owner.log'
-    if (Test-Path -LiteralPath $OwnerPath -PathType Leaf) {
-        $OwnerBytes = [IO.File]::ReadAllText($OwnerPath)
-        if ($OwnerBytes -match "(?m)^owner_id`t$([regex]::Escape($LockOwner))$") { Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue }
-    }
+    Release-SharedRuntimeLock
     if ($LockQuarantine -and (Test-Path -LiteralPath $LockQuarantine)) { Remove-Item -LiteralPath $LockQuarantine -Recurse -Force -ErrorAction SilentlyContinue }
 }
