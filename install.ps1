@@ -474,9 +474,11 @@ function Publish-SharedRuntimeLock {
 
 function Acquire-SharedRuntimeLock {
     foreach ($Attempt in 1..3) {
-        try { Publish-SharedRuntimeLock; return }
-        catch {
-            if (-not (Test-Path -LiteralPath $LockPath)) { if ($Attempt -eq 3) { throw }; continue }
+        if (-not (Test-Path -LiteralPath $LockPath)) {
+            try { Publish-SharedRuntimeLock; return }
+            catch {
+                if (-not (Test-Path -LiteralPath $LockPath)) { if ($Attempt -eq 3) { throw }; continue }
+            }
         }
         $OwnerPath = Join-Path $LockPath 'owner.log'
         if (-not (Test-Path -LiteralPath $OwnerPath -PathType Leaf)) {
