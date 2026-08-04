@@ -1,4 +1,4 @@
-# Normalize all repository text to LF so release hashes are platform-stable.
+# Normalize all repository text to LF for platform-stable release hashes and fixtures.
 * text=auto eol=lf
 *.md text eol=lf
 *.toml text eol=lf
