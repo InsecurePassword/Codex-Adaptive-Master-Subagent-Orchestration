@@ -6,7 +6,7 @@ repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
 repo_ref="main"
 raw_base_url="https://github.com/${repo_owner}/${repo_name}/raw/refs/heads/main"
 manifest_url="${raw_base_url}/install-manifest.txt"
-package_version="3.09"
+package_version="4.0"
 skill_name="adaptive-master-subagent-orchestration"
 managed_marker="# managed-by: adaptive-master-subagent-orchestration"
 user_agent="AMS-${package_version}-Tree-Installer"
@@ -17,6 +17,9 @@ agent_home="${codex_home}/agents"
 max_manifest_bytes=262144
 max_file_bytes=1048576
 max_total_bytes=104857600
+max_runtime_bytes=67108864
+max_runtime_record_bytes=65536
+max_runtime_files=2048
 
 profile_files=(
   "ams_sol_low.toml"
@@ -44,14 +47,25 @@ required_files=(
   "VERSION"
   "agents/openai.yaml"
   "references/configuration-maintenance.md"
+  "references/convergence-control.md"
+  "references/evidence-handling.md"
+  "references/feature-control.md"
+  "references/handoff-control.md"
   "references/hierarchy-control.md"
   "references/intensity-control.md"
   "references/package-maintenance.md"
   "references/profile-management.md"
   "references/project-control.md"
   "references/project-governance.md"
+  "references/request-accounting.md"
+  "references/review-control.md"
   "references/root-execution-fallback.md"
   "references/runtime-core.md"
+  "references/runtime-observation.md"
+  "references/shared-worktree-control.md"
+  "references/surface-identity.md"
+  "references/task-graph-safeguards.md"
+  "references/work-order-refinement.md"
   "references/zergling-rush.md"
 )
 for profile_file in "${profile_files[@]}"; do
@@ -76,7 +90,7 @@ fail() {
   exit 1
 }
 
-for command_name in curl awk sort cmp mktemp wc tr grep head tail od find dirname; do
+for command_name in curl awk sort cmp mktemp wc tr grep head tail od find dirname iconv; do
   command -v "$command_name" >/dev/null 2>&1 || fail "Required command not found: ${command_name}"
 done
 
@@ -102,6 +116,112 @@ download_file() {
       "$uri" -o "$output"; then
     fail "${description} failed: ${uri}"
   fi
+}
+
+
+validate_runtime_text() {
+  local path=$1 maximum=$2 size bom last_byte linked
+  [[ -f "$path" && ! -L "$path" ]] || fail "AMS runtime record is not a safe regular file: ${path}"
+  size="$(wc -c < "$path" | tr -d '[:space:]')"
+  (( size > 0 && size <= maximum )) || fail "AMS runtime record size is invalid: ${path} (${size} bytes)"
+  bom="$(head -c 3 "$path" | od -An -tx1 | tr -d ' \n')"
+  [[ "$bom" != "efbbbf" ]] || fail "AMS runtime record has a UTF-8 BOM: ${path}"
+  if LC_ALL=C grep -q $'\r' "$path"; then fail "AMS runtime record contains CR characters: ${path}"; fi
+  if od -An -tx1 "$path" | grep -qE '(^| )00( |$)'; then fail "AMS runtime record contains NUL bytes: ${path}"; fi
+  last_byte="$(tail -c 1 "$path" | od -An -tu1 | tr -d ' \n')"
+  [[ "$last_byte" == "10" ]] || fail "AMS runtime record is missing final LF: ${path}"
+  iconv -f UTF-8 -t UTF-8 "$path" >/dev/null 2>&1 || fail "AMS runtime record is not valid UTF-8: ${path}"
+  linked="$(find -P "$path" -type f -links +1 -print 2>/dev/null || true)"
+  [[ -z "$linked" ]] || fail "AMS runtime record has multiple hard links: ${path}"
+}
+
+runtime_field() {
+  local path=$1 key=$2
+  awk -F '\t' -v wanted="$key" '$1 == wanted { print substr($0, length($1) + 2); exit }' "$path"
+}
+
+validate_runtime_record() {
+  local path=$1 kind=$2 relative=$3 header expected campaign_id state generation created updated fingerprints base
+  local correction_count correction_limit redesign_count redesign_limit terminal receipt closed lease
+  validate_runtime_text "$path" "$max_runtime_record_bytes"
+  if [[ "$kind" == tracking ]]; then
+    header='ams-convergence-tracking-v1'
+    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,finding_fingerprints,last_resolution_action'
+  else
+    header='ams-convergence-history-v1'
+    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,finding_fingerprints,last_resolution_action,terminal_disposition,terminal_receipt,closed_at'
+  fi
+  awk -F '\t' -v header="$header" -v expected="$expected" '
+    NR == 1 { if ($0 != header) exit 10; next }
+    NF != 2 || $1 !~ /^[a-z_]+$/ || seen[$1]++ || length($0) > 4096 { exit 11 }
+    { value=substr($0, length($1) + 2); if (value ~ /[[:cntrl:]]/) exit 14 }
+    END {
+      n=split(expected, keys, ",")
+      for (i=1; i<=n; i++) if (!seen[keys[i]]) exit 12
+      if (NR != n + 1) exit 13
+    }
+  ' "$path" || fail "AMS convergence record structure is invalid: ${relative}"
+
+  campaign_id="$(runtime_field "$path" campaign_id)"
+  [[ "$campaign_id" =~ ^[A-Za-z0-9._-]{1,96}$ ]] || fail "AMS convergence campaign ID is invalid: ${relative}"
+  [[ -n "$(runtime_field "$path" root_objective_id)" && -n "$(runtime_field "$path" project_root)" ]] || fail "AMS convergence identity is incomplete: ${relative}"
+  state="$(runtime_field "$path" state)"
+  generation="$(runtime_field "$path" record_generation)"
+  correction_count="$(runtime_field "$path" epoch_correction_count)"
+  correction_limit="$(runtime_field "$path" correction_limit)"
+  redesign_count="$(runtime_field "$path" redesign_count)"
+  redesign_limit="$(runtime_field "$path" redesign_limit)"
+  [[ "$generation" =~ ^[0-9]+$ && "$correction_count" =~ ^[0-9]+$ && "$correction_limit" =~ ^[0-9]+$ && "$redesign_count" =~ ^[0-9]+$ && "$redesign_limit" =~ ^[0-9]+$ ]] || fail "AMS convergence counters are invalid: ${relative}"
+  (( correction_limit >= 2 && correction_limit <= 12 && redesign_limit >= 1 && redesign_limit <= 12 )) || fail "AMS convergence limits are invalid: ${relative}"
+  created="$(runtime_field "$path" created_at)"; updated="$(runtime_field "$path" updated_at)"; lease="$(runtime_field "$path" owner_lease_expires_at)"
+  [[ "$created" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ && "$updated" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "AMS convergence timestamps are invalid: ${relative}"
+  [[ "$lease" == none || "$lease" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "AMS convergence lease timestamp is invalid: ${relative}"
+  fingerprints="$(runtime_field "$path" finding_fingerprints)"
+  [[ "$fingerprints" == none || "$fingerprints" =~ ^[0-9a-f]{64}(,[0-9a-f]{64}){0,7}$ ]] || fail "AMS convergence fingerprints are invalid: ${relative}"
+  base="$(basename "$path")"
+  if [[ "$kind" == tracking ]]; then
+    [[ "$state" =~ ^(monitoring|convergence|intervention-required|terminal-pending-history)$ ]] || fail "AMS convergence tracking state is invalid: ${relative}"
+    [[ "$base" == "${campaign_id}.tracking.log" ]] || fail "AMS convergence tracking filename does not match its campaign: ${relative}"
+  else
+    terminal="$(runtime_field "$path" terminal_disposition)"; receipt="$(runtime_field "$path" terminal_receipt)"; closed="$(runtime_field "$path" closed_at)"
+    [[ "$state" == terminal ]] || fail "AMS convergence history state is invalid: ${relative}"
+    [[ "$terminal" =~ ^(accept|accept-with-follow-up|blocked|failed|intervention-required|cancelled|user-disabled|user-override|superseded|stale)$ ]] || fail "AMS convergence terminal disposition is invalid: ${relative}"
+    [[ "$receipt" =~ ^[0-9a-f]{64}$ ]] || fail "AMS convergence terminal receipt is invalid: ${relative}"
+    [[ "$closed" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "AMS convergence closed timestamp is invalid: ${relative}"
+    [[ "$base" == "${campaign_id}.${receipt}.record.log" ]] || fail "AMS convergence history filename does not match its record: ${relative}"
+  fi
+}
+
+validate_runtime_state() {
+  local runtime_root=$1 total=0 count=0 path size relative
+  [[ ! -L "$runtime_root" && -d "$runtime_root" ]] || fail "AMS runtime state is redirected or not a directory: ${runtime_root}"
+  while IFS= read -r -d '' path; do
+    [[ "$path" != "$runtime_root" ]] || continue
+    [[ ! -L "$path" ]] || fail "AMS runtime state contains a redirected path: ${path}"
+    relative=${path#"${runtime_root}/"}
+    if [[ -d "$path" ]]; then
+      case "$relative" in convergence|convergence/history) ;; *) fail "AMS runtime state contains an unexpected directory: ${relative}" ;; esac
+    elif [[ -f "$path" ]]; then
+      case "$relative" in
+        convergence/*.tracking.log) validate_runtime_record "$path" tracking "$relative" ;;
+        convergence/history/*.record.log) validate_runtime_record "$path" history "$relative" ;;
+        *) fail "AMS runtime state contains an unexpected file: ${relative}" ;;
+      esac
+      size="$(wc -c < "$path" | tr -d '[:space:]')"; total=$((total + size)); count=$((count + 1))
+      (( total <= max_runtime_bytes && count <= max_runtime_files )) || fail "AMS runtime state exceeds the preservation bound."
+    else
+      fail "AMS runtime state contains an unsupported path type: ${path}"
+    fi
+  done < <(find -P "$runtime_root" -print0)
+}
+
+runtime_state_snapshot() {
+  local runtime_root=$1 output=$2 path relative size digest
+  : > "$output"
+  while IFS= read -r path; do
+    relative=${path#"${runtime_root}/"}; size="$(wc -c < "$path" | tr -d '[:space:]')"; digest="$(sha256_file "$path")"
+    printf '%s\t%s\t%s\n' "$relative" "$size" "$digest" >> "$output"
+  done < <(find -P "$runtime_root" -type f -print | LC_ALL=C sort)
 }
 
 validate_manifest() {
@@ -163,12 +283,24 @@ mkdir -p "$codex_home"
 [[ ! -e "$agent_home" || -d "$agent_home" ]] || fail "Agent registry is not a directory: ${agent_home}"
 mkdir -p "$agent_home"
 
-lock_dir="${skill_home}/.${skill_name}.install.lock"
-[[ ! -L "$lock_dir" ]] || fail "Installer lock path is redirected: ${lock_dir}"
+lock_dir="${skill_home}/.${skill_name}.runtime.lock"
+[[ ! -L "$lock_dir" ]] || fail "Package/runtime lock path is redirected: ${lock_dir}"
 if ! mkdir "$lock_dir" 2>/dev/null; then
-  fail "Another installation is active or a stale lock exists: ${lock_dir}"
+  fail "Another AMS package/runtime writer is active or a stale lock exists: ${lock_dir}"
 fi
-printf '%s\n' "pid=$$" "host=$(hostname 2>/dev/null || printf unknown)" > "${lock_dir}/owner"
+lock_owner="installer-$$-$(date -u +%Y%m%dT%H%M%SZ)"
+lock_now="$(date +%s)"
+if ! printf '%s\n' \
+  'ams-runtime-lock-v1' \
+  $'owner_id\t'"${lock_owner}" \
+  $'purpose\tinstaller' \
+  $'campaign_id\tnone' \
+  $'pid\t'"$$" \
+  $'acquired_epoch\t'"${lock_now}" \
+  $'lease_expires_epoch\t'"$((lock_now + 3600))" > "${lock_dir}/owner.log"; then
+  rm -rf -- "$lock_dir" 2>/dev/null || true
+  fail "Could not publish the package/runtime lock owner record."
+fi
 
 stage_root=""
 backup_path=""
@@ -180,6 +312,9 @@ profile_created=()
 profile_backup_targets=()
 profile_backup_paths=()
 profile_temps=()
+runtime_state_present=0
+runtime_snapshot_before=""
+runtime_snapshot_after=""
 
 cleanup() {
   status=$?
@@ -212,7 +347,9 @@ cleanup() {
 
   [[ -z "$profile_backup_root" ]] || rm -rf -- "$profile_backup_root" 2>/dev/null || true
   [[ -z "$stage_root" ]] || rm -rf -- "$stage_root" 2>/dev/null || true
-  rm -rf -- "$lock_dir" 2>/dev/null || true
+  if [[ -f "${lock_dir}/owner.log" ]] && grep -Fqx $'owner_id\t'"${lock_owner}" "${lock_dir}/owner.log" 2>/dev/null; then
+    rm -rf -- "$lock_dir" 2>/dev/null || true
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -227,6 +364,8 @@ manifest_after="${stage_root}/install-manifest.after.txt"
 manifest_entries="${stage_root}/manifest-entries.tsv"
 manifest_paths="${stage_root}/manifest-paths.txt"
 expected_paths="${stage_root}/expected-paths.txt"
+runtime_snapshot_before="${stage_root}/runtime-before.tsv"
+runtime_snapshot_after="${stage_root}/runtime-after.tsv"
 backup_path="${skill_home}/.${skill_name}.backup-$(date +%Y%m%d%H%M%S)-$$"
 profile_backup_root="$(mktemp -d "${agent_home}/.ams-profile-backup.XXXXXXXX")"
 mkdir -p "$candidate"
@@ -270,6 +409,11 @@ done
 
 if [[ -L "$destination" ]]; then fail "Refusing to replace a redirected existing skill path: ${destination}"; fi
 if [[ -e "$destination" && ! -d "$destination" ]]; then fail "Refusing to replace a non-directory existing skill path: ${destination}"; fi
+if [[ -e "$destination/.runtime" || -L "$destination/.runtime" ]]; then
+  validate_runtime_state "$destination/.runtime"
+  runtime_state_snapshot "$destination/.runtime" "$runtime_snapshot_before"
+  runtime_state_present=1
+fi
 if [[ -e "$destination" ]]; then
   [[ ! -e "$backup_path" && ! -L "$backup_path" ]] || fail "Unexpected backup collision: ${backup_path}"
   mv -- "$destination" "$backup_path"
@@ -277,6 +421,15 @@ if [[ -e "$destination" ]]; then
 fi
 mv -- "$candidate" "$destination" || fail "Installation failed while replacing the skill directory."
 candidate_installed=1
+
+if (( runtime_state_present == 1 )); then
+  [[ -d "$backup_path/.runtime" && ! -L "$backup_path/.runtime" ]] || fail "Preserved AMS runtime state disappeared during replacement."
+  [[ ! -e "$destination/.runtime" && ! -L "$destination/.runtime" ]] || fail "Candidate unexpectedly contains package-local runtime state."
+  cp -a -- "$backup_path/.runtime" "$destination/.runtime"
+  validate_runtime_state "$destination/.runtime"
+  runtime_state_snapshot "$destination/.runtime" "$runtime_snapshot_after"
+  cmp -s "$runtime_snapshot_before" "$runtime_snapshot_after" || fail "AMS runtime state changed during preservation; retry from a stable record boundary."
+fi
 
 profiles_changed=0
 profiles_unchanged=0

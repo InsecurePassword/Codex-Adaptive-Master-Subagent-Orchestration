@@ -54,4 +54,4 @@ Require safe containment beneath the chosen registry, regular non-redirected fil
 
 An existing differing profile may be replaced only during a direct user-authorized install/repair and only when the installer proves it is an exact current or explicitly recognized prior official canonical profile. Any customized, marker-only, malformed, ambiguous, or user-authored file is preserved and blocks replacement. The user may review, rename, remove, or manually reconcile it before retrying.
 
-No legacy schema/profile migration logic is active beyond the exact prior public Spark profiles explicitly recognized by the installer for removal of their former sandbox override.
+No legacy profile migration is active beyond the exact prior public Spark profiles recognized by the installer for removal of their former sandbox override.

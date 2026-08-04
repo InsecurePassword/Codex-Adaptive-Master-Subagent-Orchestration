@@ -1,6 +1,6 @@
 # Installation
 
-AMS 3.09 installs directly from the canonical repository `main` tree. No release asset or package ZIP is used.
+AMS 4.0 installs from canonical published `main`. The standard installer uses no Release asset or package ZIP.
 
 ## One-line installation
 
@@ -10,7 +10,7 @@ AMS 3.09 installs directly from the canonical repository `main` tree. No release
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.ps1' | iex"
 ```
 
-Requirements: Windows PowerShell 5.1 or newer and built-in .NET/PowerShell components.
+Requirements: Windows PowerShell 5.1+ and built-in .NET/PowerShell components.
 
 ### Linux or macOS
 
@@ -18,182 +18,84 @@ Requirements: Windows PowerShell 5.1 or newer and built-in .NET/PowerShell compo
 curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install.sh' | bash
 ```
 
-Requirements: Bash; `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`; and either `sha256sum` or `shasum`.
+Requirements: Bash; `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`, `iconv`; and either `sha256sum` or `shasum`.
 
-Installation ends when the installer completes; AMS performs no automatic follow-up package verification or project pause.
+Installation ends when the installer completes. AMS performs no automatic follow-up audit or project pause.
 
-## Exact installer scope
-
-The standard installers use only these canonical URLs:
-
-```text
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install-manifest.txt
-https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration/...
-```
-
-They expose no environment-variable override for repository ref, manifest URL, or raw source. Alternate sources require a separate explicit manual procedure.
-
-The installers write only:
-
-```text
-$HOME/.agents/skills/adaptive-master-subagent-orchestration/
-$CODEX_HOME/agents/ams_*.toml
-```
-
-When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME` and `CODEX_HOME` may select destination roots. The installers do not edit `$CODEX_HOME/config.toml`, project `.codex/ams-orchestration.toml`, operating-system ACLs, or other Codex configuration.
-
-## Verification and transaction
+## Transaction and runtime preservation
 
 Both installers:
 
-1. download `install-manifest.txt` from canonical `main`;
-2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 31-file runtime/profile set;
+1. acquire the shared package/runtime lock used by convergence record writers;
+2. download canonical `install-manifest.txt` and require version `4.0` plus the exact core file set;
 3. reject malformed, duplicate, escaping, linked, redirected, oversized, or unexpected entries;
-4. download every declared file and verify byte length and SHA-256;
-5. download the manifest again and require byte equality, preventing mixed-generation installation;
-6. validate `VERSION = 3.09` and all 18 bundled profile markers;
-7. stage the complete skill before replacement;
-8. transactionally install the skill and eligible profiles with rollback;
-9. leave byte-identical profiles unchanged;
-10. upgrade only exact installer-recognized prior official Spark profiles that contained the former sandbox override;
-11. refuse every other differing or ambiguous profile instead of trusting a marker alone;
-12. preserve project/global settings, installed profiles not eligible for replacement, project-native state, unrelated skills, and unrelated files.
+4. verify every length/SHA-256 and require a byte-identical second manifest read;
+5. validate `VERSION = 4.0` and all 18 profile markers;
+6. validate the exact bounded convergence runtime layout and record format when present;
+7. stage the complete skill, preserve an exact runtime snapshot, and install transactionally with rollback;
+8. leave byte-identical profiles unchanged and refuse unrecognized differing profiles;
+9. hold the shared lock through runtime restoration and backup deletion;
+10. preserve project/global configuration and unrelated files/profiles.
 
-## Permission neutrality
+Package-local `.runtime` is user/runtime state, not a manifest member. Safe runtime state consists only of bounded convergence tracking records and immutable history records under `adaptive-master-subagent-orchestration/.runtime/convergence/`. Unsafe state blocks replacement rather than being copied.
 
-All installed profiles inherit platform/user/work-order permissions. No current profile sets:
-
-```text
-sandbox_mode
-approval policy
-network access
-writable roots
-tool grants
-```
-
-The previous public Spark profile hashes are recognized only so a direct user-authorized reinstall/update can remove their former `workspace-write` override safely.
-
-## Profile collision behavior
-
-For each target profile:
-
-- exact current bytes: unchanged;
-- exact recognized prior official Spark bytes: backed up and upgraded;
-- missing file: created;
-- any other differing file: installation fails and rolls back without replacing it.
-
-A customized file remains untouched even when its first line contains the AMS managed marker. Review, rename, remove, or manually reconcile it before retrying.
-
-## Installed source tree
+## Installed core tree
 
 ```text
 adaptive-master-subagent-orchestration/
 ├── SKILL.md
 ├── VERSION
-├── agents/
-│   └── openai.yaml
-├── assets/
-│   └── agent-profiles/
-│       └── 18 canonical ams_*.toml profiles
-└── references/
-    ├── configuration-maintenance.md
-    ├── hierarchy-control.md
-    ├── intensity-control.md
-    ├── package-maintenance.md
-    ├── profile-management.md
-    ├── project-control.md
-    ├── project-governance.md
-    ├── root-execution-fallback.md
-    ├── runtime-core.md
-    └── zergling-rush.md
+├── agents/openai.yaml
+├── assets/agent-profiles/        # 18 canonical profiles
+└── references/                   # core and lazy contracts
 ```
 
-## Manual installation with Git
+The core contains no Python requirement or runtime test framework.
 
-```bash
-git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
-cd Codex-Adaptive-Master-Subagent-Orchestration
-```
+## Configuration
 
-Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 18 files under `assets/agent-profiles/` into `$CODEX_HOME/agents/`. Manual installation must preserve the same permission-neutral profile bytes.
+The exact master contract is normative in `adaptive-master-subagent-orchestration/references/project-control.md`.
 
-## Verify installation
+- Missing supported fields use current defaults.
+- Unknown fields fail closed.
+- Retired top-level `schema_version` is ignored and removed on the next authorized write.
+- Project settings completely override global settings.
+- Settings survive install/update/uninstall/reinstall unless explicitly changed.
+- `AMS CONFIGURATION UPDATE [PROJECT|GLOBAL]` completes missing current fields without changing existing supported values.
 
-### PowerShell
+## Optional companions
 
-```powershell
-$SkillRoot = Join-Path $HOME '.agents\skills\adaptive-master-subagent-orchestration'
-$AgentRoot = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'agents' } else { Join-Path $HOME '.codex\agents' }
-
-Get-Content (Join-Path $SkillRoot 'VERSION')
-Test-Path (Join-Path $SkillRoot 'references\project-governance.md')
-Test-Path (Join-Path $SkillRoot 'references\configuration-maintenance.md')
-Test-Path (Join-Path $SkillRoot 'references\root-execution-fallback.md')
-(Get-ChildItem $AgentRoot -Filter 'ams_*.toml' -File).Count
-Select-String -Path (Join-Path $AgentRoot 'ams_spark_*.toml') -Pattern '^sandbox_mode\s*='
-```
-
-Expected: version `3.09`, all three reference checks `True`, profile count `18`, and no `sandbox_mode` matches.
-
-### Bash
-
-```bash
-skill_root="$HOME/.agents/skills/adaptive-master-subagent-orchestration"
-agent_root="${CODEX_HOME:-$HOME/.codex}/agents"
-
-cat "$skill_root/VERSION"
-test -f "$skill_root/references/project-governance.md"
-test -f "$skill_root/references/configuration-maintenance.md"
-test -f "$skill_root/references/root-execution-fallback.md"
-find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
-! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_spark_*.toml
-```
-
-## Root fallback and configuration updater
-
-The schema-2 default includes `root_execution_fallback = true`. `AMS ROOT FALLBACK on|off` changes only the project fallback setting.
-
-`AMS CONFIGURATION UPDATE` and `AMS CONFIGURATION UPDATE PROJECT` update an existing project configuration as well as creating a missing one. Existing project values are preserved and every missing current field is added from the exact default. Global values are consulted only when the project file is absent; an existing invalid or unsafe global file blocks creation rather than being ignored. `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit AMS command allowed to write the global file and only adds missing defaults or creates the exact disabled default.
-
-## Settings and governance
-
-Project settings override global settings. A project-setting command creates an absent project file from current valid global values when available, then changes only the requested key.
-
-```toml
-schema_version = 2
-enabled = false
-allow_implicit_invocation = true
-intensity = "auto"
-project_governance = true
-root_execution_fallback = true
-spark_enabled = true
-spark_available = true
-spark_efforts = ["low", "medium", "high"]
-profile_management = "auto"
-```
-
-Any omitted currently supported schema-2 setting resolves from the exact current default and is written during the next authorized settings change. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
-
-Disable only the optional project-governance layer with:
+The standard installer does not install companions. Copy a required directory from `extensions/` into `$HOME/.agents/skills/` and verify `COMPATIBILITY` is `4.0`:
 
 ```text
-AMS GOVERNANCE off
+extensions/ams-app-task-lane/
+extensions/ams-runtime-observation/
 ```
 
-AMS does not create `.codex/ams-recovery.json`. Live orchestration state remains in the root session; durable continuity uses an existing authorized project-native system or a user-visible handoff.
+Installing a companion does not enable it. Its core feature setting/override and operational trigger remain required; implicit invocation is disabled. The runtime-observation companion optionally requires Python 3.11+ or Windows PowerShell 5.1+.
+
+## Manual core installation
+
+Clone the repository, copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, and copy all 18 profiles into `$CODEX_HOME/agents/` (or `$HOME/.codex/agents/`). Preserve safe `.runtime` only under the shared package/runtime lock.
 
 ## Update and repair
 
-Rerun the appropriate one-line installer. A normal update safely migrates exact prior official Spark profiles. Any other differing profile blocks replacement and is reported precisely. Do not bypass the collision check.
+Rerun the appropriate installer. It acquires the shared lock, validates and preserves runtime state, stages the complete candidate, and rolls back on failure.
 
-Run the installer when an install or update is authorized. Its manifest, hash, provenance, and transaction checks occur inside that invocation. After completion, resume normal work; AMS performs no follow-up package comparison, verification, audit, activation check, project pause, or user-action request unless package-integrity verification is directly requested.
+## Supported downgrade preparation
+
+Older installers may delete AMS 4.0 package-local convergence state. Before an authorized downgrade:
+
+1. stop convergence record mutation at a safe boundary;
+2. acquire `<skill-parent>/.adaptive-master-subagent-orchestration.runtime.lock`;
+3. validate and copy `<skill-root>/.runtime/convergence/` to a user-selected directory outside the skill root, preferably `$CODEX_HOME/ams-runtime-export/<UTC-id>/`;
+4. record each relative path, byte length, and SHA-256;
+5. release the lock, then run the older installer.
+
+An older release cannot be assumed to resume the exported records. Reimport only after reinstalling a compatible AMS version, under its shared lock, after validating the export and proving no conflicting active state. A direct downgrade without export may destroy convergence history and must be disclosed before execution.
 
 ## Uninstall
 
-Standard uninstall removes only:
+Standard uninstall preserves project/global configuration and installed profiles unless separately authorized. Before removing the skill root, preserve package-local convergence records in place when supported or export them using the downgrade procedure. Remove runtime history only with explicit full-runtime-cleanup authority.
 
-```text
-$HOME/.agents/skills/adaptive-master-subagent-orchestration/
-```
-
-It intentionally preserves project/global settings and all installed profiles for troubleshooting or reinstall. Remove profiles separately only after proving exact AMS ownership and receiving explicit user authorization.
+Repository release-verification utilities are outside the install manifest, are never installed as AMS core, and are never executed during project orchestration.

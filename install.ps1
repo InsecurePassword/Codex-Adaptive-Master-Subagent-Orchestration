@@ -9,7 +9,7 @@ $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
 $RepositoryRef = "main"
 $RawBaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/main"
 $ManifestUrl = "$RawBaseUrl/install-manifest.txt"
-$PackageVersion = "3.09"
+$PackageVersion = "4.0"
 $SkillName = "adaptive-master-subagent-orchestration"
 $ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
 $UserAgent = "AMS-$PackageVersion-Tree-Installer"
@@ -23,6 +23,9 @@ $AgentHome = Join-Path $CodexHome "agents"
 $MaxManifestBytes = 256KB
 $MaxFileBytes = 1MB
 $MaxTotalBytes = 100MB
+$MaxRuntimeBytes = 64MB
+$MaxRuntimeRecordBytes = 64KB
+$MaxRuntimeFiles = 2048
 
 $ProfileFiles = @(
     "ams_sol_low.toml",
@@ -56,14 +59,25 @@ $RequiredFiles = @(
     "VERSION",
     "agents/openai.yaml",
     "references/configuration-maintenance.md",
+    "references/convergence-control.md",
+    "references/evidence-handling.md",
+    "references/feature-control.md",
+    "references/handoff-control.md",
     "references/hierarchy-control.md",
     "references/intensity-control.md",
     "references/package-maintenance.md",
     "references/profile-management.md",
     "references/project-control.md",
     "references/project-governance.md",
+    "references/request-accounting.md",
+    "references/review-control.md",
     "references/root-execution-fallback.md",
     "references/runtime-core.md",
+    "references/runtime-observation.md",
+    "references/shared-worktree-control.md",
+    "references/surface-identity.md",
+    "references/task-graph-safeguards.md",
+    "references/work-order-refinement.md",
     "references/zergling-rush.md"
 )
 foreach ($ProfileFile in $ProfileFiles) {
@@ -88,6 +102,124 @@ function Assert-SafeDirectory {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
     $Item = Get-Item -LiteralPath $Path -Force
     if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "$Label became redirected during creation: $Path" }
+}
+
+
+function Read-StrictRuntimeLines {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][Int64]$Maximum
+    )
+    $Item = Get-Item -LiteralPath $Path -Force
+    if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "AMS runtime record is not a safe regular file: $Path"
+    }
+    if ($Item.Length -le 0 -or $Item.Length -gt $Maximum) {
+        throw "AMS runtime record size is invalid: $Path ($($Item.Length) bytes)"
+    }
+    $Fsutil = Get-Command fsutil.exe -ErrorAction SilentlyContinue
+    if ($Fsutil) {
+        $HardLinks = @(& $Fsutil.Source hardlink list $Path 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $HardLinks.Count -gt 1) { throw "AMS runtime record has multiple hard links: $Path" }
+    }
+    $Bytes = [IO.File]::ReadAllBytes($Path)
+    if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) { throw "AMS runtime record has a UTF-8 BOM: $Path" }
+    if ($Bytes[$Bytes.Length - 1] -ne 0x0A) { throw "AMS runtime record is missing final LF: $Path" }
+    foreach ($Byte in $Bytes) {
+        if ($Byte -eq 0x00 -or $Byte -eq 0x0D) { throw "AMS runtime record contains a forbidden NUL or CR byte: $Path" }
+    }
+    $Utf8 = New-Object Text.UTF8Encoding($false, $true)
+    $Text = $Utf8.GetString($Bytes)
+    foreach ($Character in $Text.ToCharArray()) {
+        $Code = [int][char]$Character
+        if (($Code -lt 32 -and $Code -ne 9 -and $Code -ne 10) -or ($Code -ge 127 -and $Code -le 159)) {
+            throw "AMS runtime record contains a forbidden control character: $Path"
+        }
+    }
+    $Lines = $Text.Split(@("`n"), [StringSplitOptions]::None)
+    if ($Lines[$Lines.Count - 1] -ne '') { throw "AMS runtime record structure is invalid: $Path" }
+    return @($Lines[0..($Lines.Count - 2)])
+}
+
+function Assert-ConvergenceRecord {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][ValidateSet('tracking','history')][string]$Kind,
+        [Parameter(Mandatory=$true)][string]$Relative
+    )
+    $Lines = @(Read-StrictRuntimeLines -Path $Path -Maximum $MaxRuntimeRecordBytes)
+    if ($Kind -eq 'tracking') {
+        $Header = 'ams-convergence-tracking-v1'
+        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','finding_fingerprints','last_resolution_action')
+    }
+    else {
+        $Header = 'ams-convergence-history-v1'
+        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','finding_fingerprints','last_resolution_action','terminal_disposition','terminal_receipt','closed_at')
+    }
+    if ($Lines.Count -ne ($Expected.Count + 1) -or $Lines[0] -cne $Header) { throw "AMS convergence record structure is invalid: $Relative" }
+    $Fields = @{}
+    foreach ($Line in $Lines[1..($Lines.Count - 1)]) {
+        if ($Line.Length -gt 4096) { throw "AMS convergence record line is oversized: $Relative" }
+        $Parts = $Line.Split([char]"`t")
+        if ($Parts.Count -ne 2 -or $Parts[0] -notmatch '^[a-z_]+$' -or $Fields.ContainsKey($Parts[0])) { throw "AMS convergence record field is invalid: $Relative" }
+        $Fields[$Parts[0]] = $Parts[1]
+    }
+    foreach ($Key in $Expected) { if (-not $Fields.ContainsKey($Key)) { throw "AMS convergence record is missing $Key`: $Relative" } }
+    if ($Fields.Count -ne $Expected.Count) { throw "AMS convergence record contains an unexpected field: $Relative" }
+    $Campaign = $Fields['campaign_id']
+    if ($Campaign -notmatch '^[A-Za-z0-9._-]{1,96}$') { throw "AMS convergence campaign ID is invalid: $Relative" }
+    if (-not $Fields['root_objective_id'] -or -not $Fields['project_root']) { throw "AMS convergence identity is incomplete: $Relative" }
+    foreach ($Key in @('record_generation','redesign_count','redesign_limit','epoch_correction_count','correction_limit')) {
+        if ($Fields[$Key] -notmatch '^[0-9]+$') { throw "AMS convergence counter is invalid: $Relative" }
+    }
+    $CorrectionLimit = [int]$Fields['correction_limit']; $RedesignLimit = [int]$Fields['redesign_limit']
+    if ($CorrectionLimit -lt 2 -or $CorrectionLimit -gt 12 -or $RedesignLimit -lt 1 -or $RedesignLimit -gt 12) { throw "AMS convergence limits are invalid: $Relative" }
+    $UtcPattern = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+    if ($Fields['created_at'] -notmatch $UtcPattern -or $Fields['updated_at'] -notmatch $UtcPattern) { throw "AMS convergence timestamps are invalid: $Relative" }
+    if ($Fields['owner_lease_expires_at'] -cne 'none' -and $Fields['owner_lease_expires_at'] -notmatch $UtcPattern) { throw "AMS convergence lease timestamp is invalid: $Relative" }
+    if ($Fields['finding_fingerprints'] -cne 'none' -and $Fields['finding_fingerprints'] -notmatch '^[0-9a-f]{64}(,[0-9a-f]{64}){0,7}$') { throw "AMS convergence fingerprints are invalid: $Relative" }
+    $BaseName = [IO.Path]::GetFileName($Path)
+    if ($Kind -eq 'tracking') {
+        if ($Fields['state'] -notmatch '^(monitoring|convergence|intervention-required|terminal-pending-history)$') { throw "AMS convergence tracking state is invalid: $Relative" }
+        if ($BaseName -cne "$Campaign.tracking.log") { throw "AMS convergence tracking filename does not match its campaign: $Relative" }
+    }
+    else {
+        if ($Fields['state'] -cne 'terminal') { throw "AMS convergence history state is invalid: $Relative" }
+        if ($Fields['terminal_disposition'] -notmatch '^(accept|accept-with-follow-up|blocked|failed|intervention-required|cancelled|user-disabled|user-override|superseded|stale)$') { throw "AMS convergence terminal disposition is invalid: $Relative" }
+        if ($Fields['terminal_receipt'] -notmatch '^[0-9a-f]{64}$' -or $Fields['closed_at'] -notmatch $UtcPattern) { throw "AMS convergence terminal fields are invalid: $Relative" }
+        if ($BaseName -cne "$Campaign.$($Fields['terminal_receipt']).record.log") { throw "AMS convergence history filename does not match its record: $Relative" }
+    }
+}
+
+function Assert-SafeRuntimeState {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    $Root = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $Root -or -not $Root.PSIsContainer -or ($Root.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "AMS runtime state is redirected or not a directory: $Path" }
+    $RootPath = $Root.FullName.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    [Int64]$Total = 0; [int]$Count = 0
+    foreach ($Item in @(Get-ChildItem -LiteralPath $Path -Force -Recurse -ErrorAction Stop)) {
+        if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "AMS runtime state contains a redirected path: $($Item.FullName)" }
+        $Relative = $Item.FullName.Substring($RootPath.Length + 1).Replace('\','/')
+        if ($Item.PSIsContainer) {
+            if ($Relative -cne 'convergence' -and $Relative -cne 'convergence/history') { throw "AMS runtime state contains an unexpected directory: $Relative" }
+            continue
+        }
+        if ($Relative -match '^convergence/[A-Za-z0-9._-]{1,96}\.tracking\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind tracking -Relative $Relative }
+        elseif ($Relative -match '^convergence/history/[A-Za-z0-9._-]{1,96}\.[0-9a-f]{64}\.record\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind history -Relative $Relative }
+        else { throw "AMS runtime state contains an unexpected file: $Relative" }
+        $Total += $Item.Length; $Count++
+        if ($Total -gt $MaxRuntimeBytes -or $Count -gt $MaxRuntimeFiles) { throw "AMS runtime state exceeds the preservation bound." }
+    }
+}
+
+function Get-RuntimeStateSnapshot {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    Assert-SafeRuntimeState -Path $Path
+    $Root = (Get-Item -LiteralPath $Path -Force).FullName.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    return @(Get-ChildItem -LiteralPath $Path -Force -Recurse -File | ForEach-Object {
+        $Relative = $_.FullName.Substring($Root.Length + 1).Replace('\','/')
+        "{0}`t{1}`t{2}" -f $Relative, $_.Length, (Get-Sha256 -Path $_.FullName)
+    } | Sort-Object -CaseSensitive)
 }
 
 function Invoke-WithRetry {
@@ -147,6 +279,12 @@ function Read-InstallManifest {
 
     $Utf8 = New-Object Text.UTF8Encoding($false, $true)
     $Text = $Utf8.GetString($Bytes)
+    foreach ($Character in $Text.ToCharArray()) {
+        $Code = [int][char]$Character
+        if (($Code -lt 32 -and $Code -ne 9 -and $Code -ne 10) -or ($Code -ge 127 -and $Code -le 159)) {
+            throw "Install manifest contains a forbidden control character: $Path"
+        }
+    }
     $Lines = $Text.Split(@("`n"), [StringSplitOptions]::None)
     if ($Lines.Count -lt 4 -or $Lines[$Lines.Count - 1] -ne "") { throw "Install manifest structure is invalid." }
     if ($Lines[0] -cne "ams-install-manifest-v1") { throw "Unsupported install manifest format." }
@@ -187,21 +325,31 @@ Assert-SafeDirectory -Path $SkillHome -Label "Skill parent"
 Assert-SafeDirectory -Path $CodexHome -Label "CODEX_HOME"
 Assert-SafeDirectory -Path $AgentHome -Label "Agent registry"
 
-$LockPath = Join-Path $SkillHome ".$SkillName.install.lock"
-$LockStream = $null
+$LockPath = Join-Path $SkillHome ".$SkillName.runtime.lock"
+$LockOwner = "installer-$PID-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))"
 if (Test-Path -LiteralPath $LockPath) {
     $LockItem = Get-Item -LiteralPath $LockPath -Force
-    if ($LockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Installer lock path is redirected: $LockPath" }
+    if ($LockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Package/runtime lock path is redirected: $LockPath" }
+    throw "Another AMS package/runtime writer is active or a stale lock exists: $LockPath"
 }
+try { New-Item -ItemType Directory -Path $LockPath -ErrorAction Stop | Out-Null }
+catch { throw "Another AMS package/runtime writer is active or the shared lock cannot be acquired: $LockPath`n$($_.Exception.Message)" }
+$NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$OwnerText = @(
+    'ams-runtime-lock-v1',
+    "owner_id`t$LockOwner",
+    "purpose`tinstaller",
+    "campaign_id`tnone",
+    "pid`t$PID",
+    "acquired_epoch`t$NowEpoch",
+    "lease_expires_epoch`t$($NowEpoch + 3600)"
+) -join "`n"
 try {
-    $LockStream = [IO.File]::Open($LockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-    $LockStream.SetLength(0)
-    $LockBytes = [Text.Encoding]::UTF8.GetBytes("pid=$PID")
-    $LockStream.Write($LockBytes, 0, $LockBytes.Length)
-    $LockStream.Flush()
+    [IO.File]::WriteAllText((Join-Path $LockPath 'owner.log'), $OwnerText + "`n", (New-Object Text.UTF8Encoding($false)))
 }
 catch {
-    throw "Another installation is active or the installer lock cannot be acquired: $LockPath`n$($_.Exception.Message)"
+    Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue
+    throw "Could not publish the package/runtime lock owner record.`n$($_.Exception.Message)"
 }
 
 $StageRoot = Join-Path $SkillHome (".ams-install-{0}-{1}" -f $PID, [Guid]::NewGuid().ToString("N"))
@@ -216,6 +364,8 @@ $Committed = $false
 $ProfileCreated = @()
 $ProfileBackups = @()
 $ProfileTemps = @()
+$RuntimeStatePresent = $false
+$RuntimeSnapshotBefore = @()
 
 try {
     New-Item -ItemType Directory -Force -Path $Candidate, $ProfileBackupRoot | Out-Null
@@ -266,6 +416,11 @@ try {
     }
 
     $Existing = Get-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+    $ExistingRuntime = Join-Path $Destination ".runtime"
+    if (Test-Path -LiteralPath $ExistingRuntime) {
+        $RuntimeSnapshotBefore = @(Get-RuntimeStateSnapshot -Path $ExistingRuntime)
+        $RuntimeStatePresent = $true
+    }
     if ($Existing) {
         if ($Existing.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing to replace a redirected existing skill path: $Destination" }
         if (-not $Existing.PSIsContainer) { throw "Refusing to replace a non-directory existing skill path: $Destination" }
@@ -276,6 +431,19 @@ try {
 
     Move-Item -LiteralPath $Candidate -Destination $Destination
     $CandidateInstalled = $true
+
+    if ($RuntimeStatePresent) {
+        $SavedRuntime = Join-Path $BackupPath ".runtime"
+        $InstalledRuntime = Join-Path $Destination ".runtime"
+        if (-not (Test-Path -LiteralPath $SavedRuntime -PathType Container)) { throw "Preserved AMS runtime state disappeared during replacement." }
+        if (Test-Path -LiteralPath $InstalledRuntime) { throw "Candidate unexpectedly contains package-local runtime state." }
+        Copy-Item -LiteralPath $SavedRuntime -Destination $InstalledRuntime -Recurse
+        $RuntimeSnapshotAfter = @(Get-RuntimeStateSnapshot -Path $InstalledRuntime)
+        if ($RuntimeSnapshotBefore.Count -ne $RuntimeSnapshotAfter.Count) { throw "AMS runtime state changed during preservation; retry from a stable record boundary." }
+        for ($RuntimeIndex = 0; $RuntimeIndex -lt $RuntimeSnapshotBefore.Count; $RuntimeIndex++) {
+            if ($RuntimeSnapshotBefore[$RuntimeIndex] -cne $RuntimeSnapshotAfter[$RuntimeIndex]) { throw "AMS runtime state changed during preservation; retry from a stable record boundary." }
+        }
+    }
 
     $ProfilesChanged = 0
     $ProfilesUnchanged = 0
@@ -358,6 +526,9 @@ finally {
 
     Remove-Item -LiteralPath $ProfileBackupRoot -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue
-    if ($LockStream) { $LockStream.Dispose() }
-    Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+    $OwnerPath = Join-Path $LockPath 'owner.log'
+    if (Test-Path -LiteralPath $OwnerPath -PathType Leaf) {
+        $OwnerBytes = [IO.File]::ReadAllText($OwnerPath)
+        if ($OwnerBytes -match "(?m)^owner_id`t$([regex]::Escape($LockOwner))$") { Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue }
+    }
 }

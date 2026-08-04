@@ -2,7 +2,7 @@
 
 Read completely only when `runtime-core.md` selects a non-`auto` normal intensity. Intensity changes useful team formation, not task quality, safety, ownership, validation, or model/effort requirements. Logical reporting depth is separate from physical Codex session topology; the root may physically spawn every session while AMS records manager-worker relationships.
 
-`balanced` is the runtime name. Existing schema-2 settings use `moderate` as the compatibility token; both select the same behavior. Normalize to `balanced` in memory and retain `moderate` when persisting schema 2.
+`balanced` is the runtime name. Persisted settings use `moderate` as the compatibility token; both select the same behavior. Normalize to `balanced` in memory and retain `moderate` when persisting.
 
 | Intensity | Required posture |
 |---|---|

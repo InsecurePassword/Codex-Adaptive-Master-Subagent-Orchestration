@@ -2,7 +2,7 @@
 
 Read completely only when standard `runtime-core.md` has determined that mandatory progress would otherwise stop, no currently viable delegated route remains, and effective `root_execution_fallback = true`.
 
-This is a last-resort continuity control, not a normal execution mode. Higher-priority and active mode-specific instructions remain authoritative.
+This is a last-resort continuity control, not a normal execution mode. Higher-priority instructions remain authoritative. For an affected campaign under active convergence control, this reference is ineligible until convergence terminates `failed` or `blocked`, archives its state, and explicitly releases custody. `intervention-required` does not authorize fallback.
 
 ## Viable delegated route
 

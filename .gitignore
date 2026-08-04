@@ -1,0 +1,10 @@
+# AMS package-local runtime state
+adaptive-master-subagent-orchestration/.runtime/
+
+# Generated release/audit artifacts
+reports/
+*.zip
+*.zip.sha256
+*-POST-PACKAGE-VALIDATION.txt
+__pycache__/
+*.pyc

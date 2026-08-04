@@ -1,23 +1,39 @@
 # AMS package maintenance
 
-Read completely only for an explicit install, update, repair, rollback, uninstall, or package-integrity request. A package change or completed update does not load this reference by itself. Package maintenance is root-only and exclusive with other AMS package/control writes.
+Read completely only for an explicit install, update, repair, rollback, uninstall, downgrade preparation, runtime-state export/import, or package-integrity request. Package completion does not load this reference by itself. Package maintenance is root-only and exclusive with other AMS package/control writes.
 
-## Authority
+## Authority and shared runtime lock
 
-Require direct user authority before package mutation or uninstall. Serialize package writers and finish or roll back any active AMS control write before mutation. Do not stop or close unrelated project sessions solely because an install, update, repair, or rollback is running. Preserve continuity through the current root state, an existing authorized project-native record, or a concise user-visible handoff; never create an AMS-specific recovery file.
+Require direct user authority before mutation or uninstall. Acquire the shared package/runtime lock defined by `convergence-control.md` before reading or replacing package-local runtime state, and hold it from pre-snapshot through backup deletion or rollback completion. Finish or roll back active control writes first. Do not stop unrelated project sessions solely for package work.
+
+Preserve continuity through current root state, authorized project-native records, a concise handoff, and authorized convergence tracking/history. Convergence records are the sole exception to the prohibition on AMS-specific durable runtime files; create no task database, general recovery ledger, review ledger, settings history, or memory file.
 
 ## Canonical source and validation
 
-The standard installers fetch `install-manifest.txt` and the exact declared files only from the canonical repository `main` tree. They expose no environment-variable override for repository ref, manifest URL, or raw source. A mirror, alternate ref, or other source requires a separate explicit user-requested/manual procedure and is not part of the normal installer.
+Standard installers fetch `install-manifest.txt` and exact declared files only from canonical published `main`. Alternate sources require a separate explicit manual procedure.
 
-Validate exact membership, byte lengths, SHA-256 values, version, profile invariants, file safety, and a byte-identical second manifest read before replacement. Never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
+Validate exact manifest membership, lengths, SHA-256 values, version, profile invariants, file safety, and a byte-identical second manifest read. Package integrity excludes the safe `.runtime` convergence directory because it is runtime state, not release content. Never edit `$CODEX_HOME/config.toml` or grant sandbox, approval, network, writable-root, or tool permissions.
 
-## Mutation and repair
+## Mutation, repair, and rollback
 
-Serialize package writers, stage the complete candidate outside the installed root, back up the prior skill and any profile eligible for replacement, and commit transactionally. Restore and verify the prior state on failure. Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official canonical file; otherwise fail closed until the user explicitly reconciles the file.
+Stage the complete candidate outside the installed root. Under the shared lock, validate and snapshot the exact safe runtime layout, back up the prior skill and replaceable profiles, install transactionally, restore runtime state, and compare the preserved snapshot before deleting the backup. Restore and verify prior state on failure.
 
-After a successful install, update, repair, or rollback, resume ordinary AMS operation. A successful install or update does not invoke the `project-control.md` package-transition steering or recovery procedure. Do not compare prior and current package state, compute post-update hashes, re-verify, re-audit, reactivate, pause project work, or request user action solely because the mutation occurred. Package-integrity verification occurs only on direct user request.
+Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official file. Any other differing profile blocks replacement until explicitly reconciled.
+
+After success, resume ordinary AMS operation. Do not automatically compare prior/current packages, re-audit, reactivate, pause project work, or request user action solely because mutation occurred. Integrity verification occurs only on direct request.
+
+## Downgrade export and import
+
+An older installer may not understand AMS 4.0 package-local convergence state. A supported downgrade therefore requires explicit export before running the older installer:
+
+1. acquire the shared package/runtime lock;
+2. validate the exact `.runtime/convergence` layout;
+3. copy it to a user-selected directory outside the skill root, preferably beneath `$CODEX_HOME/ams-runtime-export/<UTC-id>/`;
+4. record byte lengths and SHA-256 values;
+5. release the lock, then run the authorized older installer.
+
+Do not claim the older release can resume those records. Reimport only after reinstalling a compatible AMS version, under its shared lock, after validating every exported path and proving no conflicting active state exists. A direct downgrade without export may destroy convergence state and must be reported before execution.
 
 ## Uninstall
 
-Standard uninstall removes only the verified AMS skill directory. Preserve project/global settings, installed profiles, and unrelated files unless the user explicitly authorizes separate proven cleanup. Refuse redirected or ambiguous roots.
+Standard uninstall removes manifest-managed package files only within the user-authorized scope. Preserve project/global configuration and installed profiles under existing AMS policy. Before removing the skill root, either preserve safe package-local convergence state in place when the uninstall method supports it or export it using the procedure above. Remove convergence history only with explicit full-runtime-cleanup authority. Refuse redirected or ambiguous roots.

@@ -1,0 +1,29 @@
+{
+  "companion_max_bytes": {
+    "ams_app_task_lane": 6500,
+    "ams_runtime_observation": 1800
+  },
+  "lazy_reference_max_bytes": {
+    "references/convergence-control.md": 12500,
+    "references/evidence-handling.md": 1400,
+    "references/feature-control.md": 3400,
+    "references/handoff-control.md": 1200,
+    "references/request-accounting.md": 1900,
+    "references/review-control.md": 3400,
+    "references/runtime-observation.md": 2250,
+    "references/shared-worktree-control.md": 3000,
+    "references/surface-identity.md": 1050,
+    "references/task-graph-safeguards.md": 1000,
+    "references/work-order-refinement.md": 1500
+  },
+  "scenario_max_bytes": {
+    "active_core": 25473,
+    "active_governance": 28909,
+    "bootstrap_skill": 3693
+  },
+  "scenario_max_delta_bytes": {
+    "active_core": 0,
+    "active_governance": 0,
+    "bootstrap_skill": 0
+  }
+}

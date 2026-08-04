@@ -1,0 +1,21 @@
+{
+  "baseline": "AMS-4.0-Conflict-Resolved-Working-Architecture-e43069d",
+  "components": {
+    "SKILL.md": {
+      "bytes": 3693,
+      "sha256": "4d6be56c27ac25cd5613a91a2f1b67ead9bcf2380a75f65183eb8a7b2583db54"
+    },
+    "references/project-control.md": {
+      "bytes": 9831,
+      "sha256": "cfbb222f87f57e977ad0a48b83b49e1a9145a4caf8dc8e8ce06300e0550c3941"
+    },
+    "references/project-governance.md": {
+      "bytes": 3436,
+      "sha256": "2b7115c2aa7c4babc3fbe9f22354ac6a0f766ad70bc30ad30109e4450223d5b7"
+    },
+    "references/runtime-core.md": {
+      "bytes": 11949,
+      "sha256": "8e460e60d017d0148e4ae587dd137b091428390dd0811be3565a906542c05423"
+    }
+  }
+}
