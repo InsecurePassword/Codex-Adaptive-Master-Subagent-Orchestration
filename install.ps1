@@ -108,7 +108,8 @@ function Get-RuntimeAllowedSids {
     return @(
         [Security.Principal.WindowsIdentity]::GetCurrent().User,
         (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-5-18'),
-        (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-5-32-544')
+        (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-5-32-544'),
+        (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-3-4')
     )
 }
 
