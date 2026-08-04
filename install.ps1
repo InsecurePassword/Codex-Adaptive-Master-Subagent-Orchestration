@@ -117,26 +117,12 @@ function Set-OwnerOnlyRuntimeAccess {
         [Parameter(Mandatory=$true)][string]$Path,
         [Parameter(Mandatory=$true)][bool]$Directory
     )
-    $Current = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    $Allowed = @(Get-RuntimeAllowedSids)
-    if ($Directory) {
-        $Acl = New-Object Security.AccessControl.DirectorySecurity
-        $Inheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
-        foreach ($Sid in $Allowed) {
-            $Rule = New-Object Security.AccessControl.FileSystemAccessRule($Sid, [Security.AccessControl.FileSystemRights]::FullControl, $Inheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
-            [void]$Acl.AddAccessRule($Rule)
-        }
-    }
-    else {
-        $Acl = New-Object Security.AccessControl.FileSecurity
-        foreach ($Sid in $Allowed) {
-            $Rule = New-Object Security.AccessControl.FileSystemAccessRule($Sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow)
-            [void]$Acl.AddAccessRule($Rule)
-        }
-    }
-    $Acl.SetOwner($Current)
-    $Acl.SetAccessRuleProtection($true, $false)
-    Set-Acl -LiteralPath $Path -AclObject $Acl
+    $Icacls = Get-Command icacls.exe -ErrorAction SilentlyContinue
+    if (-not $Icacls) { throw "icacls.exe is required to protect AMS runtime state: $Path" }
+    $CurrentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $Grant = if ($Directory) { "*$($CurrentSid):(OI)(CI)F" } else { "*$($CurrentSid):F" }
+    & $Icacls.Source $Path /inheritance:r /grant:r $Grant | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not establish current-user-only access for AMS runtime state: $Path" }
 }
 
 function Assert-OwnerOnlyRuntimeAccess {
@@ -450,25 +436,32 @@ function Get-OwnerlessLockSnapshot {
 
 function Publish-SharedRuntimeLock {
     New-Item -ItemType Directory -Path $LockPath -ErrorAction Stop | Out-Null
-    Set-OwnerOnlyRuntimeAccess -Path $LockPath -Directory $true
-    $NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $OwnerText = @(
-        'ams-runtime-lock-v1',
-        "owner_id`t$LockOwner",
-        "purpose`tinstaller",
-        "campaign_id`tnone",
-        "host_id`t$LockHost",
-        "pid`t$PID",
-        "acquired_epoch`t$NowEpoch",
-        "lease_expires_epoch`t$($NowEpoch + 21600)"
-    ) -join "`n"
-    $OwnerTemp = Join-Path $LockPath ".owner-$PID-$([Guid]::NewGuid().ToString('N'))"
-    [IO.File]::WriteAllText($OwnerTemp, $OwnerText + "`n", (New-Object Text.UTF8Encoding($false)))
-    Set-OwnerOnlyRuntimeAccess -Path $OwnerTemp -Directory $false
-    Move-Item -LiteralPath $OwnerTemp -Destination (Join-Path $LockPath 'owner.log')
-    Set-OwnerOnlyRuntimeAccess -Path (Join-Path $LockPath 'owner.log') -Directory $false
-    $Published = Read-SharedRuntimeLockOwner -Directory $LockPath
-    if ($Published.Fields['owner_id'] -cne $LockOwner) { throw 'Package/runtime lock owner verification failed.' }
+    try {
+        Set-OwnerOnlyRuntimeAccess -Path $LockPath -Directory $true
+        $NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $OwnerText = @(
+            'ams-runtime-lock-v1',
+            "owner_id`t$LockOwner",
+            "purpose`tinstaller",
+            "campaign_id`tnone",
+            "host_id`t$LockHost",
+            "pid`t$PID",
+            "acquired_epoch`t$NowEpoch",
+            "lease_expires_epoch`t$($NowEpoch + 21600)"
+        ) -join "`n"
+        $OwnerTemp = Join-Path $LockPath ".owner-$PID-$([Guid]::NewGuid().ToString('N'))"
+        [IO.File]::WriteAllText($OwnerTemp, $OwnerText + "`n", (New-Object Text.UTF8Encoding($false)))
+        Set-OwnerOnlyRuntimeAccess -Path $OwnerTemp -Directory $false
+        Move-Item -LiteralPath $OwnerTemp -Destination (Join-Path $LockPath 'owner.log')
+        Set-OwnerOnlyRuntimeAccess -Path (Join-Path $LockPath 'owner.log') -Directory $false
+        $Published = Read-SharedRuntimeLockOwner -Directory $LockPath
+        if ($Published.Fields['owner_id'] -cne $LockOwner) { throw 'Package/runtime lock owner verification failed.' }
+    }
+    catch {
+        $PublishFailure = $_
+        Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue
+        throw $PublishFailure
+    }
 }
 
 function Acquire-SharedRuntimeLock {
@@ -476,7 +469,15 @@ function Acquire-SharedRuntimeLock {
         if (-not (Test-Path -LiteralPath $LockPath)) {
             try { Publish-SharedRuntimeLock; return }
             catch {
-                if (-not (Test-Path -LiteralPath $LockPath)) { if ($Attempt -eq 3) { throw }; continue }
+                $PublishFailure = $_
+                if (Test-Path -LiteralPath $LockPath) {
+                    Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+                if ($Attempt -lt 3 -and -not (Test-Path -LiteralPath $LockPath)) {
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+                throw $PublishFailure
             }
         }
         $OwnerPath = Join-Path $LockPath 'owner.log'
@@ -551,7 +552,7 @@ function Release-SharedRuntimeLock {
         }
         throw
     }
-    if (Test-Path -LiteralPath $LockPath -or Test-Path -LiteralPath $ReleasePath) {
+    if ((Test-Path -LiteralPath $LockPath) -or (Test-Path -LiteralPath $ReleasePath)) {
         throw "Package/runtime lock release did not complete: $LockPath"
     }
 }
