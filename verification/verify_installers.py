@@ -136,6 +136,33 @@ def make_secure_dir(path: Path) -> None:
         current = current.parent
 
 
+
+
+def make_directory_stale(path: Path) -> None:
+    if os.name == "nt":
+        executable = shutil.which("powershell.exe") or shutil.which("powershell")
+        if not executable:
+            raise AssertionError("PowerShell unavailable for Windows stale-directory fixture")
+        environment = os.environ.copy()
+        environment["AMS_TEST_STALE_DIRECTORY"] = str(path)
+        result = subprocess.run(
+            [
+                executable,
+                "-NoProfile",
+                "-Command",
+                "$p=$env:AMS_TEST_STALE_DIRECTORY; [IO.Directory]::SetLastWriteTimeUtc($p,[DateTime]'2000-01-01T00:00:00Z')",
+            ],
+            text=True,
+            capture_output=True,
+            env=environment,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"could not age ownerless lock fixture: {result.stdout}\n{result.stderr}")
+    else:
+        os.utime(path, (1, 1))
+    if time.time() - path.stat().st_mtime <= 30:
+        raise AssertionError("ownerless lock fixture did not age beyond the initialization grace")
+
 def tracking_record(generation: int = 1) -> tuple[str, str]:
     objective = "objective-test"
     project = "/fixture/project"
@@ -347,7 +374,7 @@ def main() -> int:
         # A crash before owner.log publication is recoverable after the initialization grace.
         lock_path.mkdir()
         set_owner_only(lock_path, True)
-        os.utime(lock_path, (1, 1))
+        make_directory_stale(lock_path)
         invoke()
         if lock_path.exists() or list(skill_home.glob(".adaptive-master-subagent-orchestration.runtime.lock.stale.*")):
             raise AssertionError("ownerless stale lock or quarantine remained after bounded recovery")
