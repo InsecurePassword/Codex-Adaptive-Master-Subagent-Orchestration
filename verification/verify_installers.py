@@ -227,7 +227,7 @@ def start_http_server() -> tuple[subprocess.Popen[str], str]:
         text=True,
     )
     url = f"http://127.0.0.1:{port}"
-    for _ in range(100):
+    for _ in range(500):
         if process.poll() is not None:
             raise AssertionError("repository fixture HTTP server exited during startup")
         try:
