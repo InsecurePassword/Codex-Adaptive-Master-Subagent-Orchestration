@@ -27,6 +27,7 @@ jobs:
           verification/verify_repository.py
           verification/verify_contract_scenarios.py
           verification/verify_installers.py
+          verification/verify_installers_windows.py
           verification/verify_runtime_observation.py
           tools/measure_context.py
           tools/report_sizes.py
@@ -36,7 +37,11 @@ jobs:
       - name: Verify configuration and feature interactions
         run: python verification/verify_contract_scenarios.py
       - name: Verify installer transactions
+        if: runner.os != 'Windows'
         run: python verification/verify_installers.py
+      - name: Verify installer transactions (Windows)
+        if: runner.os == 'Windows'
+        run: python verification/verify_installers_windows.py
       - name: Verify runtime-observation companion
         run: python verification/verify_runtime_observation.py
       - name: Verify deterministic context and budgets
