@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from verification import verify_installers
+import verify_installers
 
 
 def wait_for_initialization_grace(_path: Path) -> None:
