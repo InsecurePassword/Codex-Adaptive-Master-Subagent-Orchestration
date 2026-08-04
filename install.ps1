@@ -105,6 +105,74 @@ function Assert-SafeDirectory {
 }
 
 
+function Get-RuntimeAllowedSids {
+    return @(
+        [Security.Principal.WindowsIdentity]::GetCurrent().User,
+        (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-5-18'),
+        (New-Object -TypeName Security.Principal.SecurityIdentifier -ArgumentList 'S-1-5-32-544')
+    )
+}
+
+function Set-OwnerOnlyRuntimeAccess {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][bool]$Directory
+    )
+    $Current = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $Allowed = @(Get-RuntimeAllowedSids)
+    if ($Directory) {
+        $Acl = New-Object Security.AccessControl.DirectorySecurity
+        $Inheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
+        foreach ($Sid in $Allowed) {
+            $Rule = New-Object Security.AccessControl.FileSystemAccessRule($Sid, [Security.AccessControl.FileSystemRights]::FullControl, $Inheritance, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+            [void]$Acl.AddAccessRule($Rule)
+        }
+    }
+    else {
+        $Acl = New-Object Security.AccessControl.FileSecurity
+        foreach ($Sid in $Allowed) {
+            $Rule = New-Object Security.AccessControl.FileSystemAccessRule($Sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow)
+            [void]$Acl.AddAccessRule($Rule)
+        }
+    }
+    $Acl.SetOwner($Current)
+    $Acl.SetAccessRuleProtection($true, $false)
+    Set-Acl -LiteralPath $Path -AclObject $Acl
+}
+
+function Assert-OwnerOnlyRuntimeAccess {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][bool]$Directory
+    )
+    $Acl = Get-Acl -LiteralPath $Path
+    if (-not $Acl.AreAccessRulesProtected) { throw "AMS runtime path inherits access rules: $Path" }
+    $Allowed = @((Get-RuntimeAllowedSids) | ForEach-Object { $_.Value })
+    $Current = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $CurrentPresent = $false
+    foreach ($Rule in @($Acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier]))) {
+        if ($Rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or $Allowed -notcontains $Rule.IdentityReference.Value) {
+            throw "AMS runtime path grants access outside the current user/system/administrators boundary: $Path"
+        }
+        if ($Rule.IdentityReference.Value -eq $Current) { $CurrentPresent = $true }
+    }
+    if (-not $CurrentPresent) { throw "AMS runtime path does not grant the current user access: $Path" }
+}
+
+function Get-LocalHostId {
+    $Value = (([Environment]::MachineName.ToLowerInvariant()) -replace '[^a-z0-9._-]', '')
+    if (-not $Value -or $Value.Length -gt 128) { throw 'Unable to derive a safe local host identifier for the package/runtime lock.' }
+    return $Value
+}
+
+function Protect-RuntimeTree {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    Set-OwnerOnlyRuntimeAccess -Path $Path -Directory $true
+    foreach ($Item in @(Get-ChildItem -LiteralPath $Path -Force -Recurse | Sort-Object { $_.FullName.Length })) {
+        Set-OwnerOnlyRuntimeAccess -Path $Item.FullName -Directory ([bool]$Item.PSIsContainer)
+    }
+}
+
 function Read-StrictRuntimeLines {
     param(
         [Parameter(Mandatory=$true)][string]$Path,
@@ -114,6 +182,7 @@ function Read-StrictRuntimeLines {
     if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
         throw "AMS runtime record is not a safe regular file: $Path"
     }
+    Assert-OwnerOnlyRuntimeAccess -Path $Path -Directory $false
     if ($Item.Length -le 0 -or $Item.Length -gt $Maximum) {
         throw "AMS runtime record size is invalid: $Path ($($Item.Length) bytes)"
     }
@@ -150,11 +219,11 @@ function Assert-ConvergenceRecord {
     $Lines = @(Read-StrictRuntimeLines -Path $Path -Maximum $MaxRuntimeRecordBytes)
     if ($Kind -eq 'tracking') {
         $Header = 'ams-convergence-tracking-v1'
-        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','finding_fingerprints','last_resolution_action')
+        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','candidate_surface','finding_fingerprints','last_resolution_action')
     }
     else {
         $Header = 'ams-convergence-history-v1'
-        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','finding_fingerprints','last_resolution_action','terminal_disposition','terminal_receipt','closed_at')
+        $Expected = @('campaign_id','root_objective_id','project_root','state','owner_id','owner_lease_expires_at','record_generation','created_at','updated_at','design_epoch_id','redesign_count','redesign_limit','epoch_correction_count','correction_limit','candidate_receipt','acceptance_boundary','candidate_surface','finding_fingerprints','last_resolution_action','terminal_disposition','terminal_receipt','closed_at')
     }
     if ($Lines.Count -ne ($Expected.Count + 1) -or $Lines[0] -cne $Header) { throw "AMS convergence record structure is invalid: $Relative" }
     $Fields = @{}
@@ -167,8 +236,15 @@ function Assert-ConvergenceRecord {
     foreach ($Key in $Expected) { if (-not $Fields.ContainsKey($Key)) { throw "AMS convergence record is missing $Key`: $Relative" } }
     if ($Fields.Count -ne $Expected.Count) { throw "AMS convergence record contains an unexpected field: $Relative" }
     $Campaign = $Fields['campaign_id']
-    if ($Campaign -notmatch '^[A-Za-z0-9._-]{1,96}$') { throw "AMS convergence campaign ID is invalid: $Relative" }
-    if (-not $Fields['root_objective_id'] -or -not $Fields['project_root']) { throw "AMS convergence identity is incomplete: $Relative" }
+    if ($Campaign -notmatch '^cvg-[0-9a-f]{64}$') { throw "AMS convergence campaign ID is invalid: $Relative" }
+    foreach ($IdentityField in @('root_objective_id','project_root','acceptance_boundary','candidate_surface')) {
+        if (-not $Fields[$IdentityField]) { throw "AMS convergence identity is incomplete: $Relative" }
+    }
+    $IdentityText = "ams-convergence-campaign-v1`nproject_root`t$($Fields['project_root'])`nroot_objective_id`t$($Fields['root_objective_id'])`nacceptance_boundary`t$($Fields['acceptance_boundary'])`ncandidate_surface`t$($Fields['candidate_surface'])`n"
+    $Hasher = [Security.Cryptography.SHA256]::Create()
+    try { $ExpectedCampaign = 'cvg-' + (($Hasher.ComputeHash((New-Object Text.UTF8Encoding($false)).GetBytes($IdentityText)) | ForEach-Object { $_.ToString('x2') }) -join '') }
+    finally { $Hasher.Dispose() }
+    if ($Campaign -cne $ExpectedCampaign) { throw "AMS convergence campaign ID does not match its canonical identity: $Relative" }
     foreach ($Key in @('record_generation','redesign_count','redesign_limit','epoch_correction_count','correction_limit')) {
         if ($Fields[$Key] -notmatch '^[0-9]+$') { throw "AMS convergence counter is invalid: $Relative" }
     }
@@ -185,7 +261,7 @@ function Assert-ConvergenceRecord {
     }
     else {
         if ($Fields['state'] -cne 'terminal') { throw "AMS convergence history state is invalid: $Relative" }
-        if ($Fields['terminal_disposition'] -notmatch '^(accept|accept-with-follow-up|blocked|failed|intervention-required|cancelled|user-disabled|user-override|superseded|stale)$') { throw "AMS convergence terminal disposition is invalid: $Relative" }
+        if ($Fields['terminal_disposition'] -notmatch '^(accept|accept-with-follow-up|blocked|failed|cancelled|user-disabled|user-override|superseded|stale)$') { throw "AMS convergence terminal disposition is invalid: $Relative" }
         if ($Fields['terminal_receipt'] -notmatch '^[0-9a-f]{64}$' -or $Fields['closed_at'] -notmatch $UtcPattern) { throw "AMS convergence terminal fields are invalid: $Relative" }
         if ($BaseName -cne "$Campaign.$($Fields['terminal_receipt']).record.log") { throw "AMS convergence history filename does not match its record: $Relative" }
     }
@@ -195,17 +271,19 @@ function Assert-SafeRuntimeState {
     param([Parameter(Mandatory=$true)][string]$Path)
     $Root = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (-not $Root -or -not $Root.PSIsContainer -or ($Root.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "AMS runtime state is redirected or not a directory: $Path" }
+    Assert-OwnerOnlyRuntimeAccess -Path $Path -Directory $true
     $RootPath = $Root.FullName.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
     [Int64]$Total = 0; [int]$Count = 0
     foreach ($Item in @(Get-ChildItem -LiteralPath $Path -Force -Recurse -ErrorAction Stop)) {
         if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "AMS runtime state contains a redirected path: $($Item.FullName)" }
         $Relative = $Item.FullName.Substring($RootPath.Length + 1).Replace('\','/')
         if ($Item.PSIsContainer) {
+            Assert-OwnerOnlyRuntimeAccess -Path $Item.FullName -Directory $true
             if ($Relative -cne 'convergence' -and $Relative -cne 'convergence/history') { throw "AMS runtime state contains an unexpected directory: $Relative" }
             continue
         }
-        if ($Relative -match '^convergence/[A-Za-z0-9._-]{1,96}\.tracking\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind tracking -Relative $Relative }
-        elseif ($Relative -match '^convergence/history/[A-Za-z0-9._-]{1,96}\.[0-9a-f]{64}\.record\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind history -Relative $Relative }
+        if ($Relative -match '^convergence/cvg-[0-9a-f]{64}\.tracking\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind tracking -Relative $Relative }
+        elseif ($Relative -match '^convergence/history/cvg-[0-9a-f]{64}\.[0-9a-f]{64}\.record\.log$') { Assert-ConvergenceRecord -Path $Item.FullName -Kind history -Relative $Relative }
         else { throw "AMS runtime state contains an unexpected file: $Relative" }
         $Total += $Item.Length; $Count++
         if ($Total -gt $MaxRuntimeBytes -or $Count -gt $MaxRuntimeFiles) { throw "AMS runtime state exceeds the preservation bound." }
@@ -327,30 +405,132 @@ Assert-SafeDirectory -Path $AgentHome -Label "Agent registry"
 
 $LockPath = Join-Path $SkillHome ".$SkillName.runtime.lock"
 $LockOwner = "installer-$PID-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))"
-if (Test-Path -LiteralPath $LockPath) {
-    $LockItem = Get-Item -LiteralPath $LockPath -Force
-    if ($LockItem.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Package/runtime lock path is redirected: $LockPath" }
-    throw "Another AMS package/runtime writer is active or a stale lock exists: $LockPath"
+$LockHost = Get-LocalHostId
+$LockQuarantine = $null
+
+function Read-SharedRuntimeLockOwner {
+    param([Parameter(Mandatory=$true)][string]$Directory)
+    $Item = Get-Item -LiteralPath $Directory -Force -ErrorAction SilentlyContinue
+    if (-not $Item -or -not $Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Package/runtime lock path is redirected or not a directory: $Directory" }
+    Assert-OwnerOnlyRuntimeAccess -Path $Directory -Directory $true
+    $OwnerPath = Join-Path $Directory 'owner.log'
+    $Lines = @(Read-StrictRuntimeLines -Path $OwnerPath -Maximum 4096)
+    $Expected = @('owner_id','purpose','campaign_id','host_id','pid','acquired_epoch','lease_expires_epoch')
+    if ($Lines.Count -ne 8 -or $Lines[0] -cne 'ams-runtime-lock-v1') { throw "Package/runtime lock owner record is malformed: $OwnerPath" }
+    $Fields = @{}
+    foreach ($Line in $Lines[1..7]) {
+        $Parts = $Line.Split([char]"`t")
+        if ($Parts.Count -ne 2 -or $Fields.ContainsKey($Parts[0])) { throw "Package/runtime lock owner record is malformed: $OwnerPath" }
+        $Fields[$Parts[0]] = $Parts[1]
+    }
+    foreach ($Key in $Expected) { if (-not $Fields.ContainsKey($Key)) { throw "Package/runtime lock owner record is missing $Key" } }
+    if ($Fields['owner_id'] -notmatch '^[A-Za-z0-9._-]{1,128}$') { throw 'Package/runtime lock owner ID is invalid.' }
+    if ($Fields['purpose'] -notmatch '^(installer|convergence|startup-recovery|runtime-export|runtime-import|package-maintenance)$') { throw 'Package/runtime lock purpose is invalid.' }
+    if ($Fields['campaign_id'] -cne 'none' -and $Fields['campaign_id'] -notmatch '^cvg-[0-9a-f]{64}$') { throw 'Package/runtime lock campaign ID is invalid.' }
+    if ($Fields['host_id'] -notmatch '^[a-z0-9._-]{1,128}$') { throw 'Package/runtime lock host ID is invalid.' }
+    if ($Fields['pid'] -cne 'none' -and $Fields['pid'] -notmatch '^[1-9][0-9]*$') { throw 'Package/runtime lock PID is invalid.' }
+    if ($Fields['acquired_epoch'] -notmatch '^[0-9]+$' -or $Fields['lease_expires_epoch'] -notmatch '^[0-9]+$' -or [Int64]$Fields['lease_expires_epoch'] -lt [Int64]$Fields['acquired_epoch']) { throw 'Package/runtime lock lease is invalid.' }
+    return [PSCustomObject]@{ Fields=$Fields; Bytes=[Convert]::ToBase64String([IO.File]::ReadAllBytes($OwnerPath)); Path=$OwnerPath }
 }
-try { New-Item -ItemType Directory -Path $LockPath -ErrorAction Stop | Out-Null }
-catch { throw "Another AMS package/runtime writer is active or the shared lock cannot be acquired: $LockPath`n$($_.Exception.Message)" }
-$NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$OwnerText = @(
-    'ams-runtime-lock-v1',
-    "owner_id`t$LockOwner",
-    "purpose`tinstaller",
-    "campaign_id`tnone",
-    "pid`t$PID",
-    "acquired_epoch`t$NowEpoch",
-    "lease_expires_epoch`t$($NowEpoch + 3600)"
-) -join "`n"
-try {
-    [IO.File]::WriteAllText((Join-Path $LockPath 'owner.log'), $OwnerText + "`n", (New-Object Text.UTF8Encoding($false)))
+
+function Get-OwnerlessLockSnapshot {
+    param([Parameter(Mandatory=$true)][string]$Directory)
+    $Rows = New-Object 'System.Collections.Generic.List[string]'
+    $Items = @(Get-ChildItem -LiteralPath $Directory -Force | Sort-Object -Property Name -CaseSensitive)
+    if ($Items.Count -gt 1) { throw 'Ownerless package/runtime lock contains more than one staging owner file.' }
+    foreach ($Item in $Items) {
+        if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $Item.Name -notmatch '^\.owner-[A-Za-z0-9._-]+$') {
+            throw "Ownerless package/runtime lock contains an unexpected entry: $($Item.FullName)"
+        }
+        if ($Item.Length -gt 4096) { throw "Ownerless package/runtime lock staging file is oversized: $($Item.FullName)" }
+        Assert-OwnerOnlyRuntimeAccess -Path $Item.FullName -Directory $false
+        $Rows.Add(("{0}`t{1}`t{2}" -f $Item.Name, $Item.Length, (Get-Sha256 -Path $Item.FullName)))
+    }
+    return ($Rows.ToArray() -join "`n")
 }
-catch {
-    Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue
-    throw "Could not publish the package/runtime lock owner record.`n$($_.Exception.Message)"
+
+function Publish-SharedRuntimeLock {
+    New-Item -ItemType Directory -Path $LockPath -ErrorAction Stop | Out-Null
+    Set-OwnerOnlyRuntimeAccess -Path $LockPath -Directory $true
+    $NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $OwnerText = @(
+        'ams-runtime-lock-v1',
+        "owner_id`t$LockOwner",
+        "purpose`tinstaller",
+        "campaign_id`tnone",
+        "host_id`t$LockHost",
+        "pid`t$PID",
+        "acquired_epoch`t$NowEpoch",
+        "lease_expires_epoch`t$($NowEpoch + 21600)"
+    ) -join "`n"
+    $OwnerTemp = Join-Path $LockPath ".owner-$PID-$([Guid]::NewGuid().ToString('N'))"
+    [IO.File]::WriteAllText($OwnerTemp, $OwnerText + "`n", (New-Object Text.UTF8Encoding($false)))
+    Set-OwnerOnlyRuntimeAccess -Path $OwnerTemp -Directory $false
+    Move-Item -LiteralPath $OwnerTemp -Destination (Join-Path $LockPath 'owner.log')
+    Set-OwnerOnlyRuntimeAccess -Path (Join-Path $LockPath 'owner.log') -Directory $false
+    $Published = Read-SharedRuntimeLockOwner -Directory $LockPath
+    if ($Published.Fields['owner_id'] -cne $LockOwner) { throw 'Package/runtime lock owner verification failed.' }
 }
+
+function Acquire-SharedRuntimeLock {
+    foreach ($Attempt in 1..3) {
+        try { Publish-SharedRuntimeLock; return }
+        catch {
+            if (-not (Test-Path -LiteralPath $LockPath)) { if ($Attempt -eq 3) { throw }; continue }
+        }
+        $OwnerPath = Join-Path $LockPath 'owner.log'
+        if (-not (Test-Path -LiteralPath $OwnerPath -PathType Leaf)) {
+            $LockItem = Get-Item -LiteralPath $LockPath -Force
+            $AgeSeconds = ([DateTime]::UtcNow - $LockItem.LastWriteTimeUtc).TotalSeconds
+            if ($AgeSeconds -le 30) { throw "Package/runtime lock initialization is still within its grace period: $LockPath" }
+            $Before = Get-OwnerlessLockSnapshot -Directory $LockPath
+            Start-Sleep -Seconds 1
+            if (Test-Path -LiteralPath $OwnerPath -PathType Leaf) { continue }
+            $After = Get-OwnerlessLockSnapshot -Directory $LockPath
+            if ($After -cne $Before) { continue }
+            $NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $Quarantine = "$LockPath.stale.$NowEpoch.$LockOwner"
+            if (Test-Path -LiteralPath $Quarantine) { throw "Stale-lock quarantine path already exists: $Quarantine" }
+            try { Move-Item -LiteralPath $LockPath -Destination $Quarantine -ErrorAction Stop }
+            catch { continue }
+            if ((Get-OwnerlessLockSnapshot -Directory $Quarantine) -cne $Before) {
+                if (-not (Test-Path -LiteralPath $LockPath) -and (Test-Path -LiteralPath $Quarantine)) { Move-Item -LiteralPath $Quarantine -Destination $LockPath -ErrorAction SilentlyContinue }
+                throw 'Ownerless package/runtime lock changed during quarantine; takeover refused.'
+            }
+            try { Publish-SharedRuntimeLock; $script:LockQuarantine=$Quarantine; Remove-Item -LiteralPath $Quarantine -Recurse -Force; $script:LockQuarantine=$null; return }
+            catch {
+                if (-not (Test-Path -LiteralPath $LockPath) -and (Test-Path -LiteralPath $Quarantine)) { Move-Item -LiteralPath $Quarantine -Destination $LockPath -ErrorAction SilentlyContinue }
+                throw
+            }
+        }
+        $Existing = Read-SharedRuntimeLockOwner -Directory $LockPath
+        $NowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ([Int64]$Existing.Fields['lease_expires_epoch'] -gt $NowEpoch) {
+            throw "Another AMS package/runtime writer holds the lock: owner=$($Existing.Fields['owner_id']), purpose=$($Existing.Fields['purpose']), expires=$($Existing.Fields['lease_expires_epoch'])"
+        }
+        if ($Existing.Fields['host_id'] -cne $LockHost) { throw "Expired package/runtime lock belongs to another host; takeover is ambiguous: $($Existing.Fields['host_id'])" }
+        if ($Existing.Fields['pid'] -ceq 'none') { throw 'Expired package/runtime lock has no process identity; takeover is ambiguous.' }
+        if (Get-Process -Id ([int]$Existing.Fields['pid']) -ErrorAction SilentlyContinue) { throw "Expired package/runtime lock owner process is still live: $($Existing.Fields['pid'])" }
+        if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($Existing.Path)) -cne $Existing.Bytes) { continue }
+        $Quarantine = "$LockPath.stale.$NowEpoch.$LockOwner"
+        if (Test-Path -LiteralPath $Quarantine) { throw "Stale-lock quarantine path already exists: $Quarantine" }
+        try { Move-Item -LiteralPath $LockPath -Destination $Quarantine -ErrorAction Stop }
+        catch { continue }
+        $QuarantinedOwner = Join-Path $Quarantine 'owner.log'
+        if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($QuarantinedOwner)) -cne $Existing.Bytes) {
+            if (-not (Test-Path -LiteralPath $LockPath) -and (Test-Path -LiteralPath $Quarantine)) { Move-Item -LiteralPath $Quarantine -Destination $LockPath -ErrorAction SilentlyContinue }
+            throw 'Stale package/runtime lock owner changed during quarantine; takeover refused.'
+        }
+        try { Publish-SharedRuntimeLock; $script:LockQuarantine=$Quarantine; Remove-Item -LiteralPath $Quarantine -Recurse -Force; $script:LockQuarantine=$null; return }
+        catch {
+            if (-not (Test-Path -LiteralPath $LockPath) -and (Test-Path -LiteralPath $Quarantine)) { Move-Item -LiteralPath $Quarantine -Destination $LockPath -ErrorAction SilentlyContinue }
+            throw
+        }
+    }
+    throw "Package/runtime lock changed repeatedly; retry after inspecting $LockPath."
+}
+
+Acquire-SharedRuntimeLock
 
 $StageRoot = Join-Path $SkillHome (".ams-install-{0}-{1}" -f $PID, [Guid]::NewGuid().ToString("N"))
 $Candidate = Join-Path $StageRoot $SkillName
@@ -438,6 +618,7 @@ try {
         if (-not (Test-Path -LiteralPath $SavedRuntime -PathType Container)) { throw "Preserved AMS runtime state disappeared during replacement." }
         if (Test-Path -LiteralPath $InstalledRuntime) { throw "Candidate unexpectedly contains package-local runtime state." }
         Copy-Item -LiteralPath $SavedRuntime -Destination $InstalledRuntime -Recurse
+        Protect-RuntimeTree -Path $InstalledRuntime
         $RuntimeSnapshotAfter = @(Get-RuntimeStateSnapshot -Path $InstalledRuntime)
         if ($RuntimeSnapshotBefore.Count -ne $RuntimeSnapshotAfter.Count) { throw "AMS runtime state changed during preservation; retry from a stable record boundary." }
         for ($RuntimeIndex = 0; $RuntimeIndex -lt $RuntimeSnapshotBefore.Count; $RuntimeIndex++) {
@@ -531,4 +712,5 @@ finally {
         $OwnerBytes = [IO.File]::ReadAllText($OwnerPath)
         if ($OwnerBytes -match "(?m)^owner_id`t$([regex]::Escape($LockOwner))$") { Remove-Item -LiteralPath $LockPath -Recurse -Force -ErrorAction SilentlyContinue }
     }
+    if ($LockQuarantine -and (Test-Path -LiteralPath $LockQuarantine)) { Remove-Item -LiteralPath $LockQuarantine -Recurse -Force -ErrorAction SilentlyContinue }
 }

@@ -5,9 +5,9 @@ import argparse,csv,hashlib,io,json
 from pathlib import Path
 from typing import Any
 ROOT=Path(__file__).resolve().parents[1]
-BASE=ROOT/'verification/fixtures/baseline-install-manifest-ams4-conflict-resolved.txt'
+BASE=ROOT/'verification/fixtures/baseline-install-manifest-pr44-pre-corrections.txt'
 CURRENT=ROOT/'install-manifest.txt'
-BASE_LABEL='AMS-4.0-Conflict-Resolved-Working-Architecture-e43069d'
+BASE_LABEL='PR44 head f7f572d229efa6f93662b7239b1984985d02e4fb before required corrections'
 EXTENSIONS=(ROOT/'extensions/ams-app-task-lane',ROOT/'extensions/ams-runtime-observation')
 
 def manifest(path:Path)->dict[str,dict[str,Any]]:

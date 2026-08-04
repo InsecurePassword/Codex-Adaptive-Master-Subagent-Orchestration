@@ -4,7 +4,7 @@ Read completely only for an explicit install, update, repair, rollback, uninstal
 
 ## Authority and shared runtime lock
 
-Require direct user authority before mutation or uninstall. Acquire the shared package/runtime lock defined by `convergence-control.md` before reading or replacing package-local runtime state, and hold it from pre-snapshot through backup deletion or rollback completion. Finish or roll back active control writes first. Do not stop unrelated project sessions solely for package work.
+Require direct user authority before mutation or uninstall. Acquire the exact shared lock and stale-takeover protocol defined by `convergence-control.md` before reading or replacing package-local runtime state, and hold it from pre-snapshot through backup deletion or rollback completion. Finish or roll back active control writes first. Do not stop unrelated project sessions solely for package work.
 
 Preserve continuity through current root state, authorized project-native records, a concise handoff, and authorized convergence tracking/history. Convergence records are the sole exception to the prohibition on AMS-specific durable runtime files; create no task database, general recovery ledger, review ledger, settings history, or memory file.
 
@@ -16,7 +16,7 @@ Validate exact manifest membership, lengths, SHA-256 values, version, profile in
 
 ## Mutation, repair, and rollback
 
-Stage the complete candidate outside the installed root. Under the shared lock, validate and snapshot the exact safe runtime layout, back up the prior skill and replaceable profiles, install transactionally, restore runtime state, and compare the preserved snapshot before deleting the backup. Restore and verify prior state on failure.
+Stage the complete candidate outside the installed root. Under the shared lock, validate the deterministic campaign IDs, record schemas, owner-only permissions, and exact safe runtime layout; snapshot it, back up the prior skill and replaceable profiles, install transactionally, restore runtime state with the same permissions, and compare the preserved snapshot before deleting the backup. Restore and verify prior state on failure.
 
 Existing profiles are replaceable only when byte-identical to the current asset or an exact installer-recognized prior official file. Any other differing profile blocks replacement until explicitly reconciled.
 

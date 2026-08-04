@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import unittest
+import hashlib
+import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +45,21 @@ def resolve(data: dict[str, object], defaults: dict[str, object] = DEFAULTS) -> 
     return {**defaults, **material}
 
 
+def deterministic_campaign_id(project_root: str, objective: str, boundary: str, surface: str) -> str:
+    project_root = unicodedata.normalize("NFC", project_root)
+    objective = unicodedata.normalize("NFC", objective)
+    boundary = re.sub(r"[ \t]+", " ", unicodedata.normalize("NFC", boundary)).strip()
+    surface = re.sub(r"[ \t]+", " ", unicodedata.normalize("NFC", surface)).strip()
+    payload = (
+        "ams-convergence-campaign-v1\n"
+        f"project_root\t{project_root}\n"
+        f"root_objective_id\t{objective}\n"
+        f"acceptance_boundary\t{boundary}\n"
+        f"candidate_surface\t{surface}\n"
+    ).encode("utf-8")
+    return "cvg-" + hashlib.sha256(payload).hexdigest()
+
+
 @dataclass
 class Campaign:
     correction_limit: int = 4
@@ -49,6 +67,7 @@ class Campaign:
     redesign_count: int = 0
     correction_count: int = 0
     tracked: bool = False
+    state: str = "monitoring"
     terminal: str | None = None
 
     def correction(self) -> str:
@@ -59,7 +78,8 @@ class Campaign:
     def redesign(self) -> str:
         self.tracked = True
         if self.redesign_count >= self.redesign_limit:
-            return "intervention-required"
+            self.state = "intervention-required"
+            return self.state
         self.redesign_count += 1
         self.correction_count = 0
         return "new-epoch"
@@ -67,7 +87,10 @@ class Campaign:
     def finalize(self, disposition: str) -> str:
         if not self.tracked:
             return "no-record"
+        if disposition == "intervention-required":
+            raise ValueError("intervention-required is active, not terminal")
         self.terminal = disposition
+        self.state = "terminal"
         return "history-published"
 
 
@@ -140,11 +163,54 @@ class ContractScenarios(unittest.TestCase):
         self.assertTrue(override("Override AMS convergence limit for this objective"))
 
     def test_fallback_is_suppressed_during_convergence(self) -> None:
-        def fallback(enabled: bool, active: bool, terminal: str | None) -> bool:
-            return enabled and (not active or terminal in {"failed", "blocked"})
-        self.assertFalse(fallback(True, True, None))
-        self.assertFalse(fallback(True, True, "intervention-required"))
-        self.assertTrue(fallback(True, True, "failed"))
+        def fallback(enabled: bool, state: str, terminal: str | None) -> bool:
+            return enabled and state == "terminal" and terminal in {"failed", "blocked"}
+        self.assertFalse(fallback(True, "convergence", None))
+        self.assertFalse(fallback(True, "intervention-required", None))
+        self.assertTrue(fallback(True, "terminal", "failed"))
+
+    def test_intervention_requires_user_decision_before_terminalization(self) -> None:
+        campaign = Campaign(redesign_count=4)
+        self.assertEqual(campaign.redesign(), "intervention-required")
+        self.assertIsNone(campaign.terminal)
+        with self.assertRaises(ValueError):
+            campaign.finalize("intervention-required")
+        self.assertEqual(campaign.finalize("user-override"), "history-published")
+
+    def test_campaign_id_is_deterministic_and_identity_bound(self) -> None:
+        first = deterministic_campaign_id("/project", "root-1", "accept", "src/audio")
+        self.assertEqual(first, deterministic_campaign_id("/project", "root-1", "accept", "src/audio"))
+        self.assertNotEqual(first, deterministic_campaign_id("/project", "root-1", "accept", "src/video"))
+        self.assertEqual(
+            deterministic_campaign_id("/project", "root-é", "packet   acceptance", "src/audio"),
+            deterministic_campaign_id("/project", "root-e\u0301", " packet acceptance ", "src/audio"),
+        )
+        self.assertRegex(first, r"^cvg-[0-9a-f]{64}$")
+
+    def test_compaction_discovery_fails_closed_above_limit(self) -> None:
+        def discover(record_names: list[str]) -> list[str]:
+            ordered = sorted(record_names)
+            if len(ordered) > 128:
+                raise OverflowError("discovery-overflow")
+            return ordered
+
+        self.assertEqual(discover(["b.tracking.log", "a.tracking.log"]), ["a.tracking.log", "b.tracking.log"])
+        with self.assertRaisesRegex(OverflowError, "discovery-overflow"):
+            discover([f"{index:03d}.tracking.log" for index in range(129)])
+
+    def test_shared_lock_wire_format_is_exact(self) -> None:
+        convergence = (PACKAGE / "references/convergence-control.md").read_text(encoding="utf-8")
+        for field in (
+            "ams-runtime-lock-v1",
+            "owner_id<TAB>",
+            "purpose<TAB>",
+            "campaign_id<TAB>",
+            "host_id<TAB>",
+            "pid<TAB>",
+            "acquired_epoch<TAB>",
+            "lease_expires_epoch<TAB>",
+        ):
+            self.assertIn(field, convergence)
 
     def test_feature_combinations_do_not_imply_each_other(self) -> None:
         settings = resolve(
@@ -177,8 +243,10 @@ class ContractScenarios(unittest.TestCase):
     def test_status_and_recovery_route_to_convergence_state_reader(self) -> None:
         control = (PACKAGE / "references/project-control.md").read_text(encoding="utf-8")
         core = (PACKAGE / "references/runtime-core.md").read_text(encoding="utf-8")
-        self.assertIn("state-reader/status section of `convergence-control.md`", control)
-        self.assertIn("On startup, compaction recovery, or `AMS STATUS`", core)
+        self.assertIn("observational state-reader/status section of `convergence-control.md`", control)
+        self.assertIn("Status never claims ownership", control)
+        self.assertIn("On startup or compaction recovery", core)
+        self.assertIn("`AMS STATUS` loads only the observational reader", core)
 
     def test_companion_availability_is_not_enablement(self) -> None:
         def usable(enabled: bool, available: bool, compatible: bool, user: bool) -> bool:

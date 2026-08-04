@@ -19,7 +19,7 @@ Once the full response takes custody, no ordinary retry loop, speculative review
 
 ## Campaigns, epochs, and limits
 
-Use the parent identity established by `runtime-core.md`: root objective + acceptance boundary + candidate surface. Epoch 1 begins with `redesign_count = 0`. Each material architecture/invariant redesign:
+Use the parent identity established by `runtime-core.md`: canonical project root + root objective + acceptance boundary + candidate surface. Normalize all four values to Unicode NFC and reject control characters. Use the already-established physical absolute project root, `/` separators, no redundant/trailing separator except a filesystem root, and case-fold only when that filesystem is proven case-insensitive. Use the exact stable root-objective ID, not objective prose. Prefer authoritative packet/checkpoint/receipt and surface IDs; otherwise trim and collapse ASCII whitespace in the boundary and surface labels. Encode exactly as `ams-convergence-campaign-v1\nproject_root<TAB>...\nroot_objective_id<TAB>...\nacceptance_boundary<TAB>...\ncandidate_surface<TAB>...\n`, and set `campaign_id = cvg-<lowercase SHA-256 of those UTF-8/LF bytes>`. Before first creation and under the shared lock, perform the complete bounded active-record search using these normalized fields. Reuse the exact deterministic path when present; if that path is absent but one safe legacy/nondeterministic record matches the same parent, reconcile that record instead of creating another; multiple matches, a conflicting deterministic path, or unsafe migration blocks. Never choose a random ID or create a second active record for one parent. Epoch 1 begins with `redesign_count = 0`. Each material architecture/invariant redesign:
 
 1. increments `redesign_count`;
 2. starts the next design epoch under the same parent;
@@ -43,13 +43,26 @@ The shared package/runtime lock is outside the replaceable skill directory:
 <skill-parent>/.adaptive-master-subagent-orchestration.runtime.lock/
 ```
 
-Every convergence read, claim, update, finalization, stale reconciliation, history publication, export/import, install, update, repair, rollback, or uninstall touching runtime state must acquire this same lock. Lock order is always: shared package/runtime lock → tracking record generation check → immutable history publication. Never acquire another AMS package/runtime lock inside it.
+Every claim, update, finalization, stale reconciliation, history publication, export/import, install, update, repair, rollback, uninstall, or recovery read that may acquire custody must use this same lock. Lock order is always: shared package/runtime lock → tracking record generation check → immutable history publication. Never acquire another AMS package/runtime lock inside it. `AMS STATUS` is the sole lock-free exception: it performs only bounded identity-stable reads, creates no lock, and reports `state-changing` instead of guessing when two immediate metadata-and-byte snapshots differ.
 
-Acquire by atomically creating the lock directory and a bounded `owner.log` containing owner token, purpose, campaign when applicable, acquisition/renewal time, and lease expiry. If it exists with a valid unexpired lease, wait only a bounded period or report the owner. If expired, take over only after the prior owner is proven non-live when observable; atomically quarantine the old lock directory before creating a new one. If liveness or takeover is ambiguous, stop rather than split ownership. Release only when the owner token still matches. Installers hold this lock from pre-snapshot through backup deletion.
+The lock directory is owner-only (`0700` on POSIX; current user plus system/administrators only on Windows) and contains exactly one owner-only `owner.log` (`0600` or equivalent), at most 4 KiB, UTF-8/LF, with this exact order:
+
+```text
+ams-runtime-lock-v1
+owner_id<TAB><[A-Za-z0-9._-]{1,128}>
+purpose<TAB><installer|convergence|startup-recovery|runtime-export|runtime-import|package-maintenance>
+campaign_id<TAB><campaign-id|none>
+host_id<TAB><lowercase [a-z0-9._-]{1,128}>
+pid<TAB><positive decimal|none>
+acquired_epoch<TAB><non-negative decimal>
+lease_expires_epoch<TAB><non-negative decimal>
+```
+
+Acquire by owner-only atomic directory creation, publish complete owner bytes promptly, then verify owner token and permissions. An unexpired lease reports the owner after at most a bounded wait. For an expired valid lease, automatic takeover is allowed only when `host_id` equals the current canonical lowercase host ID, the numeric PID is proven non-live, and the owner bytes remain unchanged before and after quarantine. A crash before `owner.log` publication is recoverable only after a 30-second initialization grace when the real directory remains unchanged across two one-second snapshots and contains no entries except at most one bounded owner-only `.owner.*` staging file; quarantine it before claiming. A foreign host, `pid = none`, malformed published record, live PID, changed snapshot/bytes, unexpected entry, failed quarantine, or ambiguous liveness blocks. Release only when the exact owner token still matches. Installers implement this same protocol and hold the lock from pre-snapshot through backup deletion.
 
 ## Record format, ownership lease, and generation fencing
 
-Tracking and history records are bounded UTF-8/LF tab-delimited logs, not free-form prose or JSON. They contain no tabs/newlines/control characters inside values and no prompts, credentials, environment variables, private reasoning, or raw logs.
+Tracking and history directories/records are owner-only (`0700` directories and `0600` files on POSIX, or the Windows ACL equivalent defined above). Creation, atomic replacement, history publication, import, and installer restoration must set and verify those permissions. Records are bounded UTF-8/LF tab-delimited logs, not free-form prose or JSON, and contain no tabs/newlines/control characters inside values and no prompts, credentials, environment variables, private reasoning, or raw logs.
 
 Active records begin exactly:
 
@@ -76,6 +89,7 @@ epoch_correction_count
 correction_limit
 candidate_receipt
 acceptance_boundary
+candidate_surface
 finding_fingerprints
 last_resolution_action
 ```
@@ -118,7 +132,6 @@ accept
 accept-with-follow-up
 blocked
 failed
-intervention-required
 cancelled
 user-disabled
 user-override
@@ -126,22 +139,22 @@ superseded
 stale
 ```
 
-Finalization applies whenever a tracked campaign closes, including pre-trigger acceptance/cancellation, a new user-defined objective, feature/governance disable, or explicit override. If history publication fails, set the active record to `terminal-pending-history`, release campaign custody, and report the maintenance blocker. Direct user disable/override still takes effect; the record is retried by the next status/startup reconciliation and is never resumed as active work.
+Finalization applies whenever a tracked campaign closes, including pre-trigger acceptance/cancellation, a new user-defined objective, feature/governance disable, or explicit override. `intervention-required` is never terminal: it retains active custody until a direct user decision, then finalizes as the resulting `accept`, `accept-with-follow-up`, `user-override`, `cancelled`, `superseded`, `blocked`, or `failed` disposition. If history publication fails, set `terminal-pending-history`, release operational custody only when the chosen terminal outcome permits it, and report the maintenance blocker. Direct disable/override still takes effect. `AMS STATUS` only reports pending repair; the next top-level startup recovery performs publication/deletion and never resumes the record as active work.
 
 Immutable per-campaign history removes global append saturation. History files are retained until explicit user-authorized archival/removal; installers preserve the exact safe layout.
 
 ## Bounded discovery, status, and compaction recovery
 
-When the campaign ID is known, read only that exact safe file. When context loss removed it, under the shared lock enumerate at most 128 safe `*.tracking.log` files and compare bounded fields in this order:
+When the campaign ID is known, read only that exact safe file. Startup/recovery reads it under the shared lock; `AMS STATUS` requires two identical immediate file identity, size, timestamp, and byte snapshots. When context loss removed the ID, startup/recovery lists under the shared lock; status takes two identical bytewise directory-name snapshots before reading. In either path, sort safe `*.tracking.log` names bytewise. If more than 128 exist, stop with `discovery-overflow`; never inspect an arbitrary subset. Otherwise compare every record in this order:
 
 1. exact normalized project root;
 2. root objective ID when known;
 3. candidate receipt, first qualifying work-order identity, or acceptance boundary;
 4. current live ownership/session evidence.
 
-Exactly one match may be reconciled. No match means no resumable campaign. Multiple plausible matches block and are reported; never guess or read history as active state. Status may read but not claim a valid unexpired record. Recovery claims only through the lease/generation protocol.
+Exactly one match may be reconciled. No match means no resumable campaign. Multiple plausible matches or discovery overflow block and are reported; never guess or read history as active state. `AMS STATUS` is strictly observational: it neither claims records nor publishes history. Startup recovery claims only through the lease/generation protocol.
 
-For an expired record with no matching active objective and no live owner, finalize it `stale`. A `terminal-pending-history` record is finalized before any attempt to resume. Handoff includes campaign ID, epoch/counts/limits, receipt, state, owner lease, and tracking path.
+For an expired record with no matching active objective and no live owner, startup recovery finalizes it `stale`. Startup recovery finalizes `terminal-pending-history` before any resume attempt. Handoff includes campaign ID, epoch/counts/limits, receipt, state, owner lease, and tracking path.
 
 ## Full convergence response
 

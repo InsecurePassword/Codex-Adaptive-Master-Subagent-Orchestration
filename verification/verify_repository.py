@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "adaptive-master-subagent-orchestration"
 MANIFEST = ROOT / "install-manifest.txt"
-BASELINE = ROOT / "verification/fixtures/baseline-install-manifest-ams4-conflict-resolved.txt"
+BASELINE = ROOT / "verification/fixtures/baseline-install-manifest-pr44-pre-corrections.txt"
 EXPECTED_VERSION = "4.0"
 
 PROFILE_EFFORTS = {
@@ -183,7 +183,7 @@ def main() -> int:
     require(control, "Ignore retired top-level `schema_version` regardless of value", "legacy field contract")
     require(control, "never branch on it", "legacy field contract")
     require(control, "Ignore no other unknown field", "unknown-field contract")
-    require(control, "load the state-reader/status section of `convergence-control.md`", "status routing")
+    require(control, "load only the observational state-reader/status section of `convergence-control.md`", "status routing")
     require(control, "named governance capability despite governance being off", "direct governance routing")
 
     feature = read_safe(PACKAGE / "references/feature-control.md")
@@ -218,7 +218,8 @@ def main() -> int:
         "Generic quality/completion language—including “fix everything,” “do not stop,”",
         "After the first completed correction cycle or any redesign",
         "Whenever a tracked campaign reaches acceptance, cancellation, supersession/new objective",
-        "On startup, compaction recovery, or `AMS STATUS`",
+        "On startup or compaction recovery",
+        "`AMS STATUS` loads only the observational reader",
         "Once response custody begins",
     ):
         require(core, phrase, "core convergence detector")
@@ -230,8 +231,20 @@ def main() -> int:
         "record_generation",
         "terminal-pending-history",
         "Finalization applies whenever a tracked campaign closes",
-        "enumerate at most 128 safe `*.tracking.log` files",
+        "If more than 128 exist, stop with `discovery-overflow`",
+        "`AMS STATUS` is the sole lock-free exception",
+        "reports `state-changing`",
         "shared package/runtime lock",
+        "ams-runtime-lock-v1",
+        "host_id<TAB><lowercase",
+        "owner-only (`0700` on POSIX",
+        "30-second initialization grace",
+        "owner bytes remain unchanged before and after quarantine",
+        "campaign_id = cvg-<lowercase SHA-256",
+        "Normalize all four values to Unicode NFC",
+        "perform the complete bounded active-record search",
+        "instead of creating another",
+        "`intervention-required` is never terminal",
     ):
         require(convergence, phrase, "convergence state contract")
     if "convergence.log" in convergence:
@@ -305,8 +318,14 @@ def main() -> int:
     for text, label in ((bash, "Bash installer"), (powershell, "PowerShell installer")):
         for phrase in (
             ".runtime.lock",
+            "ams-runtime-lock-v1",
+            "host_id",
+            "lease_expires_epoch",
+            "initialization is still within its grace period",
+            "changed during quarantine",
             "ams-convergence-tracking-v1",
             "ams-convergence-history-v1",
+            "candidate_surface",
             "record_generation",
             "terminal_receipt",
         ):

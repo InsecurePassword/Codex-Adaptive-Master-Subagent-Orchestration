@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 077
 
 repo_owner="InsecurePassword"
 repo_name="Codex-Adaptive-Master-Subagent-Orchestration"
@@ -90,7 +91,7 @@ fail() {
   exit 1
 }
 
-for command_name in curl awk sort cmp mktemp wc tr grep head tail od find dirname iconv; do
+for command_name in curl awk sort cmp mktemp wc tr grep head tail od find dirname iconv stat chmod hostname; do
   command -v "$command_name" >/dev/null 2>&1 || fail "Required command not found: ${command_name}"
 done
 
@@ -102,6 +103,138 @@ sha256_file() {
   else
     fail "A SHA-256 tool is required (sha256sum or shasum)."
   fi
+}
+
+sha256_stream() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum | awk '{print tolower($1)}'
+  else shasum -a 256 | awk '{print tolower($1)}'; fi
+}
+
+path_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then stat -c '%a' "$1"; else stat -f '%Lp' "$1"; fi
+}
+
+require_mode() {
+  local path=$1 expected=$2 actual
+  actual="$(path_mode "$path")"
+  [[ "$actual" == "$expected" ]] || fail "AMS runtime path permissions are unsafe: ${path} (mode ${actual}, expected ${expected})"
+}
+
+current_host_id() {
+  local value
+  value="$(hostname 2>/dev/null | LC_ALL=C tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9._-' | head -c 128)"
+  [[ -n "$value" ]] || fail "Unable to derive a safe local host identifier for the package/runtime lock."
+  printf '%s\n' "$value"
+}
+
+path_mtime_epoch() {
+  if stat -c '%Y' "$1" >/dev/null 2>&1; then stat -c '%Y' "$1"; else stat -f '%m' "$1"; fi
+}
+
+ownerless_lock_snapshot() {
+  local directory=$1 path name size digest count=0 old_lc=${LC_ALL-}
+  local -a paths=()
+  LC_ALL=C
+  shopt -s nullglob dotglob
+  paths=("$directory"/*)
+  shopt -u nullglob dotglob
+  if [[ -n "$old_lc" ]]; then LC_ALL=$old_lc; else unset LC_ALL; fi
+  for path in "${paths[@]}"; do
+    name="$(basename "$path")"
+    [[ "$name" == .owner.* && -f "$path" && ! -L "$path" ]] || fail "Ownerless package/runtime lock contains an unexpected entry: ${path}"
+    count=$((count + 1)); (( count <= 1 )) || fail "Ownerless package/runtime lock contains more than one staging owner file."
+    require_mode "$path" 600
+    size="$(wc -c < "$path" | tr -d '[:space:]')"
+    (( size >= 0 && size <= 4096 )) || fail "Ownerless package/runtime lock staging file is oversized: ${path}"
+    digest="$(sha256_file "$path")"
+    printf '%s\t%s\t%s\n' "$name" "$size" "$digest"
+  done
+}
+
+validate_lock_owner() {
+  local path=$1 expected='owner_id,purpose,campaign_id,host_id,pid,acquired_epoch,lease_expires_epoch'
+  validate_runtime_text "$path" 4096
+  awk -F '	' -v expected="$expected" '
+    NR == 1 { if ($0 != "ams-runtime-lock-v1") exit 10; next }
+    NF != 2 || seen[$1]++ || length($0) > 1024 { exit 11 }
+    { value=substr($0,length($1)+2); if (value ~ /[[:cntrl:]]/) exit 12 }
+    END { n=split(expected,keys,","); for(i=1;i<=n;i++) if(!seen[keys[i]]) exit 13; if(NR != n+1) exit 14 }
+  ' "$path" || fail "Package/runtime lock owner record is malformed: ${path}"
+  local owner purpose campaign host pid acquired expires
+  owner="$(runtime_field "$path" owner_id)"; purpose="$(runtime_field "$path" purpose)"; campaign="$(runtime_field "$path" campaign_id)"
+  host="$(runtime_field "$path" host_id)"; pid="$(runtime_field "$path" pid)"; acquired="$(runtime_field "$path" acquired_epoch)"; expires="$(runtime_field "$path" lease_expires_epoch)"
+  [[ "$owner" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || fail "Package/runtime lock owner ID is invalid."
+  [[ "$purpose" =~ ^(installer|convergence|startup-recovery|runtime-export|runtime-import|package-maintenance)$ ]] || fail "Package/runtime lock purpose is invalid."
+  [[ "$campaign" == none || "$campaign" =~ ^cvg-[0-9a-f]{64}$ ]] || fail "Package/runtime lock campaign ID is invalid."
+  [[ "$host" =~ ^[a-z0-9._-]{1,128}$ ]] || fail "Package/runtime lock host ID is invalid."
+  [[ "$pid" == none || "$pid" =~ ^[1-9][0-9]*$ ]] || fail "Package/runtime lock PID is invalid."
+  [[ "$acquired" =~ ^[0-9]+$ && "$expires" =~ ^[0-9]+$ ]] || fail "Package/runtime lock lease is invalid."
+  (( expires >= acquired )) || fail "Package/runtime lock lease is invalid."
+}
+
+acquire_runtime_lock() {
+  local attempts=0 now owner_path expires host pid quarantine observed_hash current_hash owner_tmp now_epoch
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    attempts=$((attempts + 1)); (( attempts <= 3 )) || fail "Package/runtime lock changed repeatedly; retry after inspecting ${lock_dir}."
+    [[ -d "$lock_dir" && ! -L "$lock_dir" ]] || fail "Package/runtime lock path is redirected or not a directory: ${lock_dir}"
+    owner_path="${lock_dir}/owner.log"
+    if [[ ! -e "$owner_path" ]]; then
+      local claim_mtime claim_before claim_after
+      now="$(date +%s)"; claim_mtime="$(path_mtime_epoch "$lock_dir")"
+      (( now - claim_mtime > 30 )) || fail "Package/runtime lock initialization is still within its grace period: ${lock_dir}"
+      claim_before="$(ownerless_lock_snapshot "$lock_dir")"
+      sleep 1
+      [[ ! -e "$owner_path" ]] || continue
+      claim_after="$(ownerless_lock_snapshot "$lock_dir")"
+      [[ "$claim_after" == "$claim_before" ]] || continue
+      quarantine="${lock_dir}.stale.${now}.${lock_owner}"
+      [[ ! -e "$quarantine" && ! -L "$quarantine" ]] || fail "Stale-lock quarantine path already exists: ${quarantine}"
+      if ! mv -- "$lock_dir" "$quarantine" 2>/dev/null; then continue; fi
+      [[ "$(ownerless_lock_snapshot "$quarantine")" == "$claim_before" ]] || {
+        if [[ ! -e "$lock_dir" && -d "$quarantine" ]]; then mv -- "$quarantine" "$lock_dir" 2>/dev/null || true; fi
+        fail "Ownerless package/runtime lock changed during quarantine; takeover refused."
+      }
+      if mkdir "$lock_dir" 2>/dev/null; then stale_lock_quarantine="$quarantine"; break; fi
+      if [[ ! -e "$lock_dir" && -d "$quarantine" ]]; then mv -- "$quarantine" "$lock_dir" 2>/dev/null || true; fi
+      continue
+    fi
+    require_mode "$lock_dir" 700
+    validate_lock_owner "$owner_path"; require_mode "$owner_path" 600
+    observed_hash="$(sha256_file "$owner_path")"; now="$(date +%s)"; expires="$(runtime_field "$owner_path" lease_expires_epoch)"
+    if (( expires > now )); then
+      fail "Another AMS package/runtime writer holds the lock: owner=$(runtime_field "$owner_path" owner_id), purpose=$(runtime_field "$owner_path" purpose), expires=${expires}"
+    fi
+    host="$(runtime_field "$owner_path" host_id)"; pid="$(runtime_field "$owner_path" pid)"
+    [[ "$host" == "$lock_host" ]] || fail "Expired package/runtime lock belongs to another host; takeover is ambiguous: ${host}"
+    [[ "$pid" != none ]] || fail "Expired package/runtime lock has no process identity; takeover is ambiguous."
+    if kill -0 "$pid" 2>/dev/null; then fail "Expired package/runtime lock owner process is still live: ${pid}"; fi
+    current_hash="$(sha256_file "$owner_path")"; [[ "$current_hash" == "$observed_hash" ]] || continue
+    quarantine="${lock_dir}.stale.${now}.${lock_owner}"
+    [[ ! -e "$quarantine" && ! -L "$quarantine" ]] || fail "Stale-lock quarantine path already exists: ${quarantine}"
+    if ! mv -- "$lock_dir" "$quarantine" 2>/dev/null; then continue; fi
+    if [[ "$(sha256_file "${quarantine}/owner.log")" != "$observed_hash" ]]; then
+      if [[ ! -e "$lock_dir" && -d "$quarantine" ]]; then mv -- "$quarantine" "$lock_dir" 2>/dev/null || true; fi
+      fail "Stale package/runtime lock owner changed during quarantine; takeover refused."
+    fi
+    if mkdir "$lock_dir" 2>/dev/null; then stale_lock_quarantine="$quarantine"; break; fi
+    if [[ ! -e "$lock_dir" && -d "$quarantine" ]]; then mv -- "$quarantine" "$lock_dir" 2>/dev/null || true; fi
+  done
+  chmod 700 "$lock_dir"; require_mode "$lock_dir" 700
+  owner_tmp="${lock_dir}/.owner.$$"; now_epoch="$(date +%s)"
+  umask 077
+  printf '%s\n' \
+    'ams-runtime-lock-v1' \
+    $'owner_id\t'"${lock_owner}" \
+    $'purpose\tinstaller' \
+    $'campaign_id\tnone' \
+    $'host_id\t'"${lock_host}" \
+    $'pid\t'"$$" \
+    $'acquired_epoch\t'"${now_epoch}" \
+    $'lease_expires_epoch\t'"$((now_epoch + 21600))" > "$owner_tmp" || fail "Could not stage the package/runtime lock owner record."
+  chmod 600 "$owner_tmp"; mv -- "$owner_tmp" "${lock_dir}/owner.log"
+  validate_lock_owner "${lock_dir}/owner.log"; require_mode "${lock_dir}/owner.log" 600
+  [[ "$(runtime_field "${lock_dir}/owner.log" owner_id)" == "$lock_owner" ]] || fail "Package/runtime lock owner verification failed."
+  if [[ -n "$stale_lock_quarantine" ]]; then rm -rf -- "$stale_lock_quarantine"; stale_lock_quarantine=""; fi
 }
 
 download_file() {
@@ -122,6 +255,7 @@ download_file() {
 validate_runtime_text() {
   local path=$1 maximum=$2 size bom last_byte linked
   [[ -f "$path" && ! -L "$path" ]] || fail "AMS runtime record is not a safe regular file: ${path}"
+  require_mode "$path" 600
   size="$(wc -c < "$path" | tr -d '[:space:]')"
   (( size > 0 && size <= maximum )) || fail "AMS runtime record size is invalid: ${path} (${size} bytes)"
   bom="$(head -c 3 "$path" | od -An -tx1 | tr -d ' \n')"
@@ -146,10 +280,10 @@ validate_runtime_record() {
   validate_runtime_text "$path" "$max_runtime_record_bytes"
   if [[ "$kind" == tracking ]]; then
     header='ams-convergence-tracking-v1'
-    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,finding_fingerprints,last_resolution_action'
+    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,candidate_surface,finding_fingerprints,last_resolution_action'
   else
     header='ams-convergence-history-v1'
-    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,finding_fingerprints,last_resolution_action,terminal_disposition,terminal_receipt,closed_at'
+    expected='campaign_id,root_objective_id,project_root,state,owner_id,owner_lease_expires_at,record_generation,created_at,updated_at,design_epoch_id,redesign_count,redesign_limit,epoch_correction_count,correction_limit,candidate_receipt,acceptance_boundary,candidate_surface,finding_fingerprints,last_resolution_action,terminal_disposition,terminal_receipt,closed_at'
   fi
   awk -F '\t' -v header="$header" -v expected="$expected" '
     NR == 1 { if ($0 != header) exit 10; next }
@@ -163,8 +297,17 @@ validate_runtime_record() {
   ' "$path" || fail "AMS convergence record structure is invalid: ${relative}"
 
   campaign_id="$(runtime_field "$path" campaign_id)"
-  [[ "$campaign_id" =~ ^[A-Za-z0-9._-]{1,96}$ ]] || fail "AMS convergence campaign ID is invalid: ${relative}"
-  [[ -n "$(runtime_field "$path" root_objective_id)" && -n "$(runtime_field "$path" project_root)" ]] || fail "AMS convergence identity is incomplete: ${relative}"
+  [[ "$campaign_id" =~ ^cvg-[0-9a-f]{64}$ ]] || fail "AMS convergence campaign ID is invalid: ${relative}"
+  local objective project boundary surface expected_campaign
+  objective="$(runtime_field "$path" root_objective_id)"; project="$(runtime_field "$path" project_root)"; boundary="$(runtime_field "$path" acceptance_boundary)"; surface="$(runtime_field "$path" candidate_surface)"
+  [[ -n "$objective" && -n "$project" && -n "$boundary" && -n "$surface" ]] || fail "AMS convergence identity is incomplete: ${relative}"
+  expected_campaign="cvg-$(printf 'ams-convergence-campaign-v1
+project_root	%s
+root_objective_id	%s
+acceptance_boundary	%s
+candidate_surface	%s
+' "$project" "$objective" "$boundary" "$surface" | sha256_stream)"
+  [[ "$campaign_id" == "$expected_campaign" ]] || fail "AMS convergence campaign ID does not match its canonical identity: ${relative}"
   state="$(runtime_field "$path" state)"
   generation="$(runtime_field "$path" record_generation)"
   correction_count="$(runtime_field "$path" epoch_correction_count)"
@@ -185,7 +328,7 @@ validate_runtime_record() {
   else
     terminal="$(runtime_field "$path" terminal_disposition)"; receipt="$(runtime_field "$path" terminal_receipt)"; closed="$(runtime_field "$path" closed_at)"
     [[ "$state" == terminal ]] || fail "AMS convergence history state is invalid: ${relative}"
-    [[ "$terminal" =~ ^(accept|accept-with-follow-up|blocked|failed|intervention-required|cancelled|user-disabled|user-override|superseded|stale)$ ]] || fail "AMS convergence terminal disposition is invalid: ${relative}"
+    [[ "$terminal" =~ ^(accept|accept-with-follow-up|blocked|failed|cancelled|user-disabled|user-override|superseded|stale)$ ]] || fail "AMS convergence terminal disposition is invalid: ${relative}"
     [[ "$receipt" =~ ^[0-9a-f]{64}$ ]] || fail "AMS convergence terminal receipt is invalid: ${relative}"
     [[ "$closed" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || fail "AMS convergence closed timestamp is invalid: ${relative}"
     [[ "$base" == "${campaign_id}.${receipt}.record.log" ]] || fail "AMS convergence history filename does not match its record: ${relative}"
@@ -195,11 +338,13 @@ validate_runtime_record() {
 validate_runtime_state() {
   local runtime_root=$1 total=0 count=0 path size relative
   [[ ! -L "$runtime_root" && -d "$runtime_root" ]] || fail "AMS runtime state is redirected or not a directory: ${runtime_root}"
+  require_mode "$runtime_root" 700
   while IFS= read -r -d '' path; do
     [[ "$path" != "$runtime_root" ]] || continue
     [[ ! -L "$path" ]] || fail "AMS runtime state contains a redirected path: ${path}"
     relative=${path#"${runtime_root}/"}
     if [[ -d "$path" ]]; then
+      require_mode "$path" 700
       case "$relative" in convergence|convergence/history) ;; *) fail "AMS runtime state contains an unexpected directory: ${relative}" ;; esac
     elif [[ -f "$path" ]]; then
       case "$relative" in
@@ -285,22 +430,10 @@ mkdir -p "$agent_home"
 
 lock_dir="${skill_home}/.${skill_name}.runtime.lock"
 [[ ! -L "$lock_dir" ]] || fail "Package/runtime lock path is redirected: ${lock_dir}"
-if ! mkdir "$lock_dir" 2>/dev/null; then
-  fail "Another AMS package/runtime writer is active or a stale lock exists: ${lock_dir}"
-fi
 lock_owner="installer-$$-$(date -u +%Y%m%dT%H%M%SZ)"
-lock_now="$(date +%s)"
-if ! printf '%s\n' \
-  'ams-runtime-lock-v1' \
-  $'owner_id\t'"${lock_owner}" \
-  $'purpose\tinstaller' \
-  $'campaign_id\tnone' \
-  $'pid\t'"$$" \
-  $'acquired_epoch\t'"${lock_now}" \
-  $'lease_expires_epoch\t'"$((lock_now + 3600))" > "${lock_dir}/owner.log"; then
-  rm -rf -- "$lock_dir" 2>/dev/null || true
-  fail "Could not publish the package/runtime lock owner record."
-fi
+lock_host="$(current_host_id)"
+stale_lock_quarantine=""
+acquire_runtime_lock
 
 stage_root=""
 backup_path=""
@@ -350,6 +483,7 @@ cleanup() {
   if [[ -f "${lock_dir}/owner.log" ]] && grep -Fqx $'owner_id\t'"${lock_owner}" "${lock_dir}/owner.log" 2>/dev/null; then
     rm -rf -- "$lock_dir" 2>/dev/null || true
   fi
+  [[ -z "$stale_lock_quarantine" ]] || rm -rf -- "$stale_lock_quarantine" 2>/dev/null || true
   exit "$status"
 }
 trap cleanup EXIT

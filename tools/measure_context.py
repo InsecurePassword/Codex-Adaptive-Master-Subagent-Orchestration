@@ -13,7 +13,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = REPO_ROOT / "adaptive-master-subagent-orchestration"
 BUDGET_PATH = REPO_ROOT / "tools" / "context-budget.json"
-BASELINE_PATH = REPO_ROOT / "tools" / "context-baseline-ams4-conflict-resolved.json"
+BASELINE_PATH = REPO_ROOT / "tools" / "context-baseline-pr44-pre-corrections.json"
 
 SCENARIOS = {
     "bootstrap_skill": ["SKILL.md"],
