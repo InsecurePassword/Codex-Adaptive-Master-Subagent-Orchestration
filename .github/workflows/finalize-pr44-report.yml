@@ -1,0 +1,180 @@
+name: Finalize and report PR 44
+
+on:
+  push:
+    branches:
+      - agent/ams-4.0-modular-governance
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ams-pr44-reporting-finalize
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.meta.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/ams-4.0-modular-governance
+          fetch-depth: 0
+      - id: meta
+        shell: bash
+        run: echo "artifact=ams-pr44-report-source-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Prepare frozen source or current clean tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          destination="$RUNNER_TEMP/final-source"
+          mkdir -p "$destination"
+          mapfile -t parts < <(find . -maxdepth 1 -type f -name '.ams-final-source.part*' -print | LC_ALL=C sort)
+          if (( ${#parts[@]} > 0 )); then
+            cat "${parts[@]}" | tr -d '\r\n' | base64 --decode > "$RUNNER_TEMP/source.tar.gz"
+            gzip -t "$RUNNER_TEMP/source.tar.gz"
+            mkdir -p "$RUNNER_TEMP/extracted"
+            python - "$RUNNER_TEMP/source.tar.gz" "$RUNNER_TEMP/extracted" <<'PY'
+          from pathlib import Path, PurePosixPath
+          import sys, tarfile
+          archive, target = Path(sys.argv[1]), Path(sys.argv[2])
+          with tarfile.open(archive, 'r:gz') as tf:
+              for item in tf.getmembers():
+                  path = PurePosixPath(item.name)
+                  if path.is_absolute() or '..' in path.parts or item.issym() or item.islnk():
+                      raise SystemExit(f'unsafe archive member: {item.name}')
+              tf.extractall(target, filter='data')
+          PY
+            candidate="$RUNNER_TEMP/extracted"
+            if [[ ! -f "$candidate/install.sh" ]]; then
+              mapfile -t roots < <(find "$candidate" -mindepth 1 -maxdepth 3 -type f -name install.sh -print | LC_ALL=C sort)
+              (( ${#roots[@]} == 1 )) || { printf 'Expected one source root, found %s\n' "${#roots[@]}" >&2; exit 1; }
+              candidate="$(dirname "${roots[0]}")"
+            fi
+            cp -a "$candidate"/. "$destination"/
+          else
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec cp -a -- {} "$destination"/ \;
+          fi
+          rm -f -- "$destination"/.ams-final-source*
+          rm -f -- "$destination"/.github/workflows/export-source-temporary.yml
+          rm -f -- "$destination"/.github/workflows/apply-final-source.yml
+          rm -f -- "$destination"/.github/workflows/apply-final-source-v2.yml
+          rm -f -- "$destination"/.github/workflows/finalize-pr44.yml
+          rm -f -- "$destination"/.github/workflows/finalize-pr44-report.yml
+          test "$(tr -d '\r\n' < "$destination/adaptive-master-subagent-orchestration/VERSION")" = 4.0
+          test -f "$destination/install-manifest.txt"
+          test -f "$destination/.github/workflows/verify.yml"
+          for required in verify_repository.py verify_contract_scenarios.py verify_installers.py verify_installers_windows.py verify_runtime_observation.py; do
+            test -f "$destination/verification/$required"
+          done
+          ! find "$destination" \( -name .git -o -name '.ams-final-source*' -o -name 'export-source-temporary.yml' -o -name 'apply-final-source*.yml' -o -name 'finalize-pr44*.yml' \) -print | grep -q .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: ${{ runner.temp }}/final-source
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  verify:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.artifact }}
+          path: source
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Compile verification
+        shell: bash
+        working-directory: source
+        run: python -m py_compile verification/*.py tools/*.py extensions/ams-runtime-observation/tools/*.py
+      - name: Verify package and contracts
+        shell: bash
+        working-directory: source
+        run: |
+          python verification/verify_repository.py
+          python verification/verify_contract_scenarios.py
+      - name: Verify Unix installer transactions
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: source
+        run: python verification/verify_installers.py
+      - name: Verify Windows installer transactions
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: source
+        run: python verification/verify_installers_windows.py
+      - name: Verify runtime observation
+        shell: bash
+        working-directory: source
+        run: python verification/verify_runtime_observation.py
+      - name: Verify PowerShell runtime observation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: source
+        run: ./verification/Verify-RuntimeObservation.ps1
+      - name: Verify deterministic context
+        shell: bash
+        working-directory: source
+        run: python tools/measure_context.py --json > context.json
+      - name: Parse Bash installer
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: source
+        run: bash -n install.sh
+      - name: Parse PowerShell files
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: source
+        run: |
+          [void][scriptblock]::Create((Get-Content -Raw ./install.ps1))
+          [void][scriptblock]::Create((Get-Content -Raw ./extensions/ams-runtime-observation/tools/Inspect-AgentRuntime.ps1))
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/ams-4.0-modular-governance
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.artifact }}
+          path: ${{ runner.temp }}/final-source
+      - name: Publish clean source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          cp -a "$RUNNER_TEMP/final-source"/. .
+          rm -f -- .ams-final-source*
+          rm -f -- .github/workflows/export-source-temporary.yml
+          rm -f -- .github/workflows/apply-final-source.yml
+          rm -f -- .github/workflows/apply-final-source-v2.yml
+          rm -f -- .github/workflows/finalize-pr44.yml
+          rm -f -- .github/workflows/finalize-pr44-report.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'Finalize AMS 4.0 audited release candidate'
+            git push origin HEAD:agent/ams-4.0-modular-governance
+          fi
+          final_sha="$(git rev-parse HEAD)"
+          gh pr comment 44 --repo InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration --body "Final transactional gate passed on Linux, macOS, and Windows for Python 3.11 and 3.13. Clean audited source published at \`${final_sha}\`. Temporary transfer files and workflows were removed. PR remains unmerged."
