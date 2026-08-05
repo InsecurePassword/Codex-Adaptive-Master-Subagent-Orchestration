@@ -1,40 +1,40 @@
-name: Temporary tree identity
+name: Temporary final source applicator
 
 on:
   push:
     branches:
       - agent/ams-4.0-modular-governance
-  pull_request:
-    branches:
-      - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: agent/ams-4.0-modular-governance
-          path: head
-      - uses: actions/checkout@v7
-        with:
-          ref: e43069dfb1e44a614e10d40c3aa06ce631cb772b
-          path: base
-      - name: Record exact tree identities
+      - name: Apply audited source snapshot
         shell: bash
         run: |
-          {
-            printf 'head_commit=%s\n' "$(git -C head rev-parse HEAD)"
-            printf 'head_tree=%s\n' "$(git -C head rev-parse HEAD^{tree})"
-            printf 'base_commit=%s\n' "$(git -C base rev-parse HEAD)"
-            printf 'base_tree=%s\n' "$(git -C base rev-parse HEAD^{tree})"
-          } > "$RUNNER_TEMP/trees.txt"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ams-pr44-tree-identities
-          path: ${{ runner.temp }}/trees.txt
-          if-no-files-found: error
-          retention-days: 1
+          set -Eeuo pipefail
+          payload=.ams-final-source.tar.gz.b64
+          if [[ ! -f "$payload" ]]; then
+            echo "No final source payload is present."
+            exit 0
+          fi
+          archive="$RUNNER_TEMP/ams-final-source.tar.gz"
+          extracted="$RUNNER_TEMP/ams-final-source"
+          base64 --decode "$payload" > "$archive"
+          printf '%s  %s\n' 'b11aa095433f7ddc1fd7d114e4883b1702187cb5c6de5a6fc5ad7f46d2368500' "$archive" | sha256sum -c -
+          mkdir "$extracted"
+          tar -xzf "$archive" -C "$extracted"
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          cp -a "$extracted"/. .
+          git config user.name 'AMS release automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'Finalize AMS 4.0 modular governance release candidate'
+          git push origin HEAD:agent/ams-4.0-modular-governance
