@@ -1,0 +1,90 @@
+name: Apply final audited AMS 4.0 source
+
+on:
+  push:
+    branches:
+      - agent/ams-4.0-modular-governance
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ams-pr44-final-source-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/ams-4.0-modular-governance
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Reconstruct and validate frozen source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mapfile -t parts < <(find . -maxdepth 1 -type f -name '.ams-final-source.part*' -print | LC_ALL=C sort)
+          (( ${#parts[@]} > 0 )) || { echo 'No source payload parts found.' >&2; exit 1; }
+          cat "${parts[@]}" | tr -d '\r\n' | base64 --decode > "$RUNNER_TEMP/final-source.tar.gz"
+          gzip -t "$RUNNER_TEMP/final-source.tar.gz"
+          mkdir -p "$RUNNER_TEMP/extracted"
+          python - "$RUNNER_TEMP/final-source.tar.gz" "$RUNNER_TEMP/extracted" <<'PY'
+          from pathlib import Path, PurePosixPath
+          import sys, tarfile
+          archive = Path(sys.argv[1])
+          destination = Path(sys.argv[2])
+          with tarfile.open(archive, 'r:gz') as tf:
+              for member in tf.getmembers():
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts or member.issym() or member.islnk():
+                      raise SystemExit(f'unsafe archive member: {member.name}')
+              tf.extractall(destination, filter='data')
+          PY
+          candidate="$RUNNER_TEMP/extracted"
+          if [[ ! -f "$candidate/install.sh" ]]; then
+            mapfile -t roots < <(find "$candidate" -mindepth 1 -maxdepth 3 -type f -name install.sh -print | LC_ALL=C sort)
+            (( ${#roots[@]} == 1 )) || { printf 'Expected one source root, found %s\n' "${#roots[@]}" >&2; exit 1; }
+            candidate="$(dirname "${roots[0]}")"
+          fi
+          test "$(tr -d '\r\n' < "$candidate/adaptive-master-subagent-orchestration/VERSION")" = '4.0'
+          test -f "$candidate/install-manifest.txt"
+          test -f "$candidate/verification/verify_repository.py"
+          test -f "$candidate/verification/verify_contract_scenarios.py"
+          test -f "$candidate/verification/verify_installers.py"
+          test -f "$candidate/verification/verify_runtime_observation.py"
+          ! find "$candidate" -name .git -o -name '.ams-final-source.part*' | grep -q .
+          (
+            cd "$candidate"
+            python verification/verify_repository.py
+            python verification/verify_contract_scenarios.py
+            python verification/verify_installers.py
+            python verification/verify_runtime_observation.py
+            python tools/measure_context.py --json > "$RUNNER_TEMP/context.json"
+            python tools/report_sizes.py --json > "$RUNNER_TEMP/sizes.json"
+            bash -n install.sh
+          )
+          printf '%s\n' "$candidate" > "$RUNNER_TEMP/candidate-root"
+      - name: Replace branch with verified source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          candidate="$(cat "$RUNNER_TEMP/candidate-root")"
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          cp -a "$candidate"/. .
+          rm -f -- .ams-final-source.part* .ams-final-source.ready
+          rm -f -- .github/workflows/export-source-temporary.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Verified source already matches branch.'
+            exit 0
+          fi
+          git commit -m 'Finalize AMS 4.0 audited release candidate'
+          git push origin HEAD:agent/ams-4.0-modular-governance
