@@ -1,4 +1,4 @@
-name: Temporary source export
+name: Temporary tree identity
 
 on:
   push:
@@ -23,13 +23,18 @@ jobs:
         with:
           ref: e43069dfb1e44a614e10d40c3aa06ce631cb772b
           path: base
-      - name: Package exact head and base
+      - name: Record exact tree identities
         shell: bash
         run: |
-          tar --exclude=.git -czf "$RUNNER_TEMP/ams-pr44-head-base.tar.gz" head base
+          {
+            printf 'head_commit=%s\n' "$(git -C head rev-parse HEAD)"
+            printf 'head_tree=%s\n' "$(git -C head rev-parse HEAD^{tree})"
+            printf 'base_commit=%s\n' "$(git -C base rev-parse HEAD)"
+            printf 'base_tree=%s\n' "$(git -C base rev-parse HEAD^{tree})"
+          } > "$RUNNER_TEMP/trees.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: ams-pr44-head-base
-          path: ${{ runner.temp }}/ams-pr44-head-base.tar.gz
+          name: ams-pr44-tree-identities
+          path: ${{ runner.temp }}/trees.txt
           if-no-files-found: error
           retention-days: 1
