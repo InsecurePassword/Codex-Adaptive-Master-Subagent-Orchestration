@@ -16,13 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Package exact checkout
+        with:
+          ref: agent/ams-4.0-modular-governance
+          path: head
+      - uses: actions/checkout@v7
+        with:
+          ref: e43069dfb1e44a614e10d40c3aa06ce631cb772b
+          path: base
+      - name: Package exact head and base
         shell: bash
         run: |
-          tar --exclude=.git -czf "$RUNNER_TEMP/ams-pr44-source.tar.gz" .
+          tar --exclude=.git -czf "$RUNNER_TEMP/ams-pr44-head-base.tar.gz" head base
       - uses: actions/upload-artifact@v4
         with:
-          name: ams-pr44-source
-          path: ${{ runner.temp }}/ams-pr44-source.tar.gz
+          name: ams-pr44-head-base
+          path: ${{ runner.temp }}/ams-pr44-head-base.tar.gz
           if-no-files-found: error
           retention-days: 1
