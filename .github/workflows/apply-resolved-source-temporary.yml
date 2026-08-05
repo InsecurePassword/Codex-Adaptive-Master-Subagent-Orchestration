@@ -1,0 +1,61 @@
+name: Apply resolved source
+
+on:
+  push:
+    branches:
+      - agent/ams-4.0-modular-governance
+    paths:
+      - .ams-resolved-source.ready
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/ams-4.0-modular-governance
+          fetch-depth: 0
+      - name: Verify and apply exact source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          expected_archive='f5904084bdbf7bbfb721627dfbb52c75397c757b55eac31dbdb09b2d9d9c476a'
+          expected_parts=(
+            '7eb827aad53cbf67bd630b6e682558bbc5cafe3b1df60ef8a7909e6663bc0f93'
+            '6157757d00150791fe4d6ee4b9bfa57c14c65f425dafa9aaeb739c008f629afd'
+            'e363574207e05074c7949b10554a9fbaaecaff87ac1b09444a8c587b6a0b1c80'
+            '5fd034e417e766951e1397092e20ae47b0e0a6ab10704c2dcca1d802063c687a'
+            '212d37b5686851e979f5e3f091b268140b89d1e55e726112c1a28b407d340179'
+            'e7beed2731df9f7e21d93f125d67ee98e408b4137b9f756e05aeb774dd148353'
+            'd811736ac64f662f8173779079e99f95c676026ba0065b502f673b0eec35e1eb'
+            '5723d2288b5898076070d7d2e3c2adb953a586d766e6bd91f8407599859942de'
+            'af9af3e98fb8631dc406223610931e528435f30405372c8fef94c04f9a3b2204'
+            '817c4526f2d55a2143d8650cd5443c4e3dee70c571895337b4696c449c6b0c20'
+          )
+          : > "$RUNNER_TEMP/source.b64"
+          for i in $(seq -w 0 9); do
+            part=".ams-resolved-source.part${i}"
+            test -f "$part"
+            actual="$(sha256sum "$part" | awk '{print $1}')"
+            index=$((10#$i))
+            test "$actual" = "${expected_parts[$index]}"
+            cat "$part" >> "$RUNNER_TEMP/source.b64"
+          done
+          base64 --decode "$RUNNER_TEMP/source.b64" > "$RUNNER_TEMP/source.tar.gz"
+          test "$(sha256sum "$RUNNER_TEMP/source.tar.gz" | awk '{print $1}')" = "$expected_archive"
+          mkdir "$RUNNER_TEMP/source"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP/source"
+          test -f "$RUNNER_TEMP/source/install-manifest.txt"
+          test -f "$RUNNER_TEMP/source/.github/workflows/verify.yml"
+          test ! -e "$RUNNER_TEMP/source/.git"
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          cp -a "$RUNNER_TEMP/source/." .
+          git config user.name 'AMS release automation'
+          git config user.email 'noreply@github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Apply final audited AMS 4.0 source'
+          git push origin HEAD:agent/ams-4.0-modular-governance
