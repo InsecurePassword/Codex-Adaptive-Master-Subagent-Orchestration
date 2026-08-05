@@ -6,16 +6,12 @@ on:
       - agent/ams-4.0-modular-governance
     paths:
       - .ams-resolved-source.ready
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,9 +22,29 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          expected='f5904084bdbf7bbfb721627dfbb52c75397c757b55eac31dbdb09b2d9d9c476a'
-          cp .ams-resolved-source.tar.gz "$RUNNER_TEMP/source.tar.gz"
-          test "$(sha256sum "$RUNNER_TEMP/source.tar.gz" | awk '{print $1}')" = "$expected"
+          expected_archive='f5904084bdbf7bbfb721627dfbb52c75397c757b55eac31dbdb09b2d9d9c476a'
+          expected_parts=(
+            'a9f0a0ce9ca19730bfffb97eda9166787db294b841ee2ef0dd7b95b26a1c391c'
+            'a130e291258968bc42a001f55146e4f7b3da6acfed81b8cbc5d6842494911375'
+            '46a567e4a7af0dc9a509adc2e3e351709adc49aa1295c8dbb0ef39f2e23b3401'
+            '9c60423e4080fa48187c685590d5ba5f1868a2f22a40b73108a97ac4bcd189a0'
+            'f97e282295dac5dfc28344c868a66a52b6bf4b6271604129bcb7c317ac534f19'
+            'eb651f0b5fe5987e27e185529ed8112661104753dbcc4d222408759508212d0a'
+            '087c27610606a7c8f9c5e359024eaabf555a34c787dbaed54927458b01073b69'
+            '9edf67667261768c40afc84dbef7c06e8d7023acf2afca2c76d4d6d2fa6a9575'
+            '814f062f4b739ee6cda3ba1f171f070263c7fd198f3244eb5f8f2c6280281ea4'
+            'f97f4d070ace37bfd8e26ca2f1e05edf9d3cc86ee160ea229142f7429ecb0962'
+          )
+          : > "$RUNNER_TEMP/source.b64"
+          for i in $(seq -w 0 9); do
+            part=".ams-resolved-source.part${i}"
+            test -f "$part"
+            index=$((10#$i))
+            test "$(sha256sum "$part" | awk '{print $1}')" = "${expected_parts[$index]}"
+            cat "$part" >> "$RUNNER_TEMP/source.b64"
+          done
+          base64 --decode "$RUNNER_TEMP/source.b64" > "$RUNNER_TEMP/source.tar.gz"
+          test "$(sha256sum "$RUNNER_TEMP/source.tar.gz" | awk '{print $1}')" = "$expected_archive"
           mkdir "$RUNNER_TEMP/source"
           tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP/source"
           test -f "$RUNNER_TEMP/source/install-manifest.txt"
