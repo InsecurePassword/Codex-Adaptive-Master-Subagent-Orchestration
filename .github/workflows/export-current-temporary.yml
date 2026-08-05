@@ -1,0 +1,27 @@
+name: Temporary current branch export
+
+on:
+  push:
+    branches:
+      - agent/ams-4.0-modular-governance
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/ams-4.0-modular-governance
+      - name: Package exact current branch
+        shell: bash
+        run: |
+          tar --exclude=.git -czf "$RUNNER_TEMP/ams-pr44-current.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ams-pr44-current
+          path: ${{ runner.temp }}/ams-pr44-current.tar.gz
+          if-no-files-found: error
+          retention-days: 1
