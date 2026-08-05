@@ -6,12 +6,16 @@ on:
       - agent/ams-4.0-modular-governance
     paths:
       - .ams-resolved-source.ready
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
