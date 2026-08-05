@@ -1,6 +1,0 @@
-interface:
-  display_name: "Adaptive Master–Subagent Orchestration"
-  short_description: "Bootstrap AMS every root turn and handle all AMS commands"
-  default_prompt: "Use $adaptive-master-subagent-orchestration; check effective global or project persistence before project work."
-policy:
-  allow_implicit_invocation: true
