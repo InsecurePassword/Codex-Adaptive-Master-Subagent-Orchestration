@@ -1,17 +1,17 @@
 name: Delete obsolete AMS branches
 
 on:
-  pull_request_target:
-    types: [opened, reopened, synchronize]
-    branches:
-      - main
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
+  issues: read
+  pull-requests: read
 
 jobs:
   cleanup:
-    if: github.head_ref == 'agent/remove-post-update-reverification'
+    if: github.event.issue.number == 45 && github.event.comment.body == '/cleanup-obsolete-branches'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
