@@ -3,6 +3,10 @@ name: Delete obsolete AMS branches
 on:
   schedule:
     - cron: '*/5 * * * *'
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,6 +15,7 @@ permissions:
 
 jobs:
   cleanup:
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.ref == 'cleanup/delete-obsolete-branches-trigger'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +30,7 @@ jobs:
         run: |
           set -uo pipefail
           failed=0
-          report='Scheduled branch cleanup results:'
+          report='Branch cleanup results:'
           for branch in agent/ams-4.0-modular-governance agent/remove-post-update-reverification cleanup/delete-obsolete-branches-trigger; do
             if ! git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
               report="${report}\n- ${branch}: already absent"
