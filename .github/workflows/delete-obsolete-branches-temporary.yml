@@ -1,0 +1,23 @@
+name: Delete obsolete AMS branches
+
+on:
+  push:
+    branches:
+      - agent/remove-post-update-reverification
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete obsolete branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/ams-4.0-modular-governance"
+          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/remove-post-update-reverification"
