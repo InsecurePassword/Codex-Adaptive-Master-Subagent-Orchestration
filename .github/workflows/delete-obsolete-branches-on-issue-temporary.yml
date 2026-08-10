@@ -1,0 +1,26 @@
+name: Delete obsolete branches on cleanup issue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.issue.title == 'Delete obsolete AMS branches now'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Delete obsolete branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete \
+            agent/ams-4.0-modular-governance \
+            agent/remove-post-update-reverification \
+            cleanup/delete-obsolete-branches-trigger
