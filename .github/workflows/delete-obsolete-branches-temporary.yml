@@ -1,9 +1,9 @@
 name: Delete obsolete AMS branches
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/remove-post-update-reverification
+      - main
 
 permissions:
   contents: write
