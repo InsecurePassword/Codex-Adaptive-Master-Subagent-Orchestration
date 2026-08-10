@@ -2,7 +2,7 @@ name: Delete obsolete AMS branches
 
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [opened]
     branches:
       - main
 
@@ -11,15 +11,18 @@ permissions:
 
 jobs:
   cleanup:
-    if: github.event.pull_request.number == 45
+    if: github.event.pull_request.head.ref == 'cleanup/delete-obsolete-branches-trigger'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
       - name: Delete obsolete branches
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/ams-4.0-modular-governance"
-          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/remove-post-update-reverification"
+          git push origin --delete \
+            agent/ams-4.0-modular-governance \
+            agent/remove-post-update-reverification \
+            cleanup/delete-obsolete-branches-trigger
