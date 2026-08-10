@@ -1,3 +1,4 @@
+# Temporary branch-local trigger; this branch will be deleted.
 name: Delete obsolete AMS branches
 
 on:
