@@ -1,27 +1,25 @@
 name: Delete obsolete AMS branches
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   cleanup:
+    if: github.event.pull_request.number == 45
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 1
       - name: Delete obsolete branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
-          for branch in agent/ams-4.0-modular-governance agent/remove-post-update-reverification; do
-            if git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
-              git push origin --delete "${branch}"
-            fi
-          done
+          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/ams-4.0-modular-governance"
+          gh api --method DELETE "repos/${GH_REPO}/git/refs/heads/agent/remove-post-update-reverification"
