@@ -123,18 +123,42 @@ semantic_reviewer started: ams_sol_xhigh
 
 That is the requested profile, not proof of observed runtime identity.
 
-## Daybreak Blue cyber-refusal fallback
+## Daybreak Blue
 
-AMS does not send ordinary cybersecurity work directly to Daybreak Blue. It first uses normal cost-appropriate routing, with security-sensitive work ordinarily assigned to Sol. The root may load the Daybreak fallback only when all of these conditions hold:
+Daybreak Blue is an optional, refusal-triggered AMS worker lane for approved defensive cybersecurity work through OpenAI Daybreak and Trusted Access for Cyber. It is not a normal routing tier, a general-purpose stronger version of Sol, an offensive escalation path, or a persistent AMS setting. Installing AMS only installs the routing profile; it does not request, provision, or prove Daybreak access.
 
-- the task is authorized defensive cybersecurity work within the user's ownership or explicit testing/analysis authority;
-- the Sol root received an explicit cyber-safeguard refusal during root handling or from a standard Sol worker for the still-required bounded task;
-- the exact task can be retried without expanding targets, scope, permissions, authority, operational effect, or offensive capability;
-- no higher-priority safety, authorization, ownership, or project control independently blocks it.
+### When AMS activates it
 
-A timeout, weak answer, permission denial, missing tool, unavailable file, generic error, account/quota failure, or non-cyber refusal does not qualify. The Daybreak worker receives the original frozen scope, bounded refusal evidence, authorization basis, and a `1 of 1` attempt budget. It cannot delegate or become a manager. A started refusal/failure consumes the attempt; AMS does not loop, rotate profiles, or escalate automatically to an offensive or specialized cyber model.
+AMS first uses normal cost-appropriate routing, with security-sensitive work ordinarily assigned to standard Sol. The root may dispatch `ams_daybreak_blue_max` only when all of the following are true:
 
-The bundled profile requests `gpt-daybreak-blue-latest`, but a file on disk does not prove that the account/workspace has the access path. Unavailable entitlement is reported as an exact blocker. Daybreak access never changes Codex permissions, establishes authorization, or weakens safety rules.
+- the task is lawful, authorized defensive cybersecurity work on a system, application, account, network, codebase, artifact, or data the user owns, operates, or is explicitly authorized to test or analyze;
+- the Sol root received an explicit refusal attributable to cyber safeguards, either during root handling or from a standard Sol worker, for a bounded task that is still required;
+- the objective, target, scope, exclusions, permissions, authorization, and operational boundary can remain materially unchanged;
+- no higher-priority safety rule, authorization boundary, ownership conflict, or project-native control independently prohibits the work.
+
+A weak, cautious, partial, or incorrect answer is not a qualifying refusal. Neither is a timeout, missing file or context, unavailable tool, sandbox or approval denial, network restriction, profile defect, account or quota error, unsupported effort, generic failure, or refusal unrelated to cybersecurity safeguards.
+
+A qualifying work unit receives one direct Daybreak worker with a `1 of 1` attempt budget. Its work order includes the original Sol route, bounded refusal evidence, the authorization basis, and the frozen scope. The worker cannot delegate, become a manager, broaden the task, alter permissions, or contact the user. A started refusal, failure, or unusable result consumes the attempt; AMS does not repeat the unchanged request, fan it out to multiple Daybreak workers, rotate access profiles, or automatically escalate to Daybreak Red, another cyber-specialized model, an offensive workflow, or root execution.
+
+### How AMS handles data
+
+AMS applies data minimization to the fallback. The Daybreak work order carries only the information needed to complete the frozen task: the bounded objective and scope, a small exact excerpt or faithful redacted summary of the Sol refusal, the authorization basis, and the relevant code, artifacts, telemetry, or evidence required by that work unit. AMS does not forward unrelated conversation history, files, credentials, secrets, or the entire repository merely because the access lane changed.
+
+The Daybreak worker inherits the same sandbox, approval, network, tool, writable-root, ownership, and Git-authority boundaries as the refused Sol route. It may inspect only the data required by the work order and reachable through those inherited controls. Daybreak access does not grant broader local access, additional network reach, new credentials, or authority to collect data from another target.
+
+AMS does not create a Daybreak-specific cache, recovery file, transcript store, or external upload service. The worker returns its result to the Sol root for reconciliation. Any later independent validator receives only the evidence needed for its distinct validation work under normal AMS routing; Daybreak material is not automatically distributed to parallel workers.
+
+Data submitted through Daybreak remains subject to the data controls and retention terms of the approved OpenAI organization or workspace and the product surface being used. **Trusted Access for Cyber does not include Zero Data Retention by default.** Zero Data Retention or other retention requirements must be arranged separately where available. Sensitive workflows should use the approved internal security workspace and should exclude unnecessary secrets, customer data, and unrelated production data.
+
+### Trusted Access required
+
+To use Daybreak Blue through AMS, the current Codex account must already have approved **Daybreak Blue / Trusted Access for Cyber** access on the organization or workspace and product surface where AMS is running. Approval is reviewed by OpenAI and is not automatic. The AMS profile cannot apply for access, transfer entitlement between workspaces, bypass provisioning, or make an unavailable model usable.
+
+The approved organization or workspace should be reserved for approved internal security users and internal security workflows. Trusted Access must not be resold, proxied, embedded for third-party customers, exposed to external users, or used to power customer-facing applications or downstream product traffic. Work must remain within the approved defensive scope and within systems or data the user owns, operates, or is explicitly authorized to test or analyze.
+
+Trusted Access provides more precise safeguards for verified defensive work; it does not remove all safeguards or refusals, authorize activity by itself, guarantee access to every cyber-specialized model, or include Daybreak Red. If Codex is not using the approved organization, workspace, model/access path, or product surface, AMS reports the exact access blocker and does not repeatedly probe or weaken the route.
+
+See [OpenAI Daybreak — Trusted Access for Cyber Overview](https://help.openai.com/en/articles/20001258-openai-daybreak-trusted-access-for-cyber-overview) for current eligibility, workspace, authorization, retention, and usage requirements.
 
 ## Virtual hierarchy and root boundary
 
@@ -197,6 +221,6 @@ Standard uninstall removes only the skill directory and deliberately leaves sett
 
 - Codex with skills and custom-subagent support
 - a top-level GPT-5.6 Sol Max session, or verified equivalent Sol alias at Max reasoning
-- Daybreak Blue account/workspace access only when the optional cyber-refusal fallback is needed
+- approved Daybreak Blue access on the active internal-security organization/workspace and Codex product surface when the optional fallback is needed
 - Windows PowerShell 5.1+ for the PowerShell installer
 - Bash plus `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`, and either `sha256sum` or `shasum`
