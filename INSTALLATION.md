@@ -1,6 +1,6 @@
 # Installation
 
-AMS 3.09 installs directly from the canonical repository `main` tree. No release asset or package ZIP is used.
+AMS 3.10 installs directly from the canonical repository `main` tree. No release asset or package ZIP is used.
 
 ## One-line installation
 
@@ -47,11 +47,11 @@ When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME
 Both installers:
 
 1. download `install-manifest.txt` from canonical `main`;
-2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 31-file runtime/profile set;
+2. require manifest format `ams-install-manifest-v1`, version `3.10`, and the exact 33-file runtime/profile set;
 3. reject malformed, duplicate, escaping, linked, redirected, oversized, or unexpected entries;
 4. download every declared file and verify byte length and SHA-256;
 5. download the manifest again and require byte equality, preventing mixed-generation installation;
-6. validate `VERSION = 3.09` and all 18 bundled profile markers;
+6. validate `VERSION = 3.10` and all 19 bundled profile markers;
 7. stage the complete skill before replacement;
 8. transactionally install the skill and eligible profiles with rollback;
 9. leave byte-identical profiles unchanged;
@@ -59,9 +59,9 @@ Both installers:
 11. refuse every other differing or ambiguous profile instead of trusting a marker alone;
 12. preserve project/global settings, installed profiles not eligible for replacement, project-native state, unrelated skills, and unrelated files.
 
-## Permission neutrality
+## Permission and authorization neutrality
 
-All installed profiles inherit platform/user/work-order permissions. No current profile sets:
+All installed profiles inherit platform/user/project/work-order permissions and authorization boundaries. No current profile sets:
 
 ```text
 sandbox_mode
@@ -69,9 +69,12 @@ approval policy
 network access
 writable roots
 tool grants
+authorization
 ```
 
 The previous public Spark profile hashes are recognized only so a direct user-authorized reinstall/update can remove their former `workspace-write` override safely.
+
+The Daybreak Blue profile requests an optional account-gated access lane. Installing the profile does not grant Daybreak entitlement, establish authorization for a target, alter safeguards, or change any Codex permission. AMS selects it only after the bounded qualifying-refusal process in `references/daybreak-blue.md`.
 
 ## Profile collision behavior
 
@@ -94,9 +97,10 @@ adaptive-master-subagent-orchestration/
 │   └── openai.yaml
 ├── assets/
 │   └── agent-profiles/
-│       └── 18 canonical ams_*.toml profiles
+│       └── 19 canonical ams_*.toml profiles
 └── references/
     ├── configuration-maintenance.md
+    ├── daybreak-blue.md
     ├── hierarchy-control.md
     ├── intensity-control.md
     ├── package-maintenance.md
@@ -115,7 +119,7 @@ git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orc
 cd Codex-Adaptive-Master-Subagent-Orchestration
 ```
 
-Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 18 files under `assets/agent-profiles/` into `$CODEX_HOME/agents/`. Manual installation must preserve the same permission-neutral profile bytes.
+Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 19 files under `assets/agent-profiles/` into `$CODEX_HOME/agents/`. Manual installation must preserve the same permission-neutral profile bytes.
 
 ## Verify installation
 
@@ -129,11 +133,13 @@ Get-Content (Join-Path $SkillRoot 'VERSION')
 Test-Path (Join-Path $SkillRoot 'references\project-governance.md')
 Test-Path (Join-Path $SkillRoot 'references\configuration-maintenance.md')
 Test-Path (Join-Path $SkillRoot 'references\root-execution-fallback.md')
+Test-Path (Join-Path $SkillRoot 'references\daybreak-blue.md')
+Test-Path (Join-Path $AgentRoot 'ams_daybreak_blue_max.toml')
 (Get-ChildItem $AgentRoot -Filter 'ams_*.toml' -File).Count
-Select-String -Path (Join-Path $AgentRoot 'ams_spark_*.toml') -Pattern '^sandbox_mode\s*='
+Select-String -Path (Join-Path $AgentRoot 'ams_*.toml') -Pattern '^sandbox_mode\s*='
 ```
 
-Expected: version `3.09`, all three reference checks `True`, profile count `18`, and no `sandbox_mode` matches.
+Expected: version `3.10`, all five path checks `True`, profile count `19`, and no `sandbox_mode` matches.
 
 ### Bash
 
@@ -145,13 +151,17 @@ cat "$skill_root/VERSION"
 test -f "$skill_root/references/project-governance.md"
 test -f "$skill_root/references/configuration-maintenance.md"
 test -f "$skill_root/references/root-execution-fallback.md"
+test -f "$skill_root/references/daybreak-blue.md"
+test -f "$agent_root/ams_daybreak_blue_max.toml"
 find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
-! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_spark_*.toml
+! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_*.toml
 ```
 
-## Root fallback and configuration updater
+## Root fallback, Daybreak fallback, and configuration updater
 
 The schema-2 default includes `root_execution_fallback = true`. `AMS ROOT FALLBACK on|off` changes only the project fallback setting.
+
+Daybreak Blue adds no configuration field. It is a lazy worker-only one-shot route for a stable authorized defensive cybersecurity work unit explicitly refused by standard Sol for cyber-safeguard reasons. It is not used for ordinary security routing, generic failure, permission denial, missing tools, or account errors. A Daybreak refusal/failure does not authorize root execution of the refused task.
 
 `AMS CONFIGURATION UPDATE` and `AMS CONFIGURATION UPDATE PROJECT` update an existing project configuration as well as creating a missing one. Existing project values are preserved and every missing current field is added from the exact default. Global values are consulted only when the project file is absent; an existing invalid or unsafe global file blocks creation rather than being ignored. `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit AMS command allowed to write the global file and only adds missing defaults or creates the exact disabled default.
 
