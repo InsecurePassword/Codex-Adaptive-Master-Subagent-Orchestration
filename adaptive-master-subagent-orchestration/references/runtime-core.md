@@ -6,7 +6,7 @@ Read completely only when `SKILL.md` routes active orchestration here. Apply it 
 
 Reuse references already read completely within the objective. Before first use of a profile, verify its effective installed definition. On a selected missing or defective profile, load `profile-management.md`.
 
-Resolve effective settings through `project-control.md`. For non-`auto` normal intensity, load `intensity-control.md`; normalize `moderate` to `balanced`. Load `hierarchy-control.md` before any delegated-manager order, request, result, descendant relay, or custody change. Load `zergling-rush.md` before any Rush decision. Load `daybreak-blue.md` only after the Sol root is presented with a qualifying cyber-safeguard refusal—either during root handling or in a standard Sol worker result—for a still-required authorized defensive cybersecurity task and before selecting the Daybreak Blue fallback. Load `project-governance.md` only when effective `project_governance = true`. Load `root-execution-fallback.md` only when mandatory progress would otherwise stop, no currently viable delegated route remains, and effective `root_execution_fallback = true`, before the root performs any project execution. Load `package-maintenance.md` only for an explicit package operation.
+Resolve effective settings through `project-control.md`. For non-`auto` normal intensity, load `intensity-control.md`; normalize `moderate` to `balanced`. Load `hierarchy-control.md` before any delegated-manager order, request, result, descendant relay, or custody change. Load `zergling-rush.md` before any Rush decision. Load `daybreak-blue.md` only after the Sol root is presented with a qualifying cyber-safeguard refusal—either during root handling or from a standard Sol non-root execution order—for a still-required authorized defensive cybersecurity task and before selecting the Daybreak Blue fallback. Load `project-governance.md` only when effective `project_governance = true`. Load `root-execution-fallback.md` only when mandatory progress would otherwise stop, no currently viable delegated route remains, and effective `root_execution_fallback = true`, before the root performs any project execution. Load `package-maintenance.md` only for an explicit package operation.
 
 A required unreadable reference fails closed only for the behavior it owns; do not invent a substitute.
 
@@ -49,17 +49,17 @@ Route by failure cost, ambiguity, architecture/security impact, dependencies, no
 - **Luna**: explicit, repetitive, low-risk, inexpensive-to-retry work.
 - **Terra**: normal implementation, tests, documentation, review, and moderate investigation/management.
 - **Sol**: ambiguous, novel, architectural, security-sensitive, cross-component, difficult, or expensive-to-fail work.
-- **Daybreak Blue**: optional worker-only one-shot fallback for an unchanged authorized defensive cybersecurity work unit after the Sol root receives an explicit cyber-safeguard refusal during root handling or from a standard Sol worker. It is never selected proactively or for ordinary routing, quality escalation, offensive expansion, permission failure, or tool failure.
+- **Daybreak Blue**: optional root-spawned worker-only one-attempt fallback for an unchanged authorized defensive cybersecurity work unit after an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order. It is never selected proactively or for ordinary routing, quality escalation, offensive expansion, permission failure, or tool failure.
 
 Effort: `low` for tight straightforward work; `medium` for ordinary multi-step work; `high` for dependencies and edge cases; `xhigh` for difficult investigation/design/validation; `max` for the hardest bounded exhaustive work. File count alone is not a strength signal. Daybreak Blue has one canonical `max` profile because its purpose is access-path fallback, not cost-tier selection.
 
 Immediately before dispatch, verify the final selected profile. After each successful non-root spawn, immediately report the new session's task name and requested AMS capability profile; batch simultaneous spawns in one concise line and never present requested configuration as observed runtime identity.
 
-For weak or failed work, correct the order before retrying; raise effort when the family remains suitable; escalate Luna→Terra→Sol by task character; and never repeat an unchanged setup. A generic refusal, timeout, permission denial, missing tool, unavailable file, account/quota error, or incomplete result does not trigger Daybreak Blue. When the Sol root receives an explicit cyber-safeguard refusal during root handling or from a standard Sol worker, classify it under `daybreak-blue.md` before any fallback attempt.
+For weak or failed ordinary work, correct the order before retrying; raise effort when the family remains suitable; escalate Luna→Terra→Sol by task character; and never repeat an unchanged setup. A generic refusal, timeout, permission denial, missing tool, unavailable file, account/quota error, or incomplete result does not trigger Daybreak Blue. When the Sol root receives an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order, classify it under `daybreak-blue.md` before any fallback attempt.
 
 ## Task graph, work orders, and hierarchy
 
-Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results.
+Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results. For each Daybreak-eligible work unit, also maintain its stable fallback unit ID, frozen boundary, refusal provenance, custody decision, and attempt state `not-started | active | consumed`.
 
 Each non-root session receives one compact stable-ID order:
 
@@ -92,7 +92,7 @@ Deviations / Unresolved issues / Assumptions / Risks:
 Recommended logical-parent action:
 ```
 
-A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak Blue order uses only `worker`/`none` and adds the trigger fields required by `daybreak-blue.md`. Worker and manager completion are claims; only the root decides project completion.
+A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak Blue order is a physical root child with only `worker`/`none`; its logical parent, replacement custody, ownership, allocation, provenance, route evidence, stable fallback unit, attempt transition, and additional result fields come from `daybreak-blue.md`. Worker and manager completion are claims; only the root decides project completion.
 
 Allow one active writer per mutable surface across the logical tree. Prefer disjoint paths or isolated workspaces; serialize shared manifests, schemas, interfaces, migrations, indexes, locks, and authoritative state. Preserve user changes. A non-root Git/history operation requires exact work-order authority and excludes all AMS controls and profiles.
 
@@ -100,7 +100,7 @@ Allow one active writer per mutable surface across the logical tree. Prefer disj
 
 Until the user objective is complete or genuinely blocked:
 
-1. refresh the objective, dependencies, effective settings, active topology, ownership, and selected profiles;
+1. refresh the objective, dependencies, effective settings, active topology, ownership, selected profiles, and any Daybreak fallback-unit attempt states;
 2. select the smallest useful ready topology and issue non-overlapping work orders;
 3. monitor progress, process bounded manager requests, classify any refusal accurately, and correct deviations;
 4. collect results through logical parents, reconcile conflicts, and commission required integration;
@@ -109,6 +109,6 @@ Until the user objective is complete or genuinely blocked:
 
 If `project_governance = true`, apply `project-governance.md` for AMS-added project-wide acceptance criteria, proportional independent review, continuous-delivery posture, deviation handling, and continuity. If false, do not load that reference or impose its additional lifecycle/review requirements; follow the user's objective and authoritative project workflow while retaining core root authority, truthful evidence, ownership, work-order, hierarchy, model/effort, and safety controls.
 
-A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken any safety, authorization, ownership, or permission boundary and must stop after the bounded attempt rules in `daybreak-blue.md` are exhausted.
+A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken any safety, authorization, ownership, lineage, allocation, or permission boundary and must stop after the stable-unit attempt rules in `daybreak-blue.md` are exhausted.
 
 Declare complete only when the user/project-defined objective and required checks are satisfied, required results are reconciled, no mandatory work or live conflicting writer remains, and any enabled governance requirements are met. Otherwise report blocked with the exact blocker and next action. Do not expose private chain-of-thought.

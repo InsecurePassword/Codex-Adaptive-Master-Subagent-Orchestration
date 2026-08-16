@@ -21,7 +21,7 @@ The packaged defaults are `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5
 The exact bundled bytes define each managed name, description, model or access lane, reasoning effort, bounded non-root instructions, and Codex V2 guidance overrides. All profiles use the same permission-neutral field shape:
 
 ```toml
-name = "ams_<family>_<effort>"
+name = "ams_<profile>"
 description = "..."
 model = "..."
 model_reasoning_effort = "..."
@@ -42,11 +42,19 @@ Every profile preserves these orchestration invariants:
 - `worker`/`none` is a leaf;
 - `delegated-manager`/`request` may request root-mediated descendants but never spawn independently or expand authority;
 - Spark and Daybreak Blue accept only `worker`/`none`;
-- a Daybreak Blue order additionally requires the qualifying-refusal, authorized-purpose, frozen-scope, and one-attempt fields defined in `daybreak-blue.md`;
+- a Daybreak Blue order additionally requires the stable fallback-unit, qualifying-refusal, provenance, custody, ownership, allocation, authorized-purpose, frozen-scope, route-evidence, and one-attempt fields defined in `daybreak-blue.md`;
 - scope, permissions, ownership, validation, and Git authority come from the work order;
 - only the root communicates with the user and accepts project completion.
 
 For Codex V2 dispatch, use the supported equivalent of `fork_turns = "none"` and supply the compact work order directly. Verify the selected effective profile immediately before spawn and record requested identity. The platform may reread the role at spawn, so observed identity remains evidence rather than a guarantee.
+
+## Requested and observed route evidence
+
+For every profile, exact canonical bytes establish only the requested configuration. Record the requested profile, model, and reasoning effort before dispatch. Record the observed execution identity only when the platform exposes it; otherwise use `observed=unavailable` without claiming verification.
+
+For Daybreak Blue, a confirmed successful spawn using the selected exact profile with no explicit model mismatch, entitlement error, workspace/product-surface error, or access-path error is sufficient requested-route evidence to begin the bounded fallback. It is not independent attestation of the effective model. The Daybreak worker must not reject a valid order solely because observed identity is unavailable. An explicit mismatch or access error blocks the route and must be reported exactly.
+
+Account or workspace approval is external entitlement, not profile state. Do not infer Trusted Access from a bundled file, a successful installation, a model name appearing in a catalog, or a prior session. Do not change credentials, organizations, workspaces, permissions, or product surfaces to repair Daybreak automatically.
 
 ## Safe profile operations
 

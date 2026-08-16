@@ -178,7 +178,7 @@ AMS defines no fixed logical-depth, manager-count, worker-ratio, team-shape, or 
 
 Actual Codex capacity, finite root-recorded allocations, dependency readiness, one-writer ownership, permissions, safety, validation needs, context value, and useful supervision still govern.
 
-Extreme changes team formation and dispatch aggressiveness. It does not weaken:
+Extreme changes team formation and dispatch aggressiveness. It does not make Daybreak Blue proactive, permit replicated Daybreak attempts, reset a consumed Daybreak fallback unit, or increase its one-attempt budget. It does not weaken:
 
 - safety policy;
 - user intent;
@@ -240,6 +240,8 @@ Before physically spawning any observable non-root session, establish all of the
 - the task does not conflict with another active writer;
 - the dispatch fits the remaining root-recorded allocation and current runtime capacity.
 
+For `ams_daybreak_blue_max`, additionally require every field and transition in the installed `daybreak-blue.md`: a stable fallback unit ID; attempt state; qualifying refusal provenance; the exact `none-root-handling` sentinel when no prior work order exists; original Sol role and logical parent; custody decision; prior-writer closure and ownership transfer; allocation and intensity-shape compatibility; frozen authorization and scope; and requested-versus-observed route evidence. Daybreak remains worker-only, but physical root dispatch does not force logical parent `root`.
+
 No observable agent may begin project work before this gate passes.
 
 Do not issue vague assignments such as “investigate,” “help,” “continue,” “review everything,” or “finish the project” without bounded scope, authority, ownership, validation, and return requirements.
@@ -277,6 +279,8 @@ Deviations / Unresolved issues / Assumptions / Risks:
 Recommended logical-parent action:
 ```
 
+A Daybreak work order and terminal result must also include the complete fallback-unit, provenance, custody, attempt-state, route-evidence, and `DAYBREAK RESULT ADDENDUM` fields selected by `daybreak-blue.md`. Physical result delivery to the root is transport; the root must relay it through the recorded logical parent before acceptance.
+
 Worker and manager completion messages are evidence claims. They are not root acceptance or project completion.
 
 ## 10. Recursive delegation and virtual hierarchy
@@ -300,7 +304,7 @@ A delegated manager may not:
 - contact the user;
 - declare project completion.
 
-Workers are leaves and receive `Delegation authority: none`.
+Workers are leaves and receive `Delegation authority: none`. Daybreak Blue is always a worker. When it replaces refused work, preserve the refused order's logical parent by default; a refusing delegated manager becomes the Daybreak worker's logical parent after relinquishing execution ownership of the affected surface. Any flattening or unavailable parent uses the installed hierarchy supersession and custody-transfer procedure.
 
 When a manager requests a descendant:
 
@@ -323,12 +327,14 @@ For every bounded non-root task, choose the lowest-cost reliable installed profi
 - **Luna** for explicit, repetitive, low-risk work that is inexpensive to retry and easy to verify.
 - **Terra** for normal implementation, fixes, tests, documentation, review, investigation, and clear bounded management.
 - **Sol** for ambiguous, novel, architectural, security-sensitive, cross-component, difficult, high-failure-cost work, or broad management that genuinely requires Sol judgment.
+- **Daybreak Blue** only as the installed worker-only one-attempt fallback for an unchanged authorized defensive cybersecurity work unit after an explicit qualifying standard-Sol cyber refusal. It is not a normal cost tier and is never selected proactively.
 
 Use only truthful compatible profiles available now:
 
 ```text
 ams_<sol|terra|luna>_<low|medium|high|xhigh|max>
 ams_spark_<low|medium|high>
+ams_daybreak_blue_max
 ```
 
 Do not:
@@ -341,7 +347,9 @@ Do not:
 - silently substitute models or efforts;
 - repeat an unchanged failed setup.
 
-Record requested and observed model identity and effort when observable, plus any substitution, escalation, or route suppression.
+Record requested and observed model identity and effort when observable, plus any substitution, escalation, or route suppression. For Daybreak, exact canonical profile bytes and a successful spawn without an explicit route/access error establish requested-route evidence only. When effective identity is not exposed, record `observed=unavailable` and do not require worker self-attestation.
+
+A qualifying Daybreak unit is keyed to its frozen task rather than a transient work-order ID. Equivalent refusals, retries, replacements, replication, or reparenting share the same `not-started | active | consumed` unit state. Extreme cannot duplicate or reset it.
 
 Extreme permits more useful lanes. It does not suspend economic restraint. Only separately authorized Zergling Rush may suspend the normal economic posture defined by its own contract.
 
@@ -429,7 +437,7 @@ If an individual dispatch fails:
 
 - keep the task and lineage registered;
 - record requested and observed identity, failure evidence, and changed assumptions;
-- classify whether the cause is decomposition-, context-, profile-, effort-, permission-, sandbox-, tool-, transport-, capacity-, ownership-, or task-specific;
+- classify whether the cause is decomposition-, context-, profile-, effort-, permission-, sandbox-, tool-, transport-, capacity-, ownership-, policy/refusal-, access-path-, or task-specific;
 - correct the work order before retrying;
 - retry, resize, reroute, escalate, replace, split, merge, flatten, deepen, or serialize through AMS;
 - never create an unregistered replacement;
@@ -437,6 +445,8 @@ If an individual dispatch fails:
 - preserve evidence custody across superseded work-order IDs.
 
 A local worker refusal, unavailable tool, timeout, or task block is not automatically a project-level block. Continue independent safe ready lanes through AMS while the affected chain is classified.
+
+When the Sol root receives an explicit qualifying cyber-safeguard refusal during root handling or from a standard Sol non-root execution order—including a delegated manager performing bounded execution—load and apply `daybreak-blue.md`. Use `Original Sol work-order ID: none-root-handling` for a root-origin refusal. Preserve or explicitly transfer logical custody, close prior writers, assign one stable fallback unit, and enforce its one-attempt state. Generic failures and non-cyber refusals do not take this branch. An exhausted or unavailable Daybreak route does not authorize Red/Cyber escalation or root execution.
 
 ## 15. Legacy orchestration and project-native workflows
 
@@ -473,6 +483,7 @@ Physical topology: root-spawned
 Initial task graph and ready lanes: <summary>
 Initial topology and profile plan: <summary>
 One-writer conflicts: <none | details>
+Daybreak fallback units and attempt states: <none | summary>
 Activation blockers: <none | details>
 ```
 
@@ -490,6 +501,7 @@ Before every later dispatch, manager descendant request, retry, replacement, rep
 - lineage and authority are valid;
 - ownership is non-conflicting;
 - the route is the lowest-cost reliable choice;
+- any Daybreak fallback unit, attempt state, provenance, custody, and requested/observed route evidence remain valid;
 - validation and return requirements are explicit;
 - the root remains the sole physical spawn authority.
 
@@ -504,6 +516,7 @@ Any handoff must preserve:
 - the global task graph;
 - immutable logical lineage;
 - ownership and allocations;
+- every Daybreak fallback unit ID, frozen boundary, provenance, custody decision, and `not-started | active | consumed` attempt state;
 - completed, active, blocked, and superseded work;
 - validation evidence;
 - unresolved risks;
