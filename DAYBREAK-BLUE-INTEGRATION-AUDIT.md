@@ -1,132 +1,202 @@
-# Daybreak Blue Integration Audit
+# Daybreak Blue Final Independent Audit
 
 **Repository:** `InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration`  
 **Pull request:** #49, `agent/daybreak-blue-fallback` → `main`  
-**Original audited head:** `ac9b733695c69c1c843ced321640eea1ff2c4ab5`  
-**Original audit commit:** `9120261ba0a3a920e2d195f50ab983ac3023efbb`  
-**Correction commit:** `0e1d9ded4cfe70154ff36bd84d685f76047cabeb`  
+**Audited code head:** `ed8cbc36f4927643e6b10c8a4e2b1d8210d519a4`  
 **Baseline:** `8883ef2f18edb0c44589645c4febaacf8c4a0975`  
-**Disposition:** **All six repository integration findings corrected; independent re-review and an authorized live Trusted Access smoke test remain required before release.**
+**Disposition:** **Further review required — not safe to merge**
 
-## Scope
+## Audit scope and method
 
-The original audit treated the package as third-party code and rebuilt the behavioral model from the complete distribution: all 33 installed files, all 19 profiles, all 11 runtime references, the installers and manifest, and every repository Markdown file. It found no regression in established AMS behavior while Daybreak was dormant, but identified six defects in the activated Daybreak transition path and Sol Ultra overlay.
+This review treated the package as third-party code. It did not accept prior audit findings, resolution claims, or reported validation as proof.
 
-Commit `0e1d9ded4cfe70154ff36bd84d685f76047cabeb` resolves those findings without changing schema 2, normal Sol/Terra/Luna/Spark routing, project controls, ordinary hierarchy rules, root fallback eligibility, installer transaction design, or the package's 19-profile/33-file installation shape.
+The review read the complete current distribution from beginning to end:
 
-## Resolution matrix
+- all 33 installed files declared by `install-manifest.txt`;
+- all 19 agent profiles;
+- all 11 runtime references;
+- `SKILL.md`, `VERSION`, and `agents/openai.yaml`;
+- both installers and the install manifest;
+- every repository Markdown file, including the Sol Ultra enforcement prompt and the existing audit artifact.
 
-### F-01 — Daybreak replacement lineage and custody — Resolved
+The behavioral model was reconstructed from the current files, compared against the 3.09 baseline on `main`, and exercised through adversarial transition scenarios covering normal routing, root-origin refusals, direct workers, delegated managers, every normal intensity, Rush, interruption and recovery, access-path failures, data handling, installer behavior, and the Sol Ultra overlay.
 
-The Daybreak reference now distinguishes physical root dispatch from logical parentage. It defines explicit transitions for:
+## Behavioral model reconstructed from the files
 
-- root-handling refusals;
-- a refused Sol worker under root or manager custody;
-- a refusing Sol delegated manager performing bounded execution;
-- an unavailable logical parent;
-- deliberate flattening through existing supersession and custody-transfer rules.
+The established AMS architecture remains unchanged while Daybreak is dormant:
 
-A prior writer must be closed or superseded and proven non-live before ownership transfer. Daybreak preserves the refused order's logical parent by default, consumes a normal worker slot and finite allocation, respects the selected intensity shape, and returns evidence through that logical parent before root acceptance. The specialized profile enforces the same custody fields.
+- schema 2 and all project controls remain unchanged;
+- the Sol root remains sole physical spawn authority and final acceptance authority;
+- normal Spark/Luna/Terra/Sol routing remains cost-first;
+- logical parentage, finite allocation, one-writer ownership, and result relay remain mandatory;
+- root execution fallback remains ineligible for security-sensitive execution;
+- installers still stage and commit the exact manifest-defined package transactionally.
 
-### F-02 — Root-origin refusal provenance — Resolved
+Daybreak adds one lazy worker-only route after a qualifying standard-Sol cyber-safeguard refusal. It freezes the authorized defensive task, assigns a stable fallback-unit ID, records `not-started | active | consumed`, preserves or explicitly transfers logical custody, and prohibits permission expansion, duplicate attempts, Red/Cyber escalation, offensive expansion, and root execution of the refused task.
 
-The combined ambiguous provenance field was replaced by explicit values:
+Most previously fragile transitions are now explicitly represented. Four final omissions remain.
+
+## Findings
+
+### F-01 — High — `minimal` delegated-manager fallback has no valid normative transition
+
+**Files:**
+
+- `adaptive-master-subagent-orchestration/references/daybreak-blue.md`
+- `adaptive-master-subagent-orchestration/references/hierarchy-control.md`
+- `adaptive-master-subagent-orchestration/references/intensity-control.md`
+- `adaptive-master-subagent-orchestration/references/runtime-core.md`
+
+The established `minimal` contract permits only one active non-root session. Its explicit serial manager procedure is:
+
+1. the manager records a descendant request and closes;
+2. the worker runs alone;
+3. the same manager is resumed, or a new superseding manager order is issued, after the worker closes.
+
+The Daybreak contract says a refusing Sol delegated manager remains the Daybreak worker's logical parent and relinquishes execution ownership. It also says an unavailable logical parent must be resumed or superseded **before** Daybreak dispatch. It does not define the `minimal` serial exception.
+
+**Break scenario:** a sole active Sol delegated manager under `minimal` performs bounded defensive security work and returns a qualifying refusal.
+
+- Keeping the manager active while Daybreak runs violates the root-plus-one ceiling.
+- Closing the manager makes the parent physically unavailable; the Daybreak text then requires resumption or supersession before dispatch, which again consumes the only non-root slot.
+- Reparenting Daybreak to the root bypasses the required manager custody unless the chain is explicitly flattened.
+
+The baseline hierarchy already has a valid solution, but the Daybreak reference does not select it and its unavailable-parent wording can prohibit it.
+
+**Required correction:** add an explicit `minimal` procedure: the refusing manager records the refusal and Daybreak request, relinquishes the affected surface, reaches a useful boundary, and closes; Daybreak then runs alone while retaining that inactive manager order as its immutable logical parent; after Daybreak closes, resume the same manager or issue a new superseding manager order to reconcile the result. Distinguish an intentionally inactive, resumable parent from a genuinely unavailable parent.
+
+### F-02 — Medium — Closed-unavailable routes are not durably represented
+
+**Files:**
+
+- `adaptive-master-subagent-orchestration/references/daybreak-blue.md`
+- `adaptive-master-subagent-orchestration/references/runtime-core.md`
+- `adaptive-master-subagent-orchestration/references/project-control.md`
+- `PRODUCT DOCUMENTATION.md`
+- `SOL-ULTRA-AMS-EXTREME-ORCHESTRATION-PROMPT.md`
+
+When a spawn is proven not to have started, the fallback unit remains `not-started`. The Daybreak reference separately says that authoritative entitlement, workspace, model, or access-path unavailability closes the fallback route without automatic re-probing.
+
+The durable Daybreak record contains the unit ID, frozen boundary, refusal provenance, custody decision, and attempt state. It has no route-disposition field. `not-started` therefore represents both:
+
+- a unit that remains eligible for dispatch; and
+- a unit whose route has been authoritatively closed as unavailable.
+
+**Break scenario:** a Daybreak spawn fails before starting with an authoritative entitlement error. The root records `not-started` and later recovers from compaction, restart, or a project-native handoff. The reconstructed state contains no normative fact distinguishing the closed route from an eligible unstarted route, so another automatic probe is permitted despite the closure rule.
+
+**Required correction:** add a root-owned route disposition independent of attempt state, for example:
 
 ```text
-Refusal source: root-handling | work-order
-Original Sol work-order ID: none-root-handling | <stable work-order ID>
-Original Sol role: root | worker | delegated-manager
-Original logical parent: root | <work-order ID>
-Refusal evidence ID: <stable root-recorded identifier>
+Route disposition: eligible | closed-unavailable
+Route-disposition evidence ID:
+Reopen condition: explicit new provisioning evidence | explicit user-directed recheck after an access change
 ```
 
-`none-root-handling` is the sole valid sentinel for a root-origin refusal. The profile requires and validates the explicit source, role, parent, and evidence identifier instead of requiring an invented work-order ID.
+Persist this disposition and blocker in the live task graph and every required continuity record. Do not reopen it merely because the work-order ID, logical parent, session, or root changed.
 
-### F-03 — Delegated-manager refusal coverage — Resolved
+### F-03 — High — Trusted Access and data-control context is documented but not part of the runtime gate
 
-The trigger now accepts a qualifying cyber-safeguard refusal from any standard Sol non-root execution order whose role is `worker` or `delegated-manager`. A refusing manager remains the logical parent of the Daybreak worker, relinquishes execution ownership of the affected surface, and cannot write it concurrently.
+**Files:**
 
-### F-04 — Requested/observed route identity — Repository contract resolved; live validation pending
+- `README.md`
+- `PRODUCT DOCUMENTATION.md`
+- `adaptive-master-subagent-orchestration/references/daybreak-blue.md`
+- `adaptive-master-subagent-orchestration/assets/agent-profiles/ams_daybreak_blue_max.toml`
+- `SOL-ULTRA-AMS-EXTREME-ORCHESTRATION-PROMPT.md`
 
-The route contract now defines the evidence boundary:
+The README correctly requires the exact approved identity, internal organization or workspace, access path, and product surface, and explains that Trusted Access does not imply Zero Data Retention. The runtime contract, however, does not require those facts in the Daybreak work order or root task graph.
 
-- exact canonical profile bytes establish requested configuration only;
-- a confirmed successful spawn with no explicit model mismatch, entitlement error, approved-workspace/product-surface error, or access-path error is sufficient requested-route evidence to begin the bounded task;
-- observed identity is recorded only when the platform exposes it;
-- otherwise AMS records `observed=unavailable` without claiming attestation;
-- the Daybreak worker does not reject a valid order solely because identity metadata is unavailable;
-- an explicit mismatch or access error blocks the route and cannot be repaired by automatic credential, organization, workspace, permission, or profile changes.
+The work order records target authorization and the requested model route, but it does not record:
 
-The profile, runtime reference, profile-management reference, README, product documentation, and Sol Ultra overlay now use the same contract.
+- the approved user or identity basis;
+- whether the access path is user-level, Codex-workspace, ChatGPT-workspace, or API-project scoped;
+- the approved organization/workspace or project and product surface;
+- confirmation that the surface is internal-only;
+- the applicable retention requirement and whether ZDR or another required treatment covers this exact surface;
+- the onboarding or provisioning evidence used for the decision.
 
-A repository audit cannot prove account entitlement or exercise Codex's live custom-agent model route. One authorized smoke test must still be run in the approved Trusted Access organization/workspace and Codex product surface before release. It should prove profile resolution, accepted `max` effort, non-root dispatch, work-order receipt, and result return. This is an external release-validation requirement rather than an unresolved repository contract.
+The specialized profile is instructed to stop on a wrong workspace or product surface, but it receives no expected workspace or product-surface value to compare. The route contract instead treats a successful spawn with no explicit platform error as sufficient requested-route evidence.
 
-### F-05 — Durable one-attempt accounting — Resolved
+**Break scenario:** the model route resolves while Codex is signed into a different approved-capable identity or workspace than the one designated for the internal security workflow, or while the required retention treatment applies only to another organization. No explicit model error occurs, so AMS begins sending scoped security evidence even though the data-governance boundary was never established.
 
-AMS now assigns a stable `Daybreak fallback unit ID` to the frozen task rather than a transient Sol or Daybreak work-order ID. Equivalent refusals, retries, replicated investigations, replacements, resumed work, and reparenting map to the same unit.
-
-The live task graph records:
+**Required correction:** add a non-secret Trusted Access context block to the root gate and Daybreak work order, for example:
 
 ```text
-not-started | active | consumed
+Trusted Access basis: user-level | named workspace | API organization/project
+Approved identity or membership basis:
+Approved organization/workspace/project and product surface:
+Internal-only use confirmed: yes | no
+Required retention treatment and coverage evidence:
+Provisioning/onboarding evidence ID:
 ```
 
-A confirmed spawn transitions `not-started -> active`; every terminal outcome after a confirmed start transitions to `consumed`. Uncertainty about whether a worker started retains `active` and prohibits another attempt until closure is proven. Extreme and Zergling Rush cannot duplicate or reset the unit. The unit ID and state are required in the work order, result addendum, Sol Ultra handoff, and any existing project-native or user-visible continuity record when durable continuity is needed. No AMS-specific recovery file is introduced.
+The root must verify this context before dispatching task data. When the approved access boundary is not observable, require explicit current user-provided or onboarding-confirmed evidence rather than inferring it from profile installation or the absence of an error.
 
-### F-06 — Sol Ultra overlay conflict — Resolved
+### F-04 — High release blocker — The only new execution path has not been exercised in Codex
 
-`SOL-ULTRA-AMS-EXTREME-ORCHESTRATION-PROMPT.md` now:
+**Files:**
 
-- includes `ams_daybreak_blue_max` in the supported profile set;
-- incorporates Daybreak into the pre-spawn gate;
-- requires the fallback-unit, provenance, custody, ownership, allocation, route-evidence, and terminal-result fields;
-- preserves logical parentage despite physical root dispatch;
-- recognizes delegated-manager refusals;
-- uses `none-root-handling` for root-origin refusals;
-- prevents Extreme replication or attempt reset;
-- records Daybreak state in startup receipts, continuous enforcement, and handoffs;
-- prohibits Red/Cyber escalation or root execution after an exhausted or unavailable route.
+- `adaptive-master-subagent-orchestration/assets/agent-profiles/ams_daybreak_blue_max.toml`
+- `adaptive-master-subagent-orchestration/references/profile-management.md`
+- `README.md`
+- PR validation record
 
-## Regression boundaries retained
+The repository proves that the profile is syntactically shaped like the existing AMS profiles and that the model name exists in OpenAI's generated model catalog. It does not prove that the current Codex custom-agent surface accepts this exact combination:
 
-The correction preserves the established AMS design:
+```text
+profile=ams_daybreak_blue_max
+model=gpt-daybreak-blue-latest
+effort=max
+```
 
-- schema 2 and all project controls are unchanged;
+OpenAI's current Trusted Access documentation identifies `gpt-daybreak-blue` as the stable API alias and requires validation on the exact approved surface, identity, organization/workspace, model/access path, and product surface. The generated OpenAI SDK also contains `gpt-daybreak-blue-latest`, so the configured alias is plausible, but Codex custom-agent resolution and `max` effort acceptance remain unproven.
+
+There is no recorded live smoke result demonstrating:
+
+- profile resolution by Codex;
+- acceptance of the configured model alias and `max` effort;
+- non-root worker creation;
+- receipt of the complete Daybreak work order;
+- preservation of the logical parent;
+- normal `RESULT` and `DAYBREAK RESULT ADDENDUM` return;
+- behavior when effective route identity is unobservable.
+
+No GitHub status or workflow run exercises this path.
+
+**Required correction:** before merge, run one authorized, narrow, non-destructive proof-of-access workflow from this branch in the exact approved Trusted Access Codex organization/workspace. Record the requested and observed route, work-order receipt, parentage, start/terminal state transition, and returned result. If Codex rejects `gpt-daybreak-blue-latest` or `max`, correct the profile to the exact route supported by the approved Codex surface and regenerate the manifest.
+
+## Controls that passed
+
+The following changes are compatible with the proven AMS baseline:
+
 - Daybreak remains dormant until a qualifying refusal;
-- normal security-sensitive work still routes to standard Sol first;
-- Daybreak remains worker-only and the root remains sole physical spawn authority;
-- permissions, authorization, ownership, and target scope are never inferred from Trusted Access;
-- generic errors, timeouts, missing tools, permission denials, quota errors, weak answers, and non-cyber refusals do not activate Daybreak;
-- one-writer safety and logical-parent evidence relay remain mandatory;
-- no automatic Daybreak Red, GPT-5.6 Cyber, offensive-workflow, or root-execution escalation exists;
-- installers and the manifest remain aligned to 19 profiles and exactly 33 installed files.
+- schema 2, configuration precedence, and all project controls are unchanged;
+- normal security work still routes to standard Sol first;
+- generic failures, tool errors, permission denials, timeouts, quota errors, and weak answers do not trigger Daybreak;
+- Daybreak remains worker-only and never becomes a competing master;
+- physical root dispatch is correctly separated from logical parentage;
+- direct-worker and manager-owned-worker replacement paths are defined;
+- delegated-manager refusals are eligible without granting the manager physical spawn authority;
+- prior-writer closure, ownership transfer, allocation accounting, and one-writer safety are required;
+- equivalent refusals share one stable fallback unit and cannot be multiplied by Extreme or Rush;
+- requested versus observed route identity is represented without false attestation;
+- no profile grants sandbox, approval, network, writable-root, credential, tool, or target authority;
+- an exhausted Daybreak attempt cannot escalate automatically to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution;
+- the installers, version, profile lists, required-file lists, and manifest consistently describe 19 profiles and 33 installed files;
+- all manifest byte lengths match the current tree;
+- the Sol Ultra profile allowlist and enforcement overlay include Daybreak.
 
-## Validation completed for the correction
+## Required follow-up review
 
-Repository-level validation covered:
+Do not merge PR #49 in its current state. After correction, perform another independent review covering at least:
 
-- UTF-8 without BOM, CR, or NUL and final-LF invariants;
-- TOML parsing of the Daybreak profile;
-- absence of sandbox, approval, network, writable-root, credential, or tool-grant overrides;
-- exact 33-entry manifest membership, byte lengths, and SHA-256 values;
-- installer-required profile and reference parity;
-- cross-reference parity among `SKILL.md`, `runtime-core.md`, `profile-management.md`, `daybreak-blue.md`, README, product documentation, the profile, and the Sol Ultra prompt;
-- adversarial state transitions for root-origin refusal, direct-worker refusal, manager-owned worker refusal, delegated-manager refusal, duplicate equivalent refusals, reparenting, recovery after a consumed attempt, unobservable identity, explicit access failure, and Sol Ultra/Extreme operation.
+1. a refusing delegated manager under `minimal`, including close–worker–resume behavior;
+2. a manager-owned worker replacement under `balanced`;
+3. authoritative pre-start access failure followed by compaction or root recovery;
+4. explicit reopening after genuinely changed provisioning evidence;
+5. validation of the exact approved identity, internal workspace, product surface, and retention treatment before data dispatch;
+6. one live Codex Daybreak smoke test using the branch profile;
+7. unobservable effective identity without false attestation;
+8. ordinary non-Daybreak AMS work proving no baseline regression.
 
-## Required independent re-review
-
-Before merging, independently verify at least:
-
-1. root-origin refusal with `none-root-handling`;
-2. direct Sol worker replacement;
-3. manager-owned Sol worker replacement under `balanced` without mixed topology shapes;
-4. Sol delegated-manager refusal under `heavy` or `extreme`;
-5. prior-writer closure, ownership transfer, allocation accounting, and logical-parent result relay;
-6. duplicate equivalent refusals under Extreme/Rush mapping to one stable fallback unit;
-7. interruption or recovery after an `active` or `consumed` attempt;
-8. unavailable entitlement, explicit route mismatch, and unobservable identity;
-9. the authorized live Trusted Access Codex smoke test;
-10. Sol Ultra overlay behavior;
-11. ordinary non-Daybreak work proving no baseline regression.
-
-Do not treat this resolution record as independent approval. Preserve it until the corrections and external smoke-test evidence have been reviewed.
+Request further review after the corrections and live evidence are available.
