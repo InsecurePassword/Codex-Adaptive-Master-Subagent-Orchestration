@@ -49,7 +49,7 @@ Route by failure cost, ambiguity, architecture/security impact, dependencies, no
 - **Luna**: explicit, repetitive, low-risk, inexpensive-to-retry work.
 - **Terra**: normal implementation, tests, documentation, review, and moderate investigation/management.
 - **Sol**: ambiguous, novel, architectural, security-sensitive, cross-component, difficult, or expensive-to-fail work.
-- **Daybreak Blue**: optional root-spawned worker-only fallback for an unchanged authorized defensive cybersecurity work unit after an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order. It requires a data-free access preflight for the exact Trusted Access context before its one task attempt. It is never selected proactively or for ordinary routing, quality escalation, offensive expansion, permission failure, or tool failure.
+- **Daybreak Blue**: optional root-spawned worker-only fallback for one unchanged authorized defensive cybersecurity work unit after an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order. It is never proactive. Before its one task attempt, the exact unit must reserve the canonical access-route record and complete the capability-verification contract in `daybreak-blue.md`.
 
 Effort: `low` for tight straightforward work; `medium` for ordinary multi-step work; `high` for dependencies and edge cases; `xhigh` for difficult investigation/design/validation; `max` for the hardest bounded exhaustive work. File count alone is not a strength signal. Daybreak Blue has one canonical `max` profile because its purpose is access-path fallback, not cost-tier selection.
 
@@ -59,7 +59,14 @@ For weak or failed ordinary work, correct the order before retrying; raise effor
 
 ## Task graph, work orders, and hierarchy
 
-Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results. For each Daybreak-eligible work unit, also maintain its stable fallback unit ID, frozen data/operational boundary, refusal provenance, custody decision, access-context ID, route disposition `unverified | verifying | verified | closed-unavailable`, route/preflight evidence and reopen condition, and task-attempt state `not-started | active | consumed`.
+Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results.
+
+For Daybreak maintain two distinct root-owned records:
+
+1. each frozen fallback unit, including refusal provenance, logical custody, ownership, and task-attempt state `not-started | active | consumed`;
+2. each canonical access-route record keyed by the normalized access path/surface, identity boundary, retention treatment, exact profile hash/model/effort, and signed-in Codex session generation, including its generation, disposition, single-flight reservation, verification budget/evidence, blocker, and reopen condition.
+
+Never duplicate route state inside units or permit simultaneous verification/task reservations on one canonical route record. Daybreak verification is bound to one exact unit/parent/custody/intensity combination and is not reusable across units.
 
 Each non-root session receives one compact stable-ID order:
 
@@ -80,7 +87,7 @@ Required actions / Success criteria / Validation:
 Expected execution profile / Deviation triggers / Return requirements:
 ```
 
-Require:
+Require every non-root session, including Daybreak capability verification, to return:
 
 ```text
 RESULT
@@ -92,7 +99,7 @@ Deviations / Unresolved issues / Assumptions / Risks:
 Recommended logical-parent action:
 ```
 
-A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak Blue order is a physical root child with only `worker`/`none`; its operation, logical parent, minimal-mode serial custody, ownership, allocation, provenance, Trusted Access/data context, route disposition, data-free preflight, stable fallback unit, task-attempt transition, and additional result fields come from `daybreak-blue.md`. Worker and manager completion are claims; only the root decides project completion.
+A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak order is a physical root child with only `worker`/`none`; its operation, canonical route record, unit binding, normalized access context, proof mode, verification budget, logical parent, minimal-mode serial custody, ownership, provenance, task attempt, and operation-specific addendum come from `daybreak-blue.md`. A capability-preflight returns normal `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`; a task-attempt returns normal `RESULT` plus `DAYBREAK RESULT ADDENDUM`. Worker and manager completion are claims; only the root decides project completion.
 
 Allow one active writer per mutable surface across the logical tree. Prefer disjoint paths or isolated workspaces; serialize shared manifests, schemas, interfaces, migrations, indexes, locks, and authoritative state. Preserve user changes. A non-root Git/history operation requires exact work-order authority and excludes all AMS controls and profiles.
 
@@ -100,15 +107,15 @@ Allow one active writer per mutable surface across the logical tree. Prefer disj
 
 Until the user objective is complete or genuinely blocked:
 
-1. refresh the objective, dependencies, effective settings, active topology, ownership, selected profiles, and any Daybreak access contexts, route dispositions, preflight evidence, and task-attempt states;
+1. refresh the objective, dependencies, effective settings, active topology, ownership, selected profiles, Daybreak fallback units, and canonical route records/reservations;
 2. select the smallest useful ready topology and issue non-overlapping work orders;
-3. monitor progress, process bounded manager requests, classify any refusal accurately, and correct deviations;
+3. monitor progress, process bounded manager requests, classify any refusal accurately, and reconcile Daybreak verification/task results idempotently by route generation, operation ID, nonce, unit binding, and work-order ID;
 4. collect results through logical parents, reconcile conflicts, and commission required integration;
 5. apply user/project-required validation and accept or reject evidence;
 6. close completed or superseded sessions and continue with the next required work.
 
 If `project_governance = true`, apply `project-governance.md` for AMS-added project-wide acceptance criteria, proportional independent review, continuous-delivery posture, deviation handling, and continuity. If false, do not load that reference or impose its additional lifecycle/review requirements; follow the user's objective and authoritative project workflow while retaining core root authority, truthful evidence, ownership, work-order, hierarchy, model/effort, and safety controls.
 
-A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken any safety, authorization, Trusted Access/data-governance, ownership, lineage, allocation, or permission boundary. It may not receive task data until its exact access context passes the data-free preflight, and it must stop after the route-disposition or stable-unit attempt rules in `daybreak-blue.md` close the path.
+A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken safety, authorization, Trusted Access/data-governance, ownership, lineage, allocation, or permission boundaries. It may not receive task data until its exact unit-bound capability verification succeeds, and it must stop when the route disposition or stable-unit attempt contract closes the path.
 
 Declare complete only when the user/project-defined objective and required checks are satisfied, required results are reconciled, no mandatory work or live conflicting writer remains, and any enabled governance requirements are met. Otherwise report blocked with the exact blocker and next action. Do not expose private chain-of-thought.

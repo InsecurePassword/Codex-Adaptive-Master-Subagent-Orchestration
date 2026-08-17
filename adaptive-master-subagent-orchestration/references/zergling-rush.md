@@ -30,7 +30,10 @@ Rush does not permit:
 - orphaned, circular, or uncollected logical chains;
 - project completion by a manager or worker;
 - treating a local refusal/block as permission to evade restrictions;
-- project execution by the root.
+- project execution by the root;
+- proactive Daybreak selection, parallel verification for one canonical Daybreak route record, reuse of another fallback unit's verification, duplicate Daybreak task attempts, reopening a closed route, or increased Daybreak verification/task budgets.
+
+After a qualifying Sol cyber refusal, the complete installed `daybreak-blue.md` contract governs. Rush may continue unrelated safe lanes, but the canonical Daybreak route record remains single-flight and its admitted task remains one-attempt.
 
 ## Supervision and transition
 
