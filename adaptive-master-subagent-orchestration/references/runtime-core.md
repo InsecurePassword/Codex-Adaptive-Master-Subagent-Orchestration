@@ -49,7 +49,7 @@ Route by failure cost, ambiguity, architecture/security impact, dependencies, no
 - **Luna**: explicit, repetitive, low-risk, inexpensive-to-retry work.
 - **Terra**: normal implementation, tests, documentation, review, and moderate investigation/management.
 - **Sol**: ambiguous, novel, architectural, security-sensitive, cross-component, difficult, or expensive-to-fail work.
-- **Daybreak Blue**: optional root-spawned worker-only one-attempt fallback for an unchanged authorized defensive cybersecurity work unit after an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order. It is never selected proactively or for ordinary routing, quality escalation, offensive expansion, permission failure, or tool failure.
+- **Daybreak Blue**: optional root-spawned worker-only fallback for an unchanged authorized defensive cybersecurity work unit after an explicit cyber-safeguard refusal during root handling or from a standard Sol non-root execution order. It requires a data-free access preflight for the exact Trusted Access context before its one task attempt. It is never selected proactively or for ordinary routing, quality escalation, offensive expansion, permission failure, or tool failure.
 
 Effort: `low` for tight straightforward work; `medium` for ordinary multi-step work; `high` for dependencies and edge cases; `xhigh` for difficult investigation/design/validation; `max` for the hardest bounded exhaustive work. File count alone is not a strength signal. Daybreak Blue has one canonical `max` profile because its purpose is access-path fallback, not cost-tier selection.
 
@@ -59,7 +59,7 @@ For weak or failed ordinary work, correct the order before retrying; raise effor
 
 ## Task graph, work orders, and hierarchy
 
-Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results. For each Daybreak-eligible work unit, also maintain its stable fallback unit ID, frozen boundary, refusal provenance, custody decision, and attempt state `not-started | active | consumed`.
+Maintain objective/criteria, dependencies, ready/active/completed/blocked/superseded work, physical identity when observable, logical parent/role/authority, ownership, required validation, selected profile, and outstanding results. For each Daybreak-eligible work unit, also maintain its stable fallback unit ID, frozen data/operational boundary, refusal provenance, custody decision, access-context ID, route disposition `unverified | verifying | verified | closed-unavailable`, route/preflight evidence and reopen condition, and task-attempt state `not-started | active | consumed`.
 
 Each non-root session receives one compact stable-ID order:
 
@@ -92,7 +92,7 @@ Deviations / Unresolved issues / Assumptions / Risks:
 Recommended logical-parent action:
 ```
 
-A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak Blue order is a physical root child with only `worker`/`none`; its logical parent, replacement custody, ownership, allocation, provenance, route evidence, stable fallback unit, attempt transition, and additional result fields come from `daybreak-blue.md`. Worker and manager completion are claims; only the root decides project completion.
+A direct worker uses `worker`/`none`. A delegated manager uses `delegated-manager`/`request` and follows `hierarchy-control.md`. A Daybreak Blue order is a physical root child with only `worker`/`none`; its operation, logical parent, minimal-mode serial custody, ownership, allocation, provenance, Trusted Access/data context, route disposition, data-free preflight, stable fallback unit, task-attempt transition, and additional result fields come from `daybreak-blue.md`. Worker and manager completion are claims; only the root decides project completion.
 
 Allow one active writer per mutable surface across the logical tree. Prefer disjoint paths or isolated workspaces; serialize shared manifests, schemas, interfaces, migrations, indexes, locks, and authoritative state. Preserve user changes. A non-root Git/history operation requires exact work-order authority and excludes all AMS controls and profiles.
 
@@ -100,7 +100,7 @@ Allow one active writer per mutable surface across the logical tree. Prefer disj
 
 Until the user objective is complete or genuinely blocked:
 
-1. refresh the objective, dependencies, effective settings, active topology, ownership, selected profiles, and any Daybreak fallback-unit attempt states;
+1. refresh the objective, dependencies, effective settings, active topology, ownership, selected profiles, and any Daybreak access contexts, route dispositions, preflight evidence, and task-attempt states;
 2. select the smallest useful ready topology and issue non-overlapping work orders;
 3. monitor progress, process bounded manager requests, classify any refusal accurately, and correct deviations;
 4. collect results through logical parents, reconcile conflicts, and commission required integration;
@@ -109,6 +109,6 @@ Until the user objective is complete or genuinely blocked:
 
 If `project_governance = true`, apply `project-governance.md` for AMS-added project-wide acceptance criteria, proportional independent review, continuous-delivery posture, deviation handling, and continuity. If false, do not load that reference or impose its additional lifecycle/review requirements; follow the user's objective and authoritative project workflow while retaining core root authority, truthful evidence, ownership, work-order, hierarchy, model/effort, and safety controls.
 
-A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken any safety, authorization, ownership, lineage, allocation, or permission boundary and must stop after the stable-unit attempt rules in `daybreak-blue.md` are exhausted.
+A local failure is not automatically a project failure. Classify scope, context, profile/effort, permissions, ownership, tools, policy/access-path refusal, or external blockers; correct or reroute through bounded sessions. Never evade safety restrictions or claim unrun validation passed. Daybreak Blue does not weaken any safety, authorization, Trusted Access/data-governance, ownership, lineage, allocation, or permission boundary. It may not receive task data until its exact access context passes the data-free preflight, and it must stop after the route-disposition or stable-unit attempt rules in `daybreak-blue.md` close the path.
 
 Declare complete only when the user/project-defined objective and required checks are satisfied, required results are reconciled, no mandatory work or live conflicting writer remains, and any enabled governance requirements are met. Otherwise report blocked with the exact blocker and next action. Do not expose private chain-of-thought.
