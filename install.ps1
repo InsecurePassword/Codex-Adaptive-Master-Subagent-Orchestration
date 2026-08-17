@@ -9,7 +9,7 @@ $RepositoryName = "Codex-Adaptive-Master-Subagent-Orchestration"
 $RepositoryRef = "main"
 $RawBaseUrl = "https://github.com/$RepositoryOwner/$RepositoryName/raw/refs/heads/main"
 $ManifestUrl = "$RawBaseUrl/install-manifest.txt"
-$PackageVersion = "3.09"
+$PackageVersion = "3.10"
 $SkillName = "adaptive-master-subagent-orchestration"
 $ManagedMarker = "# managed-by: adaptive-master-subagent-orchestration"
 $UserAgent = "AMS-$PackageVersion-Tree-Installer"
@@ -30,6 +30,7 @@ $ProfileFiles = @(
     "ams_sol_high.toml",
     "ams_sol_xhigh.toml",
     "ams_sol_max.toml",
+    "ams_daybreak_blue_max.toml",
     "ams_terra_low.toml",
     "ams_terra_medium.toml",
     "ams_terra_high.toml",
@@ -56,6 +57,7 @@ $RequiredFiles = @(
     "VERSION",
     "agents/openai.yaml",
     "references/configuration-maintenance.md",
+    "references/daybreak-blue.md",
     "references/hierarchy-control.md",
     "references/intensity-control.md",
     "references/package-maintenance.md",

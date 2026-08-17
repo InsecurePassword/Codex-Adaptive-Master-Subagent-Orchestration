@@ -1,6 +1,6 @@
 # Installation
 
-AMS 3.09 installs directly from the canonical repository `main` tree. No release asset or package ZIP is used.
+AMS 3.10 installs directly from canonical repository `main`. No release asset or package ZIP is used.
 
 ## One-line installation
 
@@ -20,48 +20,48 @@ curl -fsSL 'https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-O
 
 Requirements: Bash; `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`; and either `sha256sum` or `shasum`.
 
-Installation ends when the installer completes; AMS performs no automatic follow-up package verification or project pause.
+Installation ends when the installer completes. AMS performs no automatic follow-up verification or project pause.
 
 ## Exact installer scope
 
-The standard installers use only these canonical URLs:
+The installers use only:
 
 ```text
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/install-manifest.txt
 https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration/raw/refs/heads/main/adaptive-master-subagent-orchestration/...
 ```
 
-They expose no environment-variable override for repository ref, manifest URL, or raw source. Alternate sources require a separate explicit manual procedure.
+They expose no repository-ref, manifest-URL, or raw-source environment override. Alternate sources require a separate explicit manual procedure.
 
-The installers write only:
+They write only:
 
 ```text
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 $CODEX_HOME/agents/ams_*.toml
 ```
 
-When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME` and `CODEX_HOME` may select destination roots. The installers do not edit `$CODEX_HOME/config.toml`, project `.codex/ams-orchestration.toml`, operating-system ACLs, or other Codex configuration.
+When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. `AMS_SKILL_HOME` and `CODEX_HOME` may select destination roots. The installers do not edit `$CODEX_HOME/config.toml`, project settings, ACLs, or other Codex configuration.
 
 ## Verification and transaction
 
 Both installers:
 
 1. download `install-manifest.txt` from canonical `main`;
-2. require manifest format `ams-install-manifest-v1`, version `3.09`, and the exact 31-file runtime/profile set;
+2. require `ams-install-manifest-v1`, version `3.10`, and the exact 33-file runtime/profile set;
 3. reject malformed, duplicate, escaping, linked, redirected, oversized, or unexpected entries;
-4. download every declared file and verify byte length and SHA-256;
-5. download the manifest again and require byte equality, preventing mixed-generation installation;
-6. validate `VERSION = 3.09` and all 18 bundled profile markers;
+4. verify every downloaded file's byte length and SHA-256;
+5. reread the manifest and require byte equality;
+6. validate `VERSION = 3.10` and all 19 profile markers;
 7. stage the complete skill before replacement;
-8. transactionally install the skill and eligible profiles with rollback;
+8. transactionally install skill and eligible profiles with rollback;
 9. leave byte-identical profiles unchanged;
-10. upgrade only exact installer-recognized prior official Spark profiles that contained the former sandbox override;
-11. refuse every other differing or ambiguous profile instead of trusting a marker alone;
-12. preserve project/global settings, installed profiles not eligible for replacement, project-native state, unrelated skills, and unrelated files.
+10. upgrade only exact recognized prior official Spark profiles containing the former sandbox override;
+11. refuse every other differing or ambiguous profile;
+12. preserve settings, ineligible profiles, project-native state, unrelated skills, and unrelated files.
 
-## Permission neutrality
+## Permission and authorization neutrality
 
-All installed profiles inherit platform/user/work-order permissions. No current profile sets:
+All profiles inherit platform/user/project/work-order permissions and authorization boundaries. No current profile sets:
 
 ```text
 sandbox_mode
@@ -69,9 +69,14 @@ approval policy
 network access
 writable roots
 tool grants
+credentials
+target authority
+authorization
 ```
 
-The previous public Spark profile hashes are recognized only so a direct user-authorized reinstall/update can remove their former `workspace-write` override safely.
+The prior Spark hashes exist only so a direct user-authorized update can remove the former `workspace-write` override.
+
+The Daybreak profile requests an optional account-gated access lane. Installation does not grant entitlement, target authorization, a provisioned workspace/API path, model attestation, retention treatment, or additional permission.
 
 ## Profile collision behavior
 
@@ -80,9 +85,9 @@ For each target profile:
 - exact current bytes: unchanged;
 - exact recognized prior official Spark bytes: backed up and upgraded;
 - missing file: created;
-- any other differing file: installation fails and rolls back without replacing it.
+- any other differing file: installation fails and rolls back without replacement.
 
-A customized file remains untouched even when its first line contains the AMS managed marker. Review, rename, remove, or manually reconcile it before retrying.
+A customized file remains untouched even if it has the managed marker. Review, rename, remove, or manually reconcile it before retrying.
 
 ## Installed source tree
 
@@ -94,9 +99,10 @@ adaptive-master-subagent-orchestration/
 │   └── openai.yaml
 ├── assets/
 │   └── agent-profiles/
-│       └── 18 canonical ams_*.toml profiles
+│       └── 19 canonical ams_*.toml profiles
 └── references/
     ├── configuration-maintenance.md
+    ├── daybreak-blue.md
     ├── hierarchy-control.md
     ├── intensity-control.md
     ├── package-maintenance.md
@@ -115,7 +121,7 @@ git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orc
 cd Codex-Adaptive-Master-Subagent-Orchestration
 ```
 
-Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 18 files under `assets/agent-profiles/` into `$CODEX_HOME/agents/`. Manual installation must preserve the same permission-neutral profile bytes.
+Copy `adaptive-master-subagent-orchestration/` to `$HOME/.agents/skills/`, then copy all 19 profile files into `$CODEX_HOME/agents/`. Preserve exact permission-neutral bytes.
 
 ## Verify installation
 
@@ -129,11 +135,13 @@ Get-Content (Join-Path $SkillRoot 'VERSION')
 Test-Path (Join-Path $SkillRoot 'references\project-governance.md')
 Test-Path (Join-Path $SkillRoot 'references\configuration-maintenance.md')
 Test-Path (Join-Path $SkillRoot 'references\root-execution-fallback.md')
+Test-Path (Join-Path $SkillRoot 'references\daybreak-blue.md')
+Test-Path (Join-Path $AgentRoot 'ams_daybreak_blue_max.toml')
 (Get-ChildItem $AgentRoot -Filter 'ams_*.toml' -File).Count
-Select-String -Path (Join-Path $AgentRoot 'ams_spark_*.toml') -Pattern '^sandbox_mode\s*='
+Select-String -Path (Join-Path $AgentRoot 'ams_*.toml') -Pattern '^sandbox_mode\s*='
 ```
 
-Expected: version `3.09`, all three reference checks `True`, profile count `18`, and no `sandbox_mode` matches.
+Expected: version `3.10`, all five path checks `True`, profile count `19`, and no `sandbox_mode` match.
 
 ### Bash
 
@@ -145,19 +153,34 @@ cat "$skill_root/VERSION"
 test -f "$skill_root/references/project-governance.md"
 test -f "$skill_root/references/configuration-maintenance.md"
 test -f "$skill_root/references/root-execution-fallback.md"
+test -f "$skill_root/references/daybreak-blue.md"
+test -f "$agent_root/ams_daybreak_blue_max.toml"
 find "$agent_root" -maxdepth 1 -type f -name 'ams_*.toml' | wc -l
-! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_spark_*.toml
+! grep -R -n '^sandbox_mode[[:space:]]*=' "$agent_root"/ams_*.toml
 ```
 
-## Root fallback and configuration updater
+## Daybreak fallback
 
-The schema-2 default includes `root_execution_fallback = true`. `AMS ROOT FALLBACK on|off` changes only the project fallback setting.
+Daybreak adds no setting. It is considered only after a qualifying standard-Sol cyber-safeguard refusal for one unchanged authorized defensive task.
 
-`AMS CONFIGURATION UPDATE` and `AMS CONFIGURATION UPDATE PROJECT` update an existing project configuration as well as creating a missing one. Existing project values are preserved and every missing current field is added from the exact default. Global values are consulted only when the project file is absent; an existing invalid or unsafe global file blocks creation rather than being ignored. `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit AMS command allowed to write the global file and only adds missing defaults or creates the exact disabled default.
+Before task data or ownership is supplied, AMS:
 
-## Settings and governance
+1. establishes the normalized provisioned access path, compatible execution surface, approved identity/boundary, internal-only status, retention treatment, exact profile hash/model/effort, and a platform-observed or current-session root-generated signed-in Codex generation;
+2. resolves one canonical root-owned route record shared by every fallback unit with that key;
+3. serializes verification through a single reservation;
+4. verifies capability for the exact unit using platform attestation, the current OpenAI onboarding validation workflow, or a distinguishing non-project synthetic defensive fixture;
+5. requires universal `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`;
+6. admits one task attempt only after unit-bound verification and immediate same-wave dispatch; interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty before confirmed task start invalidates verification.
 
-Project settings override global settings. A project-setting command creates an absent project file from current valid global values when available, then changes only the requested key.
+A nonce echo alone verifies transport, not Daybreak capability. Verification is not reusable across units or signed-in sessions. An authoritative failure closes the canonical record for every unit sharing the key. A route generation allows one initial verification start and one retry only after proof of a temporary no-start transport/capacity failure. The admitted task uses the same bounded process-start rule; a second no-start closes the route while leaving the task unit unstarted and blocked.
+
+Daybreak is not ordinary routing, generic failure recovery, permission escalation, or automatic Red/Cyber/root escalation.
+
+## Configuration updater and governance
+
+`AMS CONFIGURATION UPDATE` and `AMS CONFIGURATION UPDATE PROJECT` update or create the project schema-2 file while preserving every existing value. Global values are consulted only when the project file is absent; an existing invalid global file blocks creation. `AMS CONFIGURATION UPDATE GLOBAL` adds missing defaults or creates the exact disabled default.
+
+Project settings override global settings:
 
 ```toml
 schema_version = 2
@@ -172,21 +195,19 @@ spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Any omitted currently supported schema-2 setting resolves from the exact current default and is written during the next authorized settings change. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
-
-Disable only the optional project-governance layer with:
+Unknown, duplicate, nested, invalid, or unsupported content remains an error.
 
 ```text
 AMS GOVERNANCE off
 ```
 
-AMS does not create `.codex/ams-recovery.json`. Live orchestration state remains in the root session; durable continuity uses an existing authorized project-native system or a user-visible handoff.
+disables only the optional project-governance layer. AMS never creates `.codex/ams-recovery.json`; continuity uses current root state, an authorized project-native system, or a user-visible handoff.
 
 ## Update and repair
 
-Rerun the appropriate one-line installer. A normal update safely migrates exact prior official Spark profiles. Any other differing profile blocks replacement and is reported precisely. Do not bypass the collision check.
+Rerun the one-line installer. Exact prior official Spark profiles can be migrated. Any other differing profile blocks replacement. Do not bypass collision checks.
 
-Run the installer when an install or update is authorized. Its manifest, hash, provenance, and transaction checks occur inside that invocation. After completion, resume normal work; AMS performs no follow-up package comparison, verification, audit, activation check, project pause, or user-action request unless package-integrity verification is directly requested.
+After an authorized installer completes, resume normal work. AMS performs no automatic package comparison, re-audit, activation check, project pause, or user-action request unless package-integrity verification is directly requested.
 
 ## Uninstall
 
@@ -196,4 +217,4 @@ Standard uninstall removes only:
 $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 ```
 
-It intentionally preserves project/global settings and all installed profiles for troubleshooting or reinstall. Remove profiles separately only after proving exact AMS ownership and receiving explicit user authorization.
+It preserves project/global settings and all installed profiles. Separate profile cleanup requires proven AMS ownership and explicit user authorization.

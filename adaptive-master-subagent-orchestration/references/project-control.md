@@ -110,6 +110,21 @@ On disable, intensity/governance/root-fallback/profile/Spark change, trust loss,
 6. close sessions that no longer fit;
 7. apply the authorized change and continue when permitted.
 
-The root maintains the live task graph, logical lineage, ownership, and active-session state in the current session. When durable continuity is required, use an existing authorized project-native task, issue, journal, checkpoint, or handoff system. Otherwise provide a concise user-visible handoff. **Never create `.codex/ams-recovery.json` or any other AMS-specific recovery file.**
+The root maintains the live task graph, logical lineage, ownership, and active-session state in the current session. For Daybreak, preserve:
 
-Recovery treats prior reports as evidence, not proof. Read the user-provided handoff and any existing authorized project-native state; delegate bounded inspection of the live repository, workspaces, changes, tests, artifacts, and sessions; rebuild the task graph without rewriting historical lineage; reclaim ownership only after proving no live writer remains; and resume from the earliest unfinished or unverified dependency.
+- each fallback unit's frozen data/operational boundary, refusal provenance, logical custody, ownership, and task-attempt state;
+- each canonical access-route record's deterministic key inputs, access-context fingerprint, route record ID/generation, disposition, single-flight reservation, bound unit/parent/custody/intensity, exact profile hash/model/effort, signed-in session generation, verification and task process-start attempts/evidence, blocker, and reopen condition.
+
+Do not duplicate canonical route disposition inside every fallback unit. Units reference the route record ID/generation. `closed-unavailable` applies to all units with the same route key. A stale or late result cannot overwrite a newer generation or closed record. Before confirmed task start, interruption, context compaction, handoff, root replacement, approval wait, or uncertainty about active identity/path invalidates a verified admission, clears its reservation, and requires a new unverified generation.
+
+When durable continuity is required, use an existing authorized project-native task, issue, journal, checkpoint, or handoff system. Otherwise provide a concise user-visible handoff. **Never create `.codex/ams-recovery.json` or any other AMS-specific recovery file.**
+
+Recovery treats prior reports as evidence, not proof. Read the user-provided handoff and authorized project-native state; delegate bounded inspection of the live repository, workspaces, changes, tests, artifacts, and sessions; rebuild the task graph without rewriting historical lineage; and reclaim ownership only after proving no live writer remains.
+
+For Daybreak recovery:
+
+1. reconstruct the canonical route key and verify the exact signed-in session generation, provisioned access path/surface, identity boundary, retention treatment, profile hash, model, and effort; when the platform exposes no signed-in generation, create a new opaque root generation only for the current top-level session after explicit current identity/path confirmation;
+2. if any key field or session generation is missing, changed, inherited across a root/handoff boundary, or uncertain, create a new `unverified` route generation and do not reuse prior verification;
+3. preserve `closed-unavailable` unless explicit new provisioning evidence or a user-directed recheck after material context change authorizes a new generation;
+4. accept pending verification/task results only when generation, operation ID, nonce, reserved unit, logical parent, and work-order ID match;
+5. resume from the earliest unfinished or unverified dependency without automatic reprobe.
