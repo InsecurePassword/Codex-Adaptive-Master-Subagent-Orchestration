@@ -58,11 +58,11 @@ For Daybreak:
 - profile selection or installation never authorizes task-data dispatch;
 - the root must first create or resolve the canonical route record keyed by the normalized provisioned access path, compatible execution surface, approved identity boundary, retention treatment, exact profile SHA-256/model/effort, and current signed-in Codex session generation;
 - the route record is single-flight, shared by every unit with that key, and may reserve only one fallback unit at a time;
-- verification is bound to that unit, parent, custody state, intensity shape, and route generation and is never reusable across units or sessions;
+- verification is bound to that unit, parent, custody state, intensity shape, objective, and route/session generation and is never reusable across units or sessions; before confirmed task start, interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty invalidates it;
 - the capability-preflight must use platform-attested identity, the current OpenAI onboarding validation workflow, or a distinguishing non-project defensive fixture with the required same-fixture standard-Sol control refusal;
 - a nonce echo proves transport only;
 - successful verification returns universal `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`;
-- a mismatch, non-distinguishing result, malformed result, entitlement/access failure, incompatible path/surface, unsupported model/effort, uncertain start/result, or exhausted verification budget closes the canonical route record as defined in `daybreak-blue.md`.
+- a mismatch, non-distinguishing result, malformed result, entitlement/access failure, incompatible path/surface, unsupported model/effort, uncertain start/result, or exhausted verification/task process-start budget closes the canonical route record as defined in `daybreak-blue.md`.
 
 Account/workspace/API approval is external entitlement, not profile state. Do not infer Trusted Access from bundled bytes, installation, a model catalog, a prior session, or absence of an error. Do not change credentials, organizations, workspaces, API projects, execution surfaces, permissions, or retention controls to repair Daybreak automatically.
 

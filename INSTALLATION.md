@@ -165,14 +165,14 @@ Daybreak adds no setting. It is considered only after a qualifying standard-Sol 
 
 Before task data or ownership is supplied, AMS:
 
-1. establishes the normalized provisioned access path, compatible execution surface, approved identity/boundary, internal-only status, retention treatment, exact profile hash/model/effort, and signed-in Codex session generation;
+1. establishes the normalized provisioned access path, compatible execution surface, approved identity/boundary, internal-only status, retention treatment, exact profile hash/model/effort, and a platform-observed or current-session root-generated signed-in Codex generation;
 2. resolves one canonical root-owned route record shared by every fallback unit with that key;
 3. serializes verification through a single reservation;
 4. verifies capability for the exact unit using platform attestation, the current OpenAI onboarding validation workflow, or a distinguishing non-project synthetic defensive fixture;
 5. requires universal `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`;
-6. admits one task attempt only after unit-bound verification.
+6. admits one task attempt only after unit-bound verification and immediate same-wave dispatch; interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty before confirmed task start invalidates verification.
 
-A nonce echo alone verifies transport, not Daybreak capability. Verification is not reusable across units or signed-in sessions. An authoritative failure closes the canonical record for every unit sharing the key. A route generation allows one initial verification start and one retry only after proof of a temporary no-start transport/capacity failure.
+A nonce echo alone verifies transport, not Daybreak capability. Verification is not reusable across units or signed-in sessions. An authoritative failure closes the canonical record for every unit sharing the key. A route generation allows one initial verification start and one retry only after proof of a temporary no-start transport/capacity failure. The admitted task uses the same bounded process-start rule; a second no-start closes the route while leaving the task unit unstarted and blocked.
 
 Daybreak is not ordinary routing, generic failure recovery, permission escalation, or automatic Red/Cyber/root escalation.
 

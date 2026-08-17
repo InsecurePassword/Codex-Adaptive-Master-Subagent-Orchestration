@@ -99,7 +99,7 @@ Before every observable non-root spawn establish:
 - no conflicting writer;
 - finite allocation and runtime capacity.
 
-For any Daybreak session, load and follow the complete current installed `daybreak-blue.md`. That reference is authoritative over every abbreviated Daybreak list in this prompt. Before spawn also require:
+For any Daybreak session, load and follow the complete current installed `daybreak-blue.md`. That reference is authoritative over every abbreviated Daybreak list in this prompt. Normalize `Provisioned access path` as `codex-workspace | api-organization | user-or-model-specific` and require its compatible execution surface under the installed table; never combine workspace and API approval in one route record. Before spawn also require:
 
 ```text
 Daybreak operation: capability-preflight | task-attempt
@@ -108,10 +108,10 @@ Canonical route record ID / generation / disposition
 Single-flight reservation and reserved unit ID
 Verification operation ID / nonce / attempt budget
 Provisioned access path and compatible execution surface
-Approved identity and organization/workspace/API-project boundary
+Approved identity and organization/workspace/API-project boundary, or the exact `none-user-level` sentinel only when OpenAI provisioning explicitly permits it
 Internal-only and retention evidence
 Exact profile SHA-256 / model / effort
-Signed-in Codex session generation
+Signed-in Codex session generation, platform-observed or root-generated for the current top-level session after explicit identity/path confirmation
 Capability proof mode and fixture/control evidence
 Refusal provenance
 Original/current logical parent and custody state
@@ -120,7 +120,7 @@ Allocation and intensity shape
 Frozen objective / target / scope / exclusions / data and operational boundaries
 ```
 
-A Daybreak route record may have only one active verification/task reservation. Verification is unit-, parent-, custody-, intensity-, objective-, and session-bound. No agent begins project work before the gate passes.
+A Daybreak route record may have only one active verification/task reservation. Verification is unit-, parent-, custody-, intensity-, objective-, and session-bound. Dispatch the admitted task in the same uninterrupted orchestration wave; before confirmed task start, interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty invalidates verification and requires a new generation. No agent begins project work before the gate passes.
 
 ## 9. Work-order and result contract
 
@@ -230,11 +230,11 @@ On a qualifying Sol cyber-safeguard refusal, load `daybreak-blue.md`. Use `none-
 Daybreak verification has a finite process-start budget per canonical route generation:
 
 1. one initial attempt;
-2. one retry only after proof that the first temporary transport/capacity failure occurred before any Daybreak session started.
+2. one retry only after proof that the first temporary transport/capacity failure occurred before any Daybreak verification session started.
 
-A confirmed/uncertain start or result, malformed/non-distinguishing result, failed capability criterion, refusal, substitution, mismatch, entitlement/access failure, incompatible path/surface/context, or second no-start failure sets `closed-unavailable` for every unit sharing the route record. No automatic reprobe occurs. Reopening requires explicit new evidence/user-directed recheck and a new generation.
+After the sole retry-eligible no-start, keep the reservation and generation, return `verifying -> unverified`, and permit attempt 2. A confirmed/uncertain start or result, malformed/non-distinguishing result, failed capability criterion, refusal, substitution, mismatch, entitlement/access failure, incompatible path/surface/context, or second no-start failure sets `closed-unavailable` for every unit sharing the route record. No automatic reprobe occurs. Reopening requires explicit new evidence/user-directed recheck and a new generation.
 
-A verified route is reserved to one unit. Every terminal Daybreak task result consumes that unit's one task attempt. No Red/Cyber/offensive/root escalation follows.
+The admitted task has one initial process-start attempt plus one retry only after a proven temporary no-start transport/capacity failure. A second no-start or authoritative route/context error closes the route while leaving the fallback unit `not-started` and blocked. A verified route is reserved to one unit; every terminal task result after confirmed start consumes that unit's one confirmed task attempt. No Red/Cyber/offensive/root escalation follows.
 
 ## 15. Project-native workflows
 
@@ -265,7 +265,7 @@ Physical topology: root-spawned
 Initial task graph / ready lanes / profile plan:
 One-writer conflicts:
 Daybreak fallback units:
-Daybreak canonical route records, generations, dispositions, reservations, verification budgets/evidence, blockers, and reopen conditions:
+Daybreak canonical route records, generations, dispositions, reservations, verification and task process-start budgets/evidence, freshness state, blockers, and reopen conditions:
 Activation blockers:
 ```
 
@@ -285,10 +285,10 @@ Every handoff preserves:
 - AMS as sole observable orchestration authority and Extreme for the objective;
 - global task graph, immutable lineage, ownership, allocations, completed/active/blocked/superseded work;
 - each Daybreak fallback unit's frozen boundaries, refusal provenance, custody, ownership, and task-attempt state;
-- each canonical route record's normalized key inputs, access-context fingerprint, ID/generation/disposition, reserved unit and topology binding, exact profile hash/model/effort, signed-in session generation, verification operation/attempt/evidence, capability fixture/control evidence, blocker, and reopen condition;
+- each canonical route record's normalized key inputs, access-context fingerprint, ID/generation/disposition, reserved unit and topology binding, exact profile hash/model/effort, signed-in session generation, verification and task process-start operations/attempts/evidence, capability fixture/control evidence, freshness state, blocker, and reopen condition;
 - validation evidence, unresolved risks, exact next actions/resumption conditions.
 
-On recovery, if any route-key field or signed-in session generation is missing or changed, create a new `unverified` generation. Preserve `closed-unavailable` absent explicit new evidence/user recheck. Accept late results only when all generation/binding identifiers match.
+On recovery, use a platform-observed signed-in generation when available; otherwise create a new opaque root generation for the current top-level session after explicit current identity/path confirmation. If any route-key field or session generation is missing, changed, inherited across a root/handoff boundary, or uncertain, create a new `unverified` generation. A verified admission that had not reached confirmed task start never survives interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty. Preserve `closed-unavailable` absent explicit new evidence/user recheck. Accept late results only when all generation/binding identifiers match.
 
 ## 18. Operating command
 

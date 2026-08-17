@@ -111,7 +111,7 @@ Approved identity and organization/workspace/API-project boundary
 Internal-only status
 Retention requirement and coverage
 Exact Daybreak profile SHA-256, model, and effort
-Signed-in Codex session generation
+Signed-in Codex session generation, platform-observed when available or root-generated for the current top-level session after explicit identity/path confirmation
 ```
 
 Record:
@@ -125,7 +125,7 @@ Route evidence / blocker / reopen condition
 Verified unit / logical parent / custody / intensity binding
 ```
 
-Every unit with the same key references the same record. One record permits one active verification/task reservation. Verification is unit-, parent-, custody-, intensity-, objective-, and session-bound and is not reusable across units.
+Every unit with the same key references the same record. One record permits one active verification/task reservation. Verification is unit-, parent-, custody-, intensity-, objective-, and session-bound and is not reusable across units. Dispatch the admitted task in the same uninterrupted orchestration wave; before confirmed task start, interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty invalidates verification and requires a new generation.
 
 After the admitted task terminates, clear the reservation and return to `unverified` unless authoritative evidence requires `closed-unavailable`. A closed record applies to all units sharing the key and survives replacement, reparenting, compaction, handoff, root replacement, and recovery. Only explicit new provisioning evidence or an explicit user-directed recheck after material context change creates a new generation.
 
@@ -160,7 +160,7 @@ A profile, installation, model catalog, prior session, or absence of an error is
 
 The exact fallback unit must reserve the route record and verify capability before receiving project ownership or task data.
 
-The verification session receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal evidence, target details, project/Git ownership, mutation authority, collection authority, or live-target interaction.
+The verification session receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal evidence, target details, project/Git ownership, mutation authority, non-public collection authority, or live-target interaction. The approved OpenAI workflow may read only its exact public references through existing authorized network access.
 
 Proof modes:
 
@@ -199,7 +199,7 @@ Every control/verification/task session consumes one ordinary worker slot while 
 
 After verification, recheck route generation/binding, profile hash, access context, custody, ownership, and `Attempt state = not-started`; then transfer only minimized data needed for the unchanged task.
 
-A confirmed start sets `active`. Every terminal result after confirmed start sets `consumed`. An uncertain start remains `active` until closure is proved. AMS never repeats, fans out, rotates, or resets the task through replacement, reparenting, recovery, Extreme, or Rush. It never automatically escalates to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
+Task process start permits one initial start plus one retry only after a proven temporary no-start transport/capacity failure. A second no-start or authoritative route/context error closes the route while leaving the unit `not-started` and blocked. A confirmed start sets `active`; every terminal result after confirmed start sets `consumed`; an uncertain start remains `active` until closure is proved. AMS never repeats, fans out, rotates, or resets the task through replacement, reparenting, recovery, Extreme, or Rush. It never automatically escalates to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
 
 The task returns universal `RESULT` plus `DAYBREAK RESULT ADDENDUM`. Physical return to root is transport; evidence is reconciled through the logical parent or superseding custodian. Daybreak output is evidence, not project acceptance.
 
@@ -240,7 +240,7 @@ The explicit updater preserves existing supported values, adds only missing defa
 
 ## 13. Intensity and Rush
 
-`minimal`, `balanced`, `auto`, `heavy`, and `extreme` change team formation, not quality, safety, ownership, or completion authority. Rush requires explicit current-turn consent. Neither Extreme nor Rush makes Daybreak proactive, duplicates a unit, bypasses verification, reopens a closed route, or increases verification/task budgets.
+`minimal`, `balanced`, `auto`, `heavy`, and `extreme` change team formation, not quality, safety, ownership, or completion authority. Rush requires explicit current-turn consent. Neither Extreme nor Rush makes Daybreak proactive, duplicates a unit, bypasses verification, reopens a closed route, or increases verification, task process-start, or confirmed-task budgets.
 
 ## 14. Optional project governance and continuity
 

@@ -28,6 +28,7 @@ Resolved by one root-owned canonical route record per normalized access context,
 - `closed-unavailable` applies to all units sharing the key.
 - Route generation, operation ID, nonce, reserved unit, parent, and work-order ID govern idempotent/late-result reconciliation.
 - A changed or unprovable session/context creates a new unverified generation.
+- Verification admits only immediate same-wave task dispatch; interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty before confirmed task start invalidates it.
 
 ### F-02 — Universal result custody
 
@@ -83,14 +84,16 @@ Execution surface:
 
 Workspace and API approval use separate route records. `none-user-level` is accepted only when OpenAI provisioning explicitly states that no organization/workspace/project applies. Incompatible path/surface combinations fail closed.
 
-### F-06 — Finite verification retry behavior
+### F-06 — Finite verification and task-start behavior
 
-Resolved with one exact budget per route generation:
+Resolved with exact budgets per route generation:
 
 1. one initial Daybreak verification process-start attempt;
-2. one retry only when the first failure is proven to have occurred before any Daybreak session started and was temporary transport/capacity failure.
+2. one verification retry only when the first failure is proven to have occurred before any Daybreak verification session started and was temporary transport/capacity failure;
+3. after verification, one initial task process-start attempt plus one task-start retry only after a proven temporary no-start failure;
+4. one confirmed-start task attempt.
 
-Any confirmed/uncertain start or result, malformed/non-distinguishing result, failed capability criterion, refusal, substitution, mismatch, entitlement/access failure, wrong context, or second no-start failure closes the canonical route without automatic retry. Material provisioning change requires explicit evidence and a new route generation.
+Any confirmed/uncertain verification start or result, malformed/non-distinguishing result, failed capability criterion, refusal, substitution, mismatch, entitlement/access failure, wrong context, or second verification no-start closes the canonical route without automatic retry. A second task no-start or authoritative route/context error also closes the route while leaving the task unit unstarted and blocked. Material provisioning change requires explicit evidence and a new route generation.
 
 ## Baseline preservation
 
@@ -134,7 +137,7 @@ Before merge, independently verify:
 4. normal `RESULT` plus capability-preflight addendum;
 5. platform-attested, OpenAI-workflow, and differential-fixture proof modes;
 6. path/surface compatibility and `none-user-level`;
-7. one permitted proven-no-start retry and all closure outcomes;
+7. one permitted proven-no-start retry for verification and task dispatch, plus all closure outcomes;
 8. Sol Ultra startup, operating loop, and handoff/recovery state;
 9. ordinary non-Daybreak behavior against the 3.09 baseline.
 

@@ -151,7 +151,7 @@ Access state is not copied into each fallback unit. The root owns one canonical 
 - approved identity and organization/workspace/API-project boundary;
 - internal-only and retention treatment;
 - exact Daybreak profile hash, model, and effort;
-- current signed-in Codex session generation.
+- current signed-in Codex session generation, platform-observed when available or a root-generated current-session generation after explicit identity/path confirmation.
 
 The route record is:
 
@@ -159,7 +159,7 @@ The route record is:
 unverified | verifying | verified | closed-unavailable
 ```
 
-Only one unit may reserve and verify/use a route record at a time. Verification is bound to that exact unit, logical parent, custody state, intensity shape, root objective, and session generation. It is never reused across units or signed-in sessions. After the admitted task terminates, the route returns to `unverified` unless authoritative evidence closes it.
+Only one unit may reserve and verify/use a route record at a time. Verification is bound to that exact unit, logical parent, custody state, intensity shape, root objective, and session generation. It is never reused across units or signed-in sessions. The admitted task must be dispatched in the same uninterrupted orchestration wave; before confirmed task start, interruption, compaction, handoff, root replacement, approval wait, or identity/path uncertainty invalidates verification and requires a new generation. After the admitted task terminates, the route returns to `unverified` unless authoritative evidence closes it.
 
 `closed-unavailable` applies to every unit sharing the route key and survives replacement, reparenting, compaction, handoff, root replacement, and recovery. It reopens only through a new generation after explicit new provisioning evidence or an explicit user-directed recheck following a material access change. Late results cannot overwrite a newer generation or reopen a closed route.
 
@@ -191,7 +191,7 @@ A profile, installation, model catalog entry, prior session, or absence of an er
 
 Before project ownership or task data is sent, the exact unit must reserve the canonical route and pass a non-project capability preflight through `ams_daybreak_blue_max`.
 
-The preflight receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, mutation authority, network collection authority, or live-target interaction.
+The preflight receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, mutation authority, non-public collection authority, or live-target interaction. Read-only access to the exact public references required by the approved OpenAI validation workflow is allowed only through existing authorized network access.
 
 Capability proof must use one of:
 
@@ -218,7 +218,7 @@ A confirmed or uncertain start, malformed or non-distinguishing result, failed c
 
 After verification, AMS rechecks the unit binding, current profile hash, access context, custody, ownership, and task state. It then sends only the minimized data needed for the unchanged defensive task.
 
-A confirmed task start changes the unit to `active`. Every terminal outcome after confirmed start changes it to `consumed`. An uncertain start remains `active` until closure is proven. AMS does not repeat, fan out, rotate profiles, reset through reparenting/recovery, or automatically escalate to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
+Task process start is also bounded: one initial start plus one retry only after a proven temporary no-start transport/capacity failure. A second no-start or authoritative route/context error closes the route while leaving the task unit `not-started` and blocked. A confirmed task start changes the unit to `active`; every terminal outcome after confirmed start changes it to `consumed`; an uncertain start remains `active` until closure is proven. AMS does not repeat, fan out, rotate profiles, reset through reparenting/recovery, or automatically escalate to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
 
 The worker inherits the same sandbox, approval, network, tool, writable-root, ownership, logical-parent, and Git-authority boundaries as the refused route. Daybreak does not grant broader access, credentials, collection authority, or target authority.
 
@@ -284,7 +284,7 @@ Project forms preserve existing values and add missing current fields. A missing
 
 ## Zergling Rush
 
-Zergling Rush is a separate explicit-consent mode that may use stronger models, duplicate investigation, speculative preparation, and redundant validation. It never changes authority, permissions, ownership, safety, or completion. It cannot proactively select Daybreak, duplicate a fallback unit, bypass verification, reopen a closed route, or increase verification/task budgets.
+Zergling Rush is a separate explicit-consent mode that may use stronger models, duplicate investigation, speculative preparation, and redundant validation. It never changes authority, permissions, ownership, safety, or completion. It cannot proactively select Daybreak, duplicate a fallback unit, bypass verification, reopen a closed route, or increase verification, task process-start, or confirmed-task budgets.
 
 ## Profile and installer safety
 

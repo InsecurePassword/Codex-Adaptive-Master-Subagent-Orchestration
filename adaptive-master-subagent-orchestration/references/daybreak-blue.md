@@ -52,6 +52,8 @@ Requested model and effort
 Codex signed-in session generation ID
 ```
 
+Use a platform-observed signed-in generation when available. Otherwise the root creates a new opaque generation for the current top-level session only after explicit current confirmation of the active identity, provisioned path, and boundary. A root-generated generation never survives logout/login, workspace or API-organization change, root replacement, handoff, or uncertainty about the active identity.
+
 Record:
 
 ```text
@@ -72,7 +74,8 @@ Rules:
 - All units with the same normalized key reference the same route record.
 - Treat the route record as single-flight: permit only one active verification or Daybreak task reservation. Other units wait; they do not start parallel probes.
 - Verification is one-time admission for the reserved unit only. It is not reusable by another unit, logical parent, custody state, intensity shape, root objective, or Codex session generation.
-- Keep the record `verified` and reserved while the admitted task is pending or active. After that task reaches a terminal state, clear the reservation and return the route to `unverified` unless an authoritative route/capability failure requires `closed-unavailable`.
+- Freshness is event-bound: dispatch the admitted task in the same uninterrupted orchestration wave immediately after verification. Before confirmed task start, context compaction, user interruption, handoff, root replacement, identity/path uncertainty, an approval wait, or any other break requiring later resumption invalidates `verified`, clears the reservation, and creates a new `unverified` generation. This does not reset or duplicate a task that already started.
+- Keep the record `verified` and reserved only through immediate task dispatch and any confirmed active task. After the task reaches a terminal state, clear the reservation and return the route to `unverified` unless an authoritative route/capability failure requires `closed-unavailable`.
 - `closed-unavailable` applies to every unit referencing that route record and survives work-order replacement, reparenting, compaction, handoff, root replacement, and recovery.
 - Reopen a closed record only by creating a new generation after explicit new provisioning evidence or an explicit user-directed recheck following a material access-context change.
 - Accept verification results only when the route generation, verification operation ID, reserved unit ID, logical parent, and nonce match the current record. A stale or late result is evidence only. It cannot overwrite a newer generation or reopen `closed-unavailable`.
@@ -130,7 +133,7 @@ Record original/current parent, custody state (`active | inactive-resumable | su
 
 A Daybreak task may start only after the canonical route record is `verified` and bound to that exact fallback unit, logical parent, custody state, intensity shape, access context, profile hash, model/effort, and session generation.
 
-Reserve the route record to the unit before any probe. The verification work order is data-minimized and receives no project files, repository content, telemetry, malware sample, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, mutation authority, network collection authority, or live-target interaction.
+Reserve the route record to the unit before any probe. The verification work order is data-minimized and receives no project files, repository content, telemetry, malware sample, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, mutation authority, non-public collection authority, or live-target interaction. Read-only retrieval of the exact public references required by the approved OpenAI validation workflow is permitted only through already-authorized network access.
 
 Use one of these proof modes:
 
@@ -184,12 +187,12 @@ The root validates normal result custody plus the exact generation, operation ID
 
 ### Verification attempt budget
 
-Permit at most two Daybreak process-start attempts per route generation:
+Permit at most two Daybreak verification process-start attempts per route generation:
 
 1. the initial verification attempt;
 2. one retry only when the first failure is proven to have occurred before any Daybreak session started and is classified as temporary transport or capacity failure.
 
-A confirmed start, uncertain start/result, malformed or non-distinguishing result, failed expected criterion, refusal, substitution, model/effort mismatch, entitlement/access failure, wrong context, or second no-start failure closes the route as `closed-unavailable`. Do not retry automatically. A material access/provisioning change requires explicit new evidence and a new route generation; it is not a retry.
+After the sole retry-eligible no-start failure, retain the same reservation and generation, return `verifying -> unverified`, set `Verification attempt = 1`, correct only the proven transport/capacity condition, and permit attempt 2. A confirmed start, uncertain start/result, malformed or non-distinguishing result, failed expected criterion, refusal, substitution, model/effort mismatch, entitlement/access failure, wrong context, or second no-start failure closes the route as `closed-unavailable`. Do not retry automatically. A material access/provisioning change requires explicit new evidence and a new route generation; it is not a retry.
 
 ## Task-attempt dispatch
 
@@ -212,16 +215,19 @@ Prior-writer closure and ownership transfer:
 Allocation and intensity-shape decision:
 Authorized defensive purpose and authorization basis:
 Frozen objective, target, scope, exclusions, data boundary, and operational boundary:
-Attempt budget: 1 of 1
+Attempt budget: 1 of 1 after confirmed start
+Task process-start attempt: 1 | 2
 Requested route: profile=ams_daybreak_blue_max; model=gpt-daybreak-blue-latest; effort=max
 Observed route: <value when observable | unavailable>
 ```
 
 Pass only the data needed for the unchanged frozen task. The worker may deepen analysis, finish a defensive patch, or produce the originally requested defensive evidence. It may not add targets, broaden access, increase persistence or stealth, introduce credential acquisition, operationalize an attack beyond the authorized defensive objective, or deploy against a live target.
 
-On confirmed start, set the unit to `active`. If start is uncertain, retain `active` and prohibit another attempt until closure is proven. A task proven not to have started releases ownership/allocation and leaves `not-started`; the route record remains governed independently.
+The task has the same bounded process-start rule: one initial task start and one retry only when the first task failure is proven to have occurred before any Daybreak task session started and was temporary transport/capacity failure. Retain the verified reservation for that sole retry. A second no-start failure or an authoritative route/context error closes the route, releases ownership/allocation, and leaves the unit `not-started` but blocked by the closed route.
 
-Every terminal result after confirmed start—complete, partial, blocked, failed, refused, unusable, lost, or cancelled—sets `consumed`. Do not repeat, fan out, rotate profiles, reset through replacement/reparenting/recovery, or escalate automatically to Daybreak Red, another cyber-specialized model, an offensive workflow, or root execution. Extreme and Rush do not increase the budget.
+On confirmed start, set the unit to `active`. If start is uncertain, retain `active` and prohibit another attempt until closure is proven. A task proven not to have started under the sole retry-eligible condition releases only the transient process slot, not the verified route reservation or planned ownership transfer.
+
+Every terminal result after confirmed start—complete, partial, blocked, failed, refused, unusable, lost, or cancelled—sets `consumed`. Do not repeat, fan out, rotate profiles, reset through replacement/reparenting/recovery, or escalate automatically to Daybreak Red, another cyber-specialized model, an offensive workflow, or root execution. Extreme and Rush do not increase either process-start budget or the one confirmed task attempt.
 
 Require normal `RESULT` plus:
 
