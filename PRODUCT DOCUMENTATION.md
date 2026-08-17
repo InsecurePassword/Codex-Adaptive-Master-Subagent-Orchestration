@@ -7,7 +7,7 @@
 
 AMS keeps a GPT-5.6 Sol Max root, or verified equivalent Sol alias at Max reasoning, in control of the objective, task graph, physical dispatch, logical hierarchy, model/effort selection, ownership, integration, acceptance, and user communication. Bounded non-root sessions perform project work. Workers never delegate; delegated managers may request root-mediated descendants but never physically spawn or expand authority.
 
-Every dispatch uses an explicit AMS profile. A requested profile is routing evidence, not independent attestation of the effective runtime identity.
+Every dispatch uses an explicit AMS profile. Requested configuration is routing evidence, not independent attestation of effective runtime identity.
 
 ## 2. Installed components and side effects
 
@@ -18,11 +18,11 @@ $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 $CODEX_HOME/agents/ams_*.toml
 ```
 
-It installs 19 profiles, does not edit `$CODEX_HOME/config.toml`, project settings, ACLs, or general Codex permissions, and leaves profiles after standard uninstall. AMS may create `<project-root>/.codex/ams-orchestration.toml` only under the control-file rules. It never creates an AMS recovery file.
+It installs 19 profiles, does not edit `$CODEX_HOME/config.toml`, project settings, ACLs, or general permissions, and leaves profiles after standard uninstall. AMS may create `<project-root>/.codex/ams-orchestration.toml` only under `project-control.md`. It never creates an AMS recovery file.
 
 ## 3. Installation and trust
 
-The canonical installers fetch `install-manifest.txt` and its exact 33-file set from repository `main`, verify byte lengths and SHA-256 values, reread the manifest for equality, stage the full package, and install transactionally with profile rollback. See [INSTALLATION.md](INSTALLATION.md).
+Canonical installers fetch `install-manifest.txt` and its exact 33-file set from repository `main`, verify byte lengths and SHA-256 values, reread the manifest for equality, stage the full package, and install transactionally with profile rollback. See [INSTALLATION.md](INSTALLATION.md).
 
 ## 4. Settings and precedence
 
@@ -48,7 +48,7 @@ spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Daybreak Blue adds no setting, status field, availability cache, or schema migration. Unknown, duplicate, nested, invalid, or unsupported settings remain errors.
+Daybreak adds no setting, status field, availability cache, or schema migration. Unknown, duplicate, nested, invalid, or unsupported settings remain errors.
 
 ## 5. Commands
 
@@ -83,87 +83,135 @@ ams_daybreak_blue_max
 | Luna | Explicit repetitive low-risk work. |
 | Terra | Normal implementation, tests, documentation, review, and investigation. |
 | Sol | Ambiguous, architectural, security-sensitive, difficult, or expensive-to-fail work. |
-| Daybreak Blue | Worker-only fallback for one unchanged authorized defensive cyber task explicitly refused by standard Sol for cyber-safeguard reasons. |
+| Daybreak Blue | Refusal-triggered worker-only fallback for one unchanged authorized defensive cybersecurity task. |
 
-Daybreak Blue has only `max` because it is an access-path fallback, not a cost tier.
+Daybreak has only `max` because it is an access-path fallback, not a cost tier.
 
-### 6.1 Daybreak trigger and frozen unit
+## 7. Daybreak Blue contract
 
-Daybreak is never proactive. It is considered only after an explicit qualifying cyber-safeguard refusal during root handling or from a standard Sol `worker` or `delegated-manager`, when the still-required task is authorized defensive work and its target, scope, exclusions, authority, data boundary, permissions, and operational effect remain unchanged.
+### 7.1 Trigger and frozen task
 
-Generic failure, weak output, timeout, missing context or tools, sandbox/approval denial, network restriction, account/quota failure, unsupported effort, or non-cyber refusal is not a trigger.
+Daybreak is never proactive. It is considered only after an explicit qualifying cyber-safeguard refusal during root handling or from a standard Sol `worker` or `delegated-manager`, when the still-required task is authorized defensive work and its target, scope, exclusions, authority, permissions, data handling, and operational effect remain unchanged.
 
-The root assigns one stable `Daybreak fallback unit ID` to the frozen task. Equivalent refusals, retries, replacements, resumed work, replication, and reparenting map to the same unit.
+Generic failure, weak output, timeout, missing context/tools, sandbox or approval denial, network restriction, quota/account failure, unsupported effort, or non-cyber refusal is not a trigger.
 
-Task-attempt state and route availability are independent:
+Assign one stable fallback-unit ID to the frozen task. Equivalent refusals, retries, replacement, replication, resumed work, and reparenting map to the same unit.
 
 ```text
 Attempt state: not-started | active | consumed
-Route disposition: unverified | verifying | verified | closed-unavailable
-Access-context ID:
-Route-evidence ID:
-Route blocker:
-Reopen condition:
 ```
 
-`closed-unavailable` survives recovery and may reopen only after explicit new provisioning evidence or a user-directed recheck following a material access-context change.
+### 7.2 Canonical access-route record
 
-### 6.2 Trusted Access and data-governance gate
-
-Before any Daybreak worker is started, the root records a non-secret context for the active surface:
+Route availability is owned by one root-level canonical record, not copied into every fallback unit. Its deterministic key includes:
 
 ```text
-Trusted Access scope: user-level | named workspace | API organization/project
-Approved identity or membership basis:
-Approved organization/workspace/project:
-Approved product surface: Codex
-Internal-only use confirmed: yes
-Retention requirement: standard approved-surface terms | ZDR | custom
-Retention coverage: confirmed | not-required-beyond-standard
-Retention evidence ID:
-Provisioning/onboarding evidence ID:
-Access-context ID:
+Provisioned access path and execution surface
+Approved identity and organization/workspace/API-project boundary
+Internal-only status
+Retention requirement and coverage
+Exact Daybreak profile SHA-256, model, and effort
+Signed-in Codex session generation
 ```
 
-The evidence may be platform-observed metadata, an approved onboarding record, or explicit current user confirmation tied to the signed-in identity and surface. A profile, installation, model catalog, prior session, or absence of an error is not proof. If identity, approved organization/workspace/project, Codex surface, internal-only status, or required retention coverage cannot be established, fail closed before sending task data.
+Record:
 
-### 6.3 Mandatory data-free access preflight
+```text
+Route record ID / generation
+Route disposition: unverified | verifying | verified | closed-unavailable
+Reserved fallback unit ID
+Verification operation ID / attempt
+Route evidence / blocker / reopen condition
+Verified unit / logical parent / custody / intensity binding
+```
 
-A task attempt requires `Route disposition = verified`. Otherwise, after the qualifying refusal, the root dispatches one nonce-bound `access-preflight` through `ams_daybreak_blue_max` using the planned logical parent and access context.
+Every unit with the same key references the same record. One record permits one active verification/task reservation. Verification is unit-, parent-, custody-, intensity-, objective-, and session-bound and is not reusable across units.
 
-The preflight receives no project files, repository content, telemetry, malware, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, or mutation permission. It performs no project inspection, command execution, target interaction, or data collection. It does not consume the one task-attempt budget.
+After the admitted task terminates, clear the reservation and return to `unverified` unless authoritative evidence requires `closed-unavailable`. A closed record applies to all units sharing the key and survives replacement, reparenting, compaction, handoff, root replacement, and recovery. Only explicit new provisioning evidence or an explicit user-directed recheck after material context change creates a new generation.
 
-It must return the same verification ID and nonce, confirm `worker/none`, confirm no project data access or mutation, and prove the result-return path. Only then does the root set the route to `verified`. A malformed receipt, unsupported model/effort, explicit mismatch, entitlement/access-path failure, wrong context, or uncertain preflight start/result sets `closed-unavailable` and prohibits automatic retry.
+Late results are accepted only when generation, operation ID, nonce, reserved unit, logical parent, and work-order ID match. They cannot overwrite a newer generation or reopen a closed route.
 
-The preflight proves requested Codex custom-agent routing for the exact context; it is not independent model attestation when effective identity is hidden.
+### 7.3 Provisioned access path and data boundary
 
-### 6.4 Lineage, intensity, and ownership
+Before verification, the root records:
 
-Daybreak workers are physical root children but retain the correct logical parent.
+```text
+Provisioned access path: codex-workspace | api-organization | user-or-model-specific
+Execution surface: codex-interactive | codex-security-plugin | codex-cli | codex-github-action | responses-api | approved-codex-api-workflow | exact-provisioned-surface
+Approved identity or membership basis
+Approved organization/workspace/project boundary
+Internal-only use confirmed: yes
+Retention requirement and coverage
+Provisioning and retention evidence IDs
+Signed-in session generation
+Access-context fingerprint
+```
 
-- Root-handling refusal: logical parent `root`.
-- Refused Sol worker: close/supersede it, prove it non-live, and preserve its logical parent.
-- Refusing Sol delegated manager in `balanced`, `heavy`, `extreme`, or Rush: manager remains logical parent, relinquishes the affected execution surface, and does not write concurrently.
-- Refusing delegated manager in `minimal`: manager records the request, relinquishes ownership, reaches a boundary, and closes; preflight and task run serially as the only active non-root sessions while retaining the inactive manager order as logical parent; after task closure, resume that manager or issue a superseding manager order for reconciliation.
-- Genuinely unavailable parent or deliberate flattening: use the established hierarchy supersession and custody-transfer procedure.
+Compatibility:
 
-Every Daybreak worker consumes one ordinary worker slot while active. One-writer safety and finite allocation remain mandatory.
+- `codex-workspace` uses only a Codex surface explicitly covered by the named internal Codex/ChatGPT organization or workspace.
+- `api-organization` uses only the Responses API or an explicitly approved Codex API workflow authenticated to the named internal API organization/project.
+- `user-or-model-specific` uses only the exact surface confirmed by OpenAI; `none-user-level` is valid only when confirmation explicitly states no organization/workspace/project applies.
+- Workspace and API paths use separate route records.
 
-### 6.5 Task attempt, evidence, and completion
+A profile, installation, model catalog, prior session, or absence of an error is not access proof. Fail closed when path, surface, identity, boundary, internal-only status, session generation, or required retention coverage cannot be established. ZDR/custom retention must be confirmed for the exact boundary and surface.
 
-After a successful preflight, the task work order carries the verified access-context ID and evidence, refusal provenance, frozen task/data boundary, ownership/custody transfer, minimized required data, requested route, and one-attempt budget.
+### 7.4 Capability-verification preflight
 
-A confirmed task start sets `active`. Every terminal outcome after confirmed start sets `consumed`. An uncertain start remains `active` until closure is proved. AMS does not repeat, fan out, rotate, or reset the task because of replacement, reparenting, recovery, Extreme, or Rush. It never automatically escalates to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
+The exact fallback unit must reserve the route record and verify capability before receiving project ownership or task data.
 
-The worker returns normal `RESULT` plus `DAYBREAK RESULT ADDENDUM`. Physical delivery to the root is transport; evidence is reconciled through the recorded logical parent or explicit superseding custodian. Daybreak output is evidence, not project acceptance.
+The verification session receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal evidence, target details, project/Git ownership, mutation authority, collection authority, or live-target interaction.
 
-## 7. Permission and data neutrality
+Proof modes:
 
-Profiles grant no sandbox, approval, network, writable-root, tool, credential, target, or authorization privilege. Daybreak uses the same inherited platform/user/project/work-order controls as other routes.
+1. platform-attested effective Daybreak identity;
+2. the current bounded defensive validation workflow supplied through OpenAI onboarding;
+3. a public or organization-approved, non-project, local-only defensive fixture with explicit expected results, where the identical fixture first received a qualifying standard-Sol cyber-safeguard refusal in the current session.
 
-No task data is sent during preflight. After verification, the task receives only the frozen objective, minimal relevant code/artifacts/telemetry, bounded refusal evidence, and authorization basis. AMS creates no Daybreak cache, transcript service, external uploader, or recovery ledger. Data remains subject to the exact approved surface's controls and retention terms; Trusted Access and ZDR/custom retention are separate provisioning decisions.
+Synthetic fixtures may use inert toy code/static artifacts for defensive analysis but may not contain user/customer data, a live target, credentials, working malware, persistence/stealth, an exploit chain, external side effects, or deployment instructions.
 
-## 8. Profile installation and repair
+The verification work order records the route generation, reserved unit, operation ID/nonce, proof mode, fixture and expected result, standard-Sol control result where required, access context, logical parent/custody/intensity, requested route, and no-data/no-ownership constraints.
+
+Every verification session returns universal `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`. The root validates result custody, route generation, operation ID, nonce, unit binding, proof evidence, expected result, role, and no-data/no-mutation claims. A nonce echo proves transport only and never verifies capability.
+
+### 7.5 Verification budget
+
+A route generation permits at most:
+
+1. one initial Daybreak verification process-start attempt;
+2. one retry only when the first failure is proven to have occurred before any Daybreak session started and was a temporary transport/capacity failure.
+
+Any confirmed or uncertain start/result, malformed or non-distinguishing result, failed criterion, refusal, substitution, mismatch, entitlement/access failure, incompatible context, or second no-start failure closes the route. No automatic retry follows. A material provisioning change requires explicit evidence and a new route generation.
+
+### 7.6 Lineage, intensity, and ownership
+
+Daybreak sessions are physical root children with `worker/none` but preserve logical parentage.
+
+- Root-origin refusal: parent `root`.
+- Refused Sol worker: close/supersede it, prove it non-live, and preserve its parent.
+- Refusing Sol manager in `balanced`, `heavy`, `extreme`, or Rush: manager remains parent, relinquishes the affected surface, and does not write concurrently.
+- Refusing manager in `minimal`: manager records the request, relinquishes ownership, reaches a boundary, and closes as `inactive-resumable`; any required standard-Sol control, verification, and task run serially as the only active non-root session; the manager resumes or is superseded afterward.
+- Unavailable parent/flattening: use existing hierarchy supersession and custody transfer.
+
+Every control/verification/task session consumes one ordinary worker slot while active. One-writer safety and finite allocation remain mandatory.
+
+### 7.7 Task attempt and completion
+
+After verification, recheck route generation/binding, profile hash, access context, custody, ownership, and `Attempt state = not-started`; then transfer only minimized data needed for the unchanged task.
+
+A confirmed start sets `active`. Every terminal result after confirmed start sets `consumed`. An uncertain start remains `active` until closure is proved. AMS never repeats, fans out, rotates, or resets the task through replacement, reparenting, recovery, Extreme, or Rush. It never automatically escalates to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
+
+The task returns universal `RESULT` plus `DAYBREAK RESULT ADDENDUM`. Physical return to root is transport; evidence is reconciled through the logical parent or superseding custodian. Daybreak output is evidence, not project acceptance.
+
+After terminal handling, release the canonical route reservation and return the record to `unverified` unless authoritative route/capability evidence requires closure.
+
+## 8. Permission and data neutrality
+
+No profile grants sandbox, approval, network, writable-root, tool, credential, target, or authorization privilege. Daybreak inherits existing platform/user/project/work-order controls.
+
+Capability verification receives no project data. The task receives only its frozen objective, minimal relevant code/artifacts/telemetry, bounded refusal evidence, and authorization basis. AMS creates no Daybreak cache, transcript service, external uploader, or recovery ledger. Data remains subject to the exact approved surface's controls and retention terms; Trusted Access and ZDR/custom retention are separate provisioning decisions.
+
+## 9. Profile installation and repair
 
 Existing profiles are handled strictly:
 
@@ -172,47 +220,43 @@ Existing profiles are handled strictly:
 - missing profile: created;
 - any other differing profile: preserved and blocks replacement.
 
-Runtime `profile_management = "auto"` may create a selected missing profile only. It cannot overwrite a differing profile or repair Daybreak access by changing credentials, workspaces, permissions, product surfaces, or retention controls.
+Runtime auto-management may create a selected missing profile only. It cannot overwrite differing content or repair Daybreak by changing credentials, workspaces, API projects, surfaces, permissions, or retention controls.
 
-## 9. Root authority and work orders
+## 10. Root authority, work orders, and hierarchy
 
-Valid role/authority pairs are `worker/none` and `delegated-manager/request`. The root alone physically spawns, owns global routing and task state, accepts results, declares completion, and communicates with the user. Every non-root order has one immutable logical parent. Daybreak preflight and task orders have distinct work-order IDs but share the same stable fallback unit and access context.
+Valid role/authority pairs are `worker/none` and `delegated-manager/request`. The root alone physically spawns, owns global routing/state, accepts results, declares completion, and communicates with the user. Every non-root order has one immutable logical parent.
 
-## 10. Virtual hierarchy and ownership
+All sessions may remain physical root children while work-order lineage records logical parentage. Authority, permissions, scope, ownership, and allocation may narrow but never expand. One active writer is allowed per mutable surface. Results pass through the logical parent before root acceptance.
 
-All sessions may remain physical root children while work-order lineage records logical parentage. Authority, permissions, scope, ownership, and allocation may narrow but never expand. One active writer is allowed per mutable surface. Results must pass through the logical parent before root acceptance.
+## 11. Root execution boundary and fallback
 
-## 11. Root execution boundary
+The root is management and does not perform project inspection, research, implementation, commands, deployment, tests/builds/linting, security checks, independent review, Git/history operations, or artifact generation while a compliant delegated route exists.
 
-The root is a management lane and does not perform project inspection, research, implementation, commands, deployment, tests/builds/linting, security checks, independent review, Git/history operations, or artifact generation while a compliant delegated route exists.
+Root fallback is a bounded, low-risk, reversible last-resort unblocker and is ineligible for security-sensitive execution. An unavailable or exhausted Daybreak route never authorizes the root to perform the refused cyber task.
 
-## 12. Root execution fallback
+## 12. Configuration maintenance
 
-Root fallback remains a bounded, low-risk, reversible last-resort unblocker and is ineligible for security-sensitive execution. An unavailable or exhausted Daybreak route does not authorize the root to perform the refused cyber task.
+The explicit updater preserves existing supported values, adds only missing defaults, rejects invalid content, and never runs implicitly. A missing project file may inherit valid global values; `AMS CONFIGURATION UPDATE GLOBAL` may create only the exact disabled global default.
 
-## 13. Configuration maintenance
+## 13. Intensity and Rush
 
-The explicit updater preserves all existing supported values, adds only missing defaults, rejects invalid content, and never runs implicitly. A missing project file may inherit valid global values; `AMS CONFIGURATION UPDATE GLOBAL` may create only the exact disabled global default.
+`minimal`, `balanced`, `auto`, `heavy`, and `extreme` change team formation, not quality, safety, ownership, or completion authority. Rush requires explicit current-turn consent. Neither Extreme nor Rush makes Daybreak proactive, duplicates a unit, bypasses verification, reopens a closed route, or increases verification/task budgets.
 
-## 14. Intensity and Rush
+## 14. Optional project governance and continuity
 
-`minimal`, `balanced`, `auto`, `heavy`, and `extreme` change team formation, not quality, safety, ownership, or completion authority. Zergling Rush requires explicit current-turn consent. Neither Extreme nor Rush makes Daybreak proactive, duplicates a fallback unit, bypasses preflight, reopens a closed route, or increases the task-attempt budget.
+When enabled, governance adds lifecycle tracking, proportional validation/review, deviation handling, and continuity through existing project-native state or a user-visible handoff. It does not change core authority or Daybreak gates.
 
-## 15. Optional project governance
+Durable continuity preserves each fallback unit and each canonical route record, including key inputs, generation, disposition, reservation, bound unit/topology, profile hash/model/effort, signed-in session generation, verification evidence/budget, blocker, and reopen condition. No AMS-specific recovery file is created.
 
-When enabled, project governance adds lifecycle tracking, proportional validation/review, deviation handling, and continuity through existing project-native state or a user-visible handoff. It does not change core authority or Daybreak gates.
+## 15. Completion and failure
 
-Durable continuity must preserve every Daybreak frozen boundary, access-context ID, route disposition/evidence, blocker/reopen condition, preflight receipt, refusal provenance, custody state, and task-attempt state. No AMS-specific recovery file is created.
+Workers/managers return evidence claims; only root accepts project completion. Ordinary failures use normal correction/rerouting. Closed route state survives recovery until explicit reopen conditions are met. Unobservable route identity is reported as unavailable without false attestation.
 
-## 16. Completion and failure
+## 16. Update, repair, and uninstall
 
-Workers and managers return evidence claims; only the root accepts project completion. Ordinary failures use normal correction/rerouting. A closed Daybreak route survives recovery until its explicit reopen condition is met. An uncertain task start blocks another task attempt; every terminal outcome after confirmed start consumes the unit. Unobservable route identity is recorded as unavailable without a false attestation claim.
+Package mutation requires direct user authority. After authorized install/update AMS performs no automatic re-audit or project pause. Standard uninstall removes only the skill directory; settings/profiles remain unless separately authorized for cleanup.
 
-## 17. Update, repair, and uninstall
-
-Package mutation requires direct user authority. After an authorized install/update, AMS performs no automatic re-audit or project pause. Standard uninstall removes only the skill directory; settings and profiles remain unless separately authorized for cleanup.
-
-## 18. Directory structure
+## 17. Directory structure
 
 ```text
 Codex-Adaptive-Master-Subagent-Orchestration/

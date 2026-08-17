@@ -2,18 +2,18 @@
 
 **Current release: 3.10**
 
-Adaptive Master–Subagent Orchestration (AMS) is a Codex skill that keeps **GPT-5.6 Sol Max** in charge while routing bounded project work to the lowest-cost reliable subagent model and reasoning effort.
+Adaptive Master–Subagent Orchestration (AMS) is a Codex skill that keeps **GPT-5.6 Sol Max** in charge while routing bounded project work to the lowest-cost reliable non-root model and reasoning effort.
 
-The two core functions are:
+Its core rules are unchanged:
 
-1. **Sol Max controls orchestration.** The root owns the objective, task graph, physical spawning, logical hierarchy, routing, integration decisions, acceptance, and user communication. Workers are bounded leaves; delegated managers may request root-mediated descendants.
-2. **AMS controls requested model and reasoning effort.** Every non-root dispatch uses an explicit AMS profile. AMS reports the requested profile after spawn without claiming that the runtime identity was independently observable.
+1. **Sol Max controls orchestration.** The root owns the objective, task graph, physical spawning, logical hierarchy, routing, integration decisions, acceptance, and user communication. Workers are leaves; delegated managers may request root-mediated descendants.
+2. **AMS controls requested model and effort.** Every non-root dispatch uses an explicit AMS profile. Requested configuration is reported without claiming independently observed runtime identity.
 
-Profiles do not grant sandbox, approval, network, writable-root, tool, authorization, or other permission overrides. Spark and the optional Daybreak Blue fallback inherit the same platform/user/project/work-order boundaries as every other route.
+Profiles do not grant sandbox, approval, network, writable-root, tool, credential, target, authorization, or other permission overrides.
 
 ## Install
 
-The installers fetch each required file directly from the canonical `main` repository tree through `install-manifest.txt`. They do not use GitHub Release assets or a package ZIP.
+The installers fetch the exact runtime/profile set from canonical repository `main` through `install-manifest.txt`. They do not use GitHub Release assets or a package ZIP.
 
 ### Windows PowerShell
 
@@ -34,7 +34,7 @@ $HOME/.agents/skills/adaptive-master-subagent-orchestration/
 $CODEX_HOME/agents/ams_*.toml
 ```
 
-When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. The installer does **not** edit `$CODEX_HOME/config.toml`, project settings, or operating-system permissions.
+When `CODEX_HOME` is unset, profiles use `$HOME/.codex/agents/`. The installer does not edit `$CODEX_HOME/config.toml`, project settings, or operating-system permissions.
 
 For a complete source copy:
 
@@ -42,7 +42,7 @@ For a complete source copy:
 git clone https://github.com/InsecurePassword/Codex-Adaptive-Master-Subagent-Orchestration.git
 ```
 
-See [INSTALLATION.md](INSTALLATION.md) for exact validation, profile-collision, update, repair, and uninstall behavior.
+See [INSTALLATION.md](INSTALLATION.md) for validation, profile-collision, repair, and uninstall behavior.
 
 ## Persistence and settings
 
@@ -53,9 +53,9 @@ AMS checks project settings first, then global settings only when the project fi
 $CODEX_HOME/ams-orchestration.toml
 ```
 
-Global configuration is never written implicitly. Normal project controls write only the current project file; `AMS CONFIGURATION UPDATE GLOBAL` is the sole explicit global-writing command and only adds missing defaults or creates the exact disabled default. If a project control creates a project file while valid global settings are active, AMS copies the resolved global values first and changes only the requested project setting.
+Project and global files are not merged. Global configuration is never written implicitly. Normal controls write only the project file; `AMS CONFIGURATION UPDATE GLOBAL` only adds missing defaults or creates the exact disabled default.
 
-Schema 2 default:
+Schema 2 remains unchanged:
 
 ```toml
 schema_version = 2
@@ -70,9 +70,7 @@ spark_efforts = ["low", "medium", "high"]
 profile_management = "auto"
 ```
 
-Daybreak Blue adds no setting and requires no schema migration. It remains dormant unless a qualifying refusal occurs.
-
-Any omitted currently supported schema-2 setting resolves from the exact current default and is persisted during the next authorized settings write. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
+Daybreak Blue adds no setting or schema migration. Omitted supported fields resolve from the current default and are persisted on the next authorized write. Unknown, duplicate, nested, invalid, or unsupported content remains an error.
 
 Useful commands:
 
@@ -93,15 +91,13 @@ AMS PROFILES auto|installer
 
 ## Optional project governance
 
-`project_governance = true` is the default. It adds AMS project-wide acceptance tracking, proportional independent review, continuous-delivery posture, deviation handling, and continuity through existing project-native state or a user-visible handoff.
-
-Disable it for one project with:
+`project_governance = true` adds project-wide acceptance tracking, proportional independent review, continuous-delivery posture, deviation handling, and continuity through existing project-native state or a user-visible handoff.
 
 ```text
 AMS GOVERNANCE off
 ```
 
-Disabling governance does not change Sol-root control, model/reasoning routing, work orders, virtual hierarchy, root-only physical spawning, one-writer safety, or truthful completion.
+Disabling governance does not change root authority, model/effort routing, work orders, hierarchy, one-writer safety, or truthful completion.
 
 ## Model and effort routing
 
@@ -111,101 +107,158 @@ Disabling governance does not change Sol-root control, model/reasoning routing, 
 | **Luna** | Clear, repetitive, low-risk work that is easy to verify. |
 | **Terra** | Normal implementation, fixes, tests, documentation, review, and moderate investigation. |
 | **Sol** | Architecture, security-sensitive work, ambiguity, difficult debugging, and expensive-to-fail decisions. |
-| **Daybreak Blue** | Root-spawned, worker-only, one-attempt fallback for an unchanged authorized defensive cybersecurity work unit explicitly refused by standard Sol for cyber-safeguard reasons. Never normal routing. |
+| **Daybreak Blue** | Refusal-triggered worker-only fallback for one unchanged authorized defensive cybersecurity task. Never normal routing. |
 
-Sol, Terra, and Luna support `low`, `medium`, `high`, `xhigh`, and `max`; Spark supports `low`, `medium`, and `high`. Daybreak Blue has one canonical `max` profile: `ams_daybreak_blue_max`.
+Sol, Terra, and Luna support `low`, `medium`, `high`, `xhigh`, and `max`; Spark supports `low`, `medium`, and `high`. Daybreak has one profile: `ams_daybreak_blue_max`.
 
-After a successful spawn AMS reports, for example:
+After a successful spawn AMS reports the requested profile, for example:
 
 ```text
 semantic_reviewer started: ams_sol_xhigh
 ```
 
-That is the requested profile, not proof of observed runtime identity.
+That is routing evidence, not proof of observed runtime identity.
 
 ## Daybreak Blue
 
-Daybreak Blue is an optional, refusal-triggered AMS worker lane for approved defensive cybersecurity work through OpenAI Daybreak and Trusted Access for Cyber. It is not a normal routing tier, a general-purpose stronger version of Sol, an offensive escalation path, or a persistent AMS setting. Installing AMS only installs the routing profile; it does not request, provision, transfer, or prove Daybreak access.
+Daybreak Blue is an optional lane for approved defensive cybersecurity work through OpenAI Daybreak and Trusted Access for Cyber. Installing AMS only installs the profile. It does not request, provision, transfer, or prove access.
 
-### When AMS activates it
+### Activation
 
-AMS first uses normal cost-appropriate routing, with security-sensitive work ordinarily assigned to standard Sol. The root may dispatch `ams_daybreak_blue_max` only when all of the following are true:
+AMS first routes security-sensitive work to standard Sol. Daybreak is considered only when:
 
-- the task is lawful, authorized defensive cybersecurity work on a system, application, account, network, codebase, artifact, or data the user owns, operates, or is explicitly authorized to test or analyze;
-- the Sol root received an explicit refusal attributable to cyber safeguards, either during root handling or from a standard Sol non-root execution order whose role was `worker` or `delegated-manager`;
-- the refused bounded task is still required;
-- the objective, target, scope, exclusions, permissions, authorization, and operational boundary can remain materially unchanged;
-- no higher-priority safety rule, authorization boundary, ownership conflict, or project-native control independently prohibits the work.
+- the task is lawful, authorized defensive work on a system, codebase, artifact, account, network, or data the user owns, operates, or is explicitly authorized to analyze;
+- the Sol root received an explicit cyber-safeguard refusal during root handling or from a standard Sol `worker` or `delegated-manager`;
+- the bounded task remains required;
+- target, scope, exclusions, authority, permissions, data boundary, and operational effect remain unchanged;
+- no higher-priority safety, authorization, ownership, project-native, or Trusted Access/data-governance control blocks it.
 
-A weak, cautious, partial, or incorrect answer is not a qualifying refusal. Neither is a timeout, missing file or context, unavailable tool, sandbox or approval denial, network restriction, profile defect, account or quota error, unsupported effort, generic failure, or refusal unrelated to cybersecurity safeguards.
+Weak or partial output, ordinary inability, timeout, missing tools/context, sandbox/approval denial, network restriction, quota/account error, unsupported effort, or non-cyber refusal does not qualify.
 
-Before dispatch, AMS creates a stable Daybreak fallback unit ID bound to the frozen task rather than to a temporary Sol work-order ID. Equivalent refusals from retries, replicated investigations, replacements, or reparented work map to the same unit. The task attempt has state `not-started`, `active`, or `consumed`. Route availability is tracked separately as `unverified`, `verifying`, `verified`, or `closed-unavailable`. A closed route remains closed across recovery until new provisioning evidence or an explicit user-directed recheck follows a material access-context change. Extreme and Zergling Rush cannot duplicate the unit or increase its budget.
-
-A root-handled refusal uses the exact provenance sentinel `Original Sol work-order ID: none-root-handling`. A work-order refusal records the original Sol order, role, and logical parent. The Daybreak worker is always physically spawned by the root but normally preserves the refused work's logical parent. A refused worker must be closed or superseded before replacement. A refusing delegated manager remains the logical parent and relinquishes execution ownership. Under `minimal`, that manager records the request and closes; the preflight and task worker run serially as the only active non-root session, and the manager is resumed or superseded afterward to reconcile the result. An intentionally inactive `minimal` parent is distinct from an unavailable parent.
-
-Before transferring project ownership or task data, AMS runs one nonce-bound, data-free access preflight through the exact Daybreak profile for the planned logical parent and access context. The preflight receives no repository content, telemetry, malware, credentials, customer data, project ownership, or mutation authority. It verifies that Codex accepts the custom-agent path and returns the required worker-only receipt. It does not consume the one task-attempt budget. A failed or malformed preflight closes the route without automatic retry.
-
-After a verified preflight, a successful task start changes the attempt state to `active`; every terminal task result after a confirmed start changes it to `consumed`. AMS does not repeat the unchanged task, fan it out to multiple Daybreak task workers, rotate access profiles, reset the budget after a work-order or parent change, or automatically escalate to Daybreak Red, another cyber-specialized model, an offensive workflow, or root execution.
-
-### How AMS handles data
-
-AMS applies data minimization to the fallback. No task data is sent during the mandatory access preflight. After verification, the task work order carries only the information needed to complete the frozen task: the bounded objective and scope, a small exact excerpt or faithful redacted summary of the Sol refusal, the authorization basis, and the relevant code, artifacts, telemetry, or evidence required by that work unit. AMS does not forward unrelated conversation history, files, credentials, secrets, or the entire repository merely because the access lane changed.
-
-The Daybreak worker inherits the same sandbox, approval, network, tool, writable-root, ownership, logical-parent, and Git-authority boundaries as the refused route. It may inspect only the data required by the work order and reachable through those inherited controls. Daybreak access does not grant broader local access, additional network reach, new credentials, or authority to collect data from another target.
-
-AMS does not create a Daybreak-specific cache, recovery file, transcript store, or external upload service. The root records the fallback unit, access-context ID, route disposition and evidence, blocker/reopen condition, preflight receipt, and task-attempt state in the live task graph. When durable continuity is required, AMS uses an existing authorized project-native record or a user-visible handoff. Daybreak results are physically returned to the root and then relayed through the recorded logical parent for reconciliation. Any later independent validator receives only the evidence needed for its distinct validation work under normal AMS routing.
-
-Before preflight, the root records a non-secret Trusted Access context: approved identity or membership basis, organization/workspace/project, Codex product surface, internal-only confirmation, retention requirement and coverage, and onboarding/retention evidence IDs. Data submitted through Daybreak remains subject to the data controls and retention terms of that exact approved surface. **Trusted Access for Cyber does not include Zero Data Retention by default.** When ZDR or custom retention is required, coverage must be confirmed for the exact organization/project and product surface before task data is dispatched. Sensitive workflows should exclude unnecessary secrets, customer data, and unrelated production data.
-
-### Requested versus observed route
-
-The bundled profile requests:
+AMS assigns one stable fallback-unit ID to the frozen task. Equivalent refusals, retries, replacements, replication, resumed work, and reparenting map to the same unit. Its **task-attempt** state is:
 
 ```text
-profile=ams_daybreak_blue_max
-model=gpt-daybreak-blue-latest
-effort=max
+not-started | active | consumed
 ```
 
-Exact profile bytes prove only the requested configuration. AMS therefore requires the data-free access preflight before any task data or project ownership is supplied. A successful preflight returns the exact verification ID and nonce, confirms `worker/none`, confirms no project access or mutation, and proves the result-return path for the current access context. It is not independent model attestation. When Codex exposes the effective identity, AMS records it; otherwise it records `observed=unavailable` and makes no observation claim.
+Extreme and Zergling Rush cannot duplicate the unit or increase its one task attempt.
 
-An explicit mismatch, unsupported model/effort, malformed preflight receipt, entitlement error, wrong access context, or access-path error sets the route to `closed-unavailable`. AMS does not automatically change credentials, organizations, workspaces, product surfaces, retention controls, permissions, or profiles to force access.
+### Canonical access-route record
+
+Access state is not copied into each fallback unit. The root owns one canonical route record for each normalized combination of:
+
+- provisioned access path and execution surface;
+- approved identity and organization/workspace/API-project boundary;
+- internal-only and retention treatment;
+- exact Daybreak profile hash, model, and effort;
+- current signed-in Codex session generation.
+
+The route record is:
+
+```text
+unverified | verifying | verified | closed-unavailable
+```
+
+Only one unit may reserve and verify/use a route record at a time. Verification is bound to that exact unit, logical parent, custody state, intensity shape, root objective, and session generation. It is never reused across units or signed-in sessions. After the admitted task terminates, the route returns to `unverified` unless authoritative evidence closes it.
+
+`closed-unavailable` applies to every unit sharing the route key and survives replacement, reparenting, compaction, handoff, root replacement, and recovery. It reopens only through a new generation after explicit new provisioning evidence or an explicit user-directed recheck following a material access change. Late results cannot overwrite a newer generation or reopen a closed route.
+
+### Provisioned access path
+
+Before verification, AMS records a non-secret access context:
+
+```text
+Provisioned access path: codex-workspace | api-organization | user-or-model-specific
+Execution surface: codex-interactive | codex-security-plugin | codex-cli | codex-github-action | responses-api | approved-codex-api-workflow | exact-provisioned-surface
+Approved identity or membership basis:
+Approved organization/workspace/project boundary:
+Internal-only use confirmed: yes
+Retention requirement and coverage:
+Provisioning and retention evidence IDs:
+Signed-in session generation ID:
+```
+
+Compatibility is strict:
+
+- `codex-workspace` may use only a Codex surface explicitly covered by the named internal Codex/ChatGPT organization or workspace.
+- `api-organization` may use only the Responses API or an explicitly approved Codex API workflow authenticated to the named internal API organization/project.
+- `user-or-model-specific` may use only the exact surface named by OpenAI; `none-user-level` is valid only when provisioning explicitly states that no organization/workspace/project applies.
+- Workspace and API approval are separate route records and are never combined.
+
+A profile, installation, model catalog entry, prior session, or absence of an error is not proof. If the exact path, surface, identity, boundary, internal-only status, signed-in session generation, or required retention coverage cannot be established, AMS stops before verification or task data.
+
+### Capability-verification preflight
+
+Before project ownership or task data is sent, the exact unit must reserve the canonical route and pass a non-project capability preflight through `ams_daybreak_blue_max`.
+
+The preflight receives no project files, repository content, telemetry, malware samples, credentials, secrets, customer data, refusal excerpt, target details, project ownership, Git authority, mutation authority, network collection authority, or live-target interaction.
+
+Capability proof must use one of:
+
+1. platform-attested effective Daybreak identity;
+2. the current bounded defensive validation workflow supplied through OpenAI onboarding;
+3. a public or organization-approved, local-only synthetic defensive fixture with explicit expected results, where the identical fixture first produced a qualifying standard-Sol safeguard refusal in the current session.
+
+A synthetic fixture may use inert toy code or static artifacts for defensive analysis. It may not contain user/customer data, a live target, credentials, a working malware payload, persistence/stealth, an exploit chain, external side effects, or deployment instructions.
+
+A nonce protects against replay, but a nonce echo alone proves transport and does not establish Daybreak capability. The verification session returns the universal AMS `RESULT` plus `DAYBREAK CAPABILITY PREFLIGHT ADDENDUM`, including fixture/control evidence, expected-result status, route generation, unit binding, role confirmation, and no-data/no-mutation confirmation.
+
+Only a fully validated result sets the route to `verified`.
+
+### Verification retry budget
+
+Each route generation permits:
+
+1. one initial Daybreak verification process-start attempt;
+2. one retry only when the first failure is proven to have occurred before any Daybreak session started and was a temporary transport or capacity failure.
+
+A confirmed or uncertain start, malformed or non-distinguishing result, failed capability criterion, refusal, substitution, mismatch, entitlement/access failure, wrong context, or second no-start failure closes the route without automatic retry. A material provisioning/access change requires explicit evidence and a new route generation.
+
+### Task attempt and data handling
+
+After verification, AMS rechecks the unit binding, current profile hash, access context, custody, ownership, and task state. It then sends only the minimized data needed for the unchanged defensive task.
+
+A confirmed task start changes the unit to `active`. Every terminal outcome after confirmed start changes it to `consumed`. An uncertain start remains `active` until closure is proven. AMS does not repeat, fan out, rotate profiles, reset through reparenting/recovery, or automatically escalate to Daybreak Red, GPT-5.6 Cyber, an offensive workflow, or root execution.
+
+The worker inherits the same sandbox, approval, network, tool, writable-root, ownership, logical-parent, and Git-authority boundaries as the refused route. Daybreak does not grant broader access, credentials, collection authority, or target authority.
+
+Capability verification and task sessions return normal `RESULT` plus the applicable Daybreak addendum. Physical delivery to the root is transport; task evidence is reconciled through the logical parent or explicit superseding custodian.
+
+AMS creates no Daybreak cache, transcript service, external uploader, or recovery ledger. Durable state uses an existing authorized project-native record or user-visible handoff. Data remains subject to the exact approved surface's controls and retention terms.
 
 ### Trusted Access required
 
-To use Daybreak Blue through AMS, the current Codex account must already have approved **Daybreak Blue / Trusted Access for Cyber** access on the exact internal organization or workspace and product surface where AMS is running. OpenAI reviews and provisions access; approval is not automatic, and provisioned access is not currently guaranteed to appear in a customer-visible workspace dashboard. The AMS profile cannot apply for access, transfer entitlement between workspaces, bypass provisioning, or make an unavailable route usable.
+The active account must already have approved Daybreak/Trusted Access on the exact internal path and surface used by AMS. OpenAI approval is not automatic and may apply to a Codex/ChatGPT organization or workspace, an API organization, or both as separately provisioned paths.
 
-The approved organization or workspace should be reserved for approved internal security users and internal security workflows. Trusted Access must not be resold, proxied, embedded for third-party customers, exposed to external users, or used to power customer-facing applications or downstream product traffic. Work must remain within the approved defensive scope and within systems or data the user owns, operates, or is explicitly authorized to test or analyze.
+Trusted Access is internal-only. It may not be resold, proxied, exposed to external users, used for customer-facing traffic, or treated as target authorization. It does not remove all safeguards, guarantee every cyber model, include Daybreak Red, or include Zero Data Retention automatically. ZDR/custom retention must be separately confirmed for the exact organization/project and surface.
 
-Trusted Access provides more precise safeguards for verified work; it does not remove all safeguards or refusals, authorize activity by itself, guarantee access to every cyber-specialized model, or include Daybreak Red. AMS requires the root to establish the signed-in identity or membership basis, approved organization/workspace/project, model/access path, Codex product surface, internal-only status, and applicable retention coverage before running even the data-free preflight.
+Current onboarding references:
 
-For onboarding and access validation, follow:
-
-- [OpenAI Daybreak — Trusted Access for Cyber Overview](https://help.openai.com/en/articles/20001258-trusted-access-for-cyber)
+- [OpenAI Daybreak — Trusted Access for Cyber Overview](https://help.openai.com/en/articles/20001258-openai-daybreak-trusted-access-for-cyber-overview)
 - [Enterprise Daybreak onboarding](https://help.openai.com/en/articles/20001261-enterprise-daybreak-onboarding)
 
 ## Virtual hierarchy and root boundary
 
 - The root is the sole physical spawn authority.
 - Workers never delegate.
-- Delegated managers request descendants through the root and remain bounded to their work orders.
-- Spark and Daybreak Blue are always workers.
+- Delegated managers request descendants through the root.
+- Spark and Daybreak are always workers.
 - Every non-root session has an immutable logical parent.
 - One active writer is allowed per mutable surface.
 - Only the root accepts project completion and communicates with the user.
-- The root remains a management lane and does not take over project execution while a compliant delegated route exists.
+- The root remains management while a compliant delegated route exists.
+
+Under `minimal`, a refusing manager records the Daybreak request, relinquishes ownership, and closes. Any required standard-Sol control, capability verification, and task run serially as the only active non-root session while retaining the inactive manager order as logical parent. The manager is resumed or superseded afterward for reconciliation.
 
 ## Root execution fallback
 
-`root_execution_fallback = true` is the default for standard AMS operation. The root still delegates every task that a viable lower-cost session can complete and validate. The lazy fallback reference is loaded only when mandatory progress would otherwise stop and no viable delegated route remains. It permits one bounded low-risk atomic unblocker, protects ownership and root context, prevents chaining into a root implementation lane, and requires non-root validation before a root mutation can be finally accepted.
-
-Disable it per project with:
+`root_execution_fallback = true` permits only the bounded last-resort behavior in `root-execution-fallback.md`. It does not create a routine root lane.
 
 ```text
 AMS ROOT FALLBACK off
 ```
 
-Daybreak Blue is separate from root fallback: a qualifying cyber refusal is handled by a bounded non-root worker, and an exhausted Daybreak attempt does not authorize root execution of the refused cyber task. Specialized modes such as Zergling Rush and the separate Sol Ultra prompt retain their own stricter contracts.
+An unavailable or exhausted Daybreak route never authorizes the root to execute the refused cybersecurity task.
 
 ## Configuration maintenance
 
@@ -215,7 +268,7 @@ AMS CONFIGURATION UPDATE PROJECT
 AMS CONFIGURATION UPDATE GLOBAL
 ```
 
-The project forms update an existing project schema-2 file by adding every currently supported missing field from the exact default while preserving every existing value. For a missing project file, valid global settings are used when present; an existing invalid or unsafe global file blocks the operation rather than being ignored. The explicit `GLOBAL` form performs the same missing-field update on the global file or creates the exact disabled default. No form changes an existing value or enables AMS.
+Project forms preserve existing values and add missing current fields. A missing project file may use valid global values. An invalid global file blocks project creation rather than being ignored. The explicit global form adds missing defaults or creates the exact disabled default. No form changes an existing value or enables AMS.
 
 ## Intensity modes
 
@@ -224,27 +277,27 @@ The project forms update an existing project schema-2 file by adding every curre
 | `minimal` | Root plus at most one active non-root session. |
 | `balanced` | One small bounded direct-worker or manager team shape. |
 | `auto` | Smallest useful adaptive topology. |
-| `heavy` | Proactively forms useful managers and parallel lanes. |
-| `extreme` | Dispatches every useful ready safe lane while remaining cost-first. |
+| `heavy` | Useful managers and parallel lanes. |
+| `extreme` | Every useful ready safe lane while remaining cost-first. |
 
-`moderate` remains the schema-2 storage/command alias for `balanced`.
+`moderate` remains the schema-2 alias for `balanced`.
 
 ## Zergling Rush
 
-Zergling Rush is a separate explicit-consent mode that may use stronger models, duplicate investigation, speculative preparation, and redundant validation to reduce wall-clock time. It never changes root authority, permissions, ownership, safety, or completion rules. It cannot proactively select Daybreak, replicate a Daybreak unit, or increase its one-attempt budget.
+Zergling Rush is a separate explicit-consent mode that may use stronger models, duplicate investigation, speculative preparation, and redundant validation. It never changes authority, permissions, ownership, safety, or completion. It cannot proactively select Daybreak, duplicate a fallback unit, bypass verification, reopen a closed route, or increase verification/task budgets.
 
 ## Profile and installer safety
 
-The installer deploys all 19 global profiles. A byte-identical profile is left unchanged. An exact prior official Spark profile may be upgraded to remove its former sandbox override. Any other differing, customized, marker-only, malformed, or user-authored profile is preserved and blocks replacement until the user reviews and reconciles it.
+The installer deploys 19 profiles. Byte-identical profiles are unchanged. Exact recognized prior official Spark profiles may be upgraded to remove their former sandbox override. Any other differing, customized, marker-only, malformed, or user-authored profile is preserved and blocks replacement.
 
-Installer transfer and transaction checks run only inside the explicitly invoked installer. After completion, AMS performs no package comparison, re-verification, re-audit, reactivation, project pause, or user-action gate unless the user directly requests package-integrity verification.
+Installer validation runs only inside an explicitly invoked installer. After completion AMS performs no automatic package comparison, re-audit, project pause, or user gate unless package-integrity verification is directly requested.
 
-Standard uninstall removes only the skill directory and deliberately leaves settings and installed profiles for troubleshooting or reinstall.
+Standard uninstall removes only the skill directory and preserves settings and profiles.
 
 ## Requirements
 
 - Codex with skills and custom-subagent support
 - a top-level GPT-5.6 Sol Max session, or verified equivalent Sol alias at Max reasoning
-- approved Daybreak Blue access on the active internal-security organization/workspace and Codex product surface when the optional fallback is needed
+- approved Daybreak access on the exact internal provisioned path and surface when the optional fallback is needed
 - Windows PowerShell 5.1+ for the PowerShell installer
 - Bash plus `curl`, `awk`, `sort`, `cmp`, `mktemp`, `wc`, `tr`, `grep`, `head`, `tail`, `od`, `find`, `dirname`, and either `sha256sum` or `shasum`
